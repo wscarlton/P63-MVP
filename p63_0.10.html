@@ -1091,6 +1091,8 @@ const MOD_PURCHASE_LIMIT_PER_DELTA = 2; // only this many of each modifier (-4..
 const BENCH_BASE_CAPACITY = 2; // bench slots at start of run
 const BENCH_CAPACITY_BONUS_PER_BOSS_WIN = 1; // +1 bench slot after each boss victory
 const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (payout + transfer) only
+const CALLING_PROC_CHANCE = 0.50;
+const DIAMOND_BONUS_CHIPS = 10;
 
 
     const LOAN_AMOUNT = 500;
@@ -1491,6 +1493,11 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
       if (t === 'BONUS_21') return `Bonus: lane #${d.lane} hit 21 (+${d.amount})`;
       if (t === 'BONUS_ALL_FIVE') return `Bonus: all five hit 21 (+${d.amount})`;
       if (t === 'SETTINGS_CHANGED') return `Settings updated`;
+      if (t === 'CALLING_CARD_SET') return `Calling card set: ${d.callingCard ? cardToString(d.callingCard) : '—'}`;
+      if (t === 'CALLING_PROC_DIAMOND') return `Calling (♦): +${d.amount} chips`;
+      if (t === 'CALLING_PROC_CLUBS') return `Calling (♣): dealer lane #${d.laneIdx} ${d.delta}`;
+      if (t === 'CALLING_PROC_SPADES') return `Calling (♠): revealed dealer lane #${d.laneIdx}`;
+      if (t === 'CALLING_PROC_HEARTS_TRIAGE') return `Calling (♥): triage lane #${d.laneIdx}`;
       if (t === 'WINNER_REWARD_FUSE') return `Fused ${d.cards ? d.cards.join(' + ') : 'cards'}`;
       if (t === 'DECK_EXHAUSTION') return `Deck exhaustion: ${d.side} (${d.reason})`;
       if (t === 'MATCH_END') return `Match end: ${d.outcome} (payout ${d.payout}, transfer ${d.transferNet >= 0 ? '+' : ''}${d.transferNet})`;
@@ -2491,6 +2498,8 @@ function benchPush(card, source = '') {
         floor: 1,
         chips: STARTING_CHIPS,
         karma: 0,
+        callingCard: null,
+        callingCardChosenSuit: null,
         playerDeck: makeStandardDeck52(),
         ownedActions: [],
         bankedTokens: 0,
@@ -2511,14 +2520,35 @@ function benchPush(card, source = '') {
       };
 
       resetLog();
-      logEvent('GAME_START', {
-        startingChips: STARTING_CHIPS,
-        deckSize: run.playerDeck.length,
-        deckSnapshot: deckSnapshot(),
-        settings: getSettingsSnapshot()
-      });
+      const chooseSuit = (suit) => {
+        const rank = RANKS[Math.floor(Math.random() * RANKS.length)];
+        run.callingCard = { rank, suit };
+        run.callingCardChosenSuit = suit;
+        logEvent('CALLING_CARD_SET', { callingCard: run.callingCard });
+        logEvent('GAME_START', {
+          startingChips: STARTING_CHIPS,
+          deckSize: run.playerDeck.length,
+          deckSnapshot: deckSnapshot(),
+          settings: getSettingsSnapshot()
+        });
+        closeModal();
+        initFloor(1);
+      };
 
-      initFloor(1);
+      showModal('Choose Calling Suit', `
+        <p class="modal-text">Choose your Calling Suit for this run.</p>
+        <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
+          <button class="modal-btn" onclick="setCallingSuit('♥')">♥ Hearts</button>
+          <button class="modal-btn" onclick="setCallingSuit('♠')">♠ Spades</button>
+          <button class="modal-btn" onclick="setCallingSuit('♦')">♦ Diamonds</button>
+          <button class="modal-btn" onclick="setCallingSuit('♣')">♣ Clubs</button>
+        </div>
+      `, []);
+
+      window.setCallingSuit = function(suit) {
+        chooseSuit(suit);
+        delete window.setCallingSuit;
+      };
     }
 
     function initFloor(floor) {
@@ -3107,6 +3137,9 @@ body += `
         transferMultiplierMax: null,
         transferMultiplierStage: 'player',
         transferRaiseOffer: null,
+        callingProcChance: CALLING_PROC_CHANCE,
+        spadePeekLanes: new Set(),
+        lastCallingSuitPlay: null,
 
         // Action tokens + action usage
         tokensTotal,
@@ -3463,6 +3496,97 @@ body += `
       showToast(`Played ${cardToString(mod)} to ${side} #${posIdx + 1}`);
     };
 
+    function handleCallingSuitOnPlayerCardPlaced(placedCard, laneIdx, onComplete) {
+      if (!blackjackMatch || blackjackMatch.phase !== 'playing') return false;
+      if (!run || !run.callingCard) return false;
+      if (!isStandardCard(placedCard)) return false;
+
+      if (placedCard.suit !== run.callingCard.suit) {
+        blackjackMatch.lastCallingSuitPlay = null;
+        return false;
+      }
+
+      const procced = Math.random() < blackjackMatch.callingProcChance;
+      blackjackMatch.lastCallingSuitPlay = {
+        laneIdx,
+        suit: placedCard.suit,
+        procced,
+        card: placedCard
+      };
+
+      if (!procced) return false;
+
+      if (placedCard.suit === '♦') {
+        run.chips += DIAMOND_BONUS_CHIPS;
+        blackjackMatch.bonusChipsEarned += DIAMOND_BONUS_CHIPS;
+        logEvent('CALLING_PROC_DIAMOND', {
+          laneIdx: laneIdx + 1,
+          amount: DIAMOND_BONUS_CHIPS,
+          callingCard: run.callingCard,
+          playedCard: placedCard
+        });
+        renderHUD();
+        showToast(`+${DIAMOND_BONUS_CHIPS} chips (Wealth)`);
+        return false;
+      }
+
+      if (placedCard.suit === '♠') {
+        blackjackMatch.spadePeekLanes.add(laneIdx);
+        logEvent('CALLING_PROC_SPADES', {
+          laneIdx: laneIdx + 1,
+          callingCard: run.callingCard,
+          playedCard: placedCard
+        });
+        showToast(`Intel: Revealed Dealer lane #${laneIdx + 1}`);
+        renderBlackjack();
+        return false;
+      }
+
+      if (placedCard.suit === '♣') {
+        const dPos = blackjackMatch.dealerPositions[laneIdx];
+        if (!dPos || !dPos.isOpen || dPos.isComplete) {
+          logEvent('CALLING_PROC_CLUBS', {
+            laneIdx: laneIdx + 1,
+            delta: null,
+            blocked: true,
+            callingCard: run.callingCard,
+            playedCard: placedCard
+          });
+          return false;
+        }
+
+        showModal('Power Proc', `
+          <p class="modal-text">Choose effect on Dealer lane #${laneIdx + 1}.</p>
+          <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
+            <button class="modal-btn" onclick="applyCallingClubs(${laneIdx}, 1)">+1</button>
+            <button class="modal-btn danger" onclick="applyCallingClubs(${laneIdx}, -1)">-1</button>
+          </div>
+        `, []);
+
+        window.applyCallingClubs = function(targetIdx, delta) {
+          const target = blackjackMatch.dealerPositions[targetIdx];
+          if (target && target.isOpen && !target.isComplete) {
+            target.mods = target.mods || [];
+            target.mods.push(delta);
+            logEvent('CALLING_PROC_CLUBS', {
+              laneIdx: targetIdx + 1,
+              delta,
+              callingCard: run.callingCard,
+              playedCard: placedCard
+            });
+            showToast(`Power: Dealer lane #${targetIdx + 1} ${delta > 0 ? '+1' : '-1'}`);
+          }
+          closeModal();
+          delete window.applyCallingClubs;
+          renderAll();
+          onComplete();
+        };
+        return true;
+      }
+
+      return false;
+    }
+
     window.playerPlaceBenchCard = function(posIdx) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
       if (blackjackMatch.turn !== 'player') return;
@@ -3486,8 +3610,8 @@ body += `
 
       maybeAward21BonusForPlayerPos(posIdx);
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
-
-      endPlayerTurn();
+      const deferred = handleCallingSuitOnPlayerCardPlaced(c, posIdx, endPlayerTurn);
+      if (!deferred) endPlayerTurn();
     };
 
     // =============================================
@@ -3547,7 +3671,8 @@ body += `
         dealerPlaceOneCard(gift, true);
       }
 
-      endPlayerTurn();
+      const deferred = handleCallingSuitOnPlayerCardPlaced(placed, posIdx, endPlayerTurn);
+      if (!deferred) endPlayerTurn();
     };
 
     window.playerStand = function(posIdx) {
@@ -3591,7 +3716,33 @@ body += `
       blackjackMatch.metrics.turns += 1;
 
       // Finalize busts at end of player's turn (per spec)
+      const preBust = blackjackMatch.playerPositions.map(p => !!p.isBust);
       finalizeBusts(blackjackMatch.playerPositions);
+
+      const lastPlay = blackjackMatch.lastCallingSuitPlay;
+      if (lastPlay && lastPlay.procced && lastPlay.suit === '♥') {
+        const newlyBusted = blackjackMatch.playerPositions
+          .map((p, idx) => ({ p, idx }))
+          .filter(({ p, idx }) => !preBust[idx] && p.isBust);
+
+        if (newlyBusted.length) {
+          let target = newlyBusted.find(n => n.idx === lastPlay.laneIdx);
+          if (!target) target = newlyBusted[0];
+          const pos = target.p;
+          const discarded = pos.cards.pop();
+          pos.isBust = false;
+          pos.isComplete = false;
+          logEvent('CALLING_PROC_HEARTS_TRIAGE', {
+            laneIdx: target.idx + 1,
+            discardedCard: cardToString(discarded),
+            callingCard: run.callingCard,
+            playedCard: lastPlay.card
+          });
+          showToast(`Health: Triage saved lane #${target.idx + 1}`);
+        }
+      }
+      blackjackMatch.lastCallingSuitPlay = null;
+
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
 
       if (checkMatchEnd()) return;
@@ -3710,6 +3861,7 @@ function dealerLaneScore(idx, total, diff) {
       if (targetIdx >= 0) {
         blackjackMatch.dealerPositions[targetIdx].cards.push(card);
         recordLaneCard('dealer', targetIdx);
+        if (blackjackMatch.spadePeekLanes) blackjackMatch.spadePeekLanes.delete(targetIdx);
 
         blackjackMatch.metrics.dealerDraws += 1;
 
@@ -4784,6 +4936,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             <span class="hud-stat-value karma">${safeNumber(run.karma, 0)}</span>
           </div>
           <div class="hud-stat">
+            <span class="hud-stat-label">Calling</span>
+            <span class="hud-stat-value">${run.callingCard ? cardToString(run.callingCard) : '—'}</span>
+          </div>
+          <div class="hud-stat">
             <span class="hud-stat-label">Deck</span>
             <span class="hud-stat-value">${run.playerDeck.length}</span>
           </div>
@@ -4924,12 +5080,16 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     && blackjackMatch
     && blackjackMatch.spyReveals
     && blackjackMatch.spyReveals.has(idx);
+  const spadeReveal = (side === 'dealer')
+    && blackjackMatch
+    && blackjackMatch.spadePeekLanes
+    && blackjackMatch.spadePeekLanes.has(idx);
 
   // NEW: totals + hole-card reveal behavior for dealer
   // - if revealTotalsOnClose: reveal when lane closes (stood/bust)
   // - else: reveal only when match resolves
   const revealTotalsOnClose = (uiSettings && uiSettings.revealTotalsOnClose) !== false;
-  const showDealerTotal = spy || isResolved || (revealTotalsOnClose && pos.isComplete);
+  const showDealerTotal = spy || spadeReveal || isResolved || (revealTotalsOnClose && pos.isComplete);
 
   const showTotal = (side === 'player') ? true : showDealerTotal;
   const totalText = showTotal ? `${total}` : '??';
