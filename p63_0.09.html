@@ -123,6 +123,7 @@
     .hud-stat-value.chips { color: var(--accent-green); }
     .hud-stat-value.debt { color: var(--accent-red); }
     .hud-stat-value.tokens { color: var(--accent-purple); }
+    .hud-stat-value.karma { color: var(--accent-blue); }
 
     .hud-btn {
       font-family: 'Cinzel', serif;
@@ -429,6 +430,13 @@
       background: rgba(77, 166, 255, 0.18);
       border-color: rgba(77, 166, 255, 0.65);
       color: #dbeafe;
+    }
+
+    .playing-card.fused {
+      background: linear-gradient(135deg, rgba(168,85,247,0.22), rgba(77,166,255,0.22));
+      border-color: rgba(168,85,247,0.65);
+      color: #1f2937;
+      font-size: 11px;
     }
 
     /* Bench styling (subtle blue “bench” tint) */
@@ -1414,10 +1422,15 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
       if (t === 'BENCH_APPLY') return `Bench applied ${d.card} to ${d.side} lane #${d.lane}`;
       if (t === 'BENCH_PLACE') return `Bench placed ${d.card} to player lane #${d.lane}`;
       if (t === 'BENCH_OVERFLOW') return `Bench overflow: discarded ${d.removed}`;
+      if (t === 'TRANSFER_BET') return `Transfer bet: player x${d.playerMultiplier} (${d.dealerAction}${d.offer ? ` to x${d.offer}` : ''})`;
+      if (t === 'TRANSFER_BET_RESPONSE') return `Transfer bet response: ${d.response} (x${d.finalMultiplier})`;
       if (t === 'ACTION_USED') return `Action used: ${d.actionName}`;
       if (t === 'BONUS_21') return `Bonus: lane #${d.lane} hit 21 (+${d.amount})`;
       if (t === 'BONUS_ALL_FIVE') return `Bonus: all five hit 21 (+${d.amount})`;
+      if (t === 'WINNER_REWARD_FUSE') return `Fused ${d.cards ? d.cards.join(' + ') : 'cards'}`;
+      if (t === 'DECK_EXHAUSTION') return `Deck exhaustion: ${d.side} (${d.reason})`;
       if (t === 'MATCH_END') return `Match end: ${d.outcome} (payout ${d.payout}, transfer ${d.transferNet >= 0 ? '+' : ''}${d.transferNet})`;
+      if (t === 'KARMA_GAIN') return `Karma +${d.amount} (total ${d.total})`;
       if (t === 'GAME_END') return `Run ended: ${d.result}`;
       return t;
     }
@@ -1868,9 +1881,18 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
       return c && c.type === 'MOD';
     }
 
+    function isFused(c) {
+      return c && c.type === 'FUSE';
+    }
+
+    function isStandardCard(c) {
+      return c && !c.type && c.rank && c.suit;
+    }
+
     function cardToString(c) {
       if (!c) return '';
       if (isModifier(c)) return c.delta > 0 ? `+${c.delta}` : `${c.delta}`;
+      if (isFused(c)) return `${cardToString(c.a)}/${cardToString(c.b)}`;
       return `${c.rank}${c.suit}`;
     }
 
@@ -1880,28 +1902,41 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
 
     function cardCssClass(card) {
       if (isModifier(card)) return 'mod';
+      if (isFused(card)) return 'fused';
       return isRedSuit(card.suit) ? 'red' : 'black';
     }
 
-    // Harden calcTotal to never produce NaN (ignores modifiers if they ever slip in)
-    function calcTotal(cards) {
-      let total = 0;
-      let aces = 0;
+    function getCardValueOptions(card) {
+      if (!card || isModifier(card)) return [];
+      if (isFused(card)) {
+        const options = [
+          ...getCardValueOptions(card.a),
+          ...getCardValueOptions(card.b)
+        ];
+        return Array.from(new Set(options));
+      }
+      if (card.rank === 'A') return [1, 11];
+      if (['J', 'Q', 'K'].includes(card.rank)) return [10];
+      const n = Number(card.rank);
+      return Number.isFinite(n) ? [n] : [];
+    }
+
+    // Harden total calc to never produce NaN (supports fused + aces)
+    function calcBestTotal(cards, modSum = 0) {
+      let totals = [0];
       for (const c of cards || []) {
-        if (!c) continue;
-        if (isModifier(c)) continue; // defensive
-        if (c.rank === 'A') aces++;
-        else if (['J', 'Q', 'K'].includes(c.rank)) total += 10;
-        else {
-          const n = Number(c.rank);
-          if (Number.isFinite(n)) total += n;
+        const options = getCardValueOptions(c);
+        if (!options.length) continue;
+        const nextTotals = [];
+        for (const t of totals) {
+          for (const v of options) nextTotals.push(t + v);
         }
+        totals = nextTotals;
       }
-      while (aces > 0) {
-        total += (total + 11 <= 21) ? 11 : 1;
-        aces--;
-      }
-      return total;
+      totals = totals.map(t => t + modSum);
+      const under = totals.filter(t => t <= 21);
+      if (under.length) return Math.max(...under);
+      return totals.length ? Math.min(...totals) : 0;
     }
 
     function hexPath(x, y) {
@@ -2096,6 +2131,7 @@ function benchPush(card, source = '') {
       run = {
         floor: 1,
         chips: STARTING_CHIPS,
+        karma: 0,
         playerDeck: makeStandardDeck52(),
         ownedActions: [],
         bankedTokens: 0,
@@ -2642,6 +2678,12 @@ body += `
     // =============================================
     // SLOT BLACKJACK ENGINE
     // =============================================
+    function getTransferMultiplierLimits(type) {
+      if (type === 'BOSS') return { min: 2, max: 5 };
+      if (type === 'HIGH_STAKES') return { min: 1, max: 5 };
+      return { min: 1, max: 3 };
+    }
+
     function startBlackjackMatch(type, buyIn) {
       clearDealerTimers();
 
@@ -2678,7 +2720,7 @@ body += `
 
         drawnCard: null,
         turn: 'player',
-        phase: 'playing',
+        phase: 'betting',
         result: null,
 
         // Bench (player mods + normal cards)
@@ -2689,6 +2731,11 @@ body += `
         bonusAll21Awarded: false,
         bonusChipsEarned: 0,
         transferChipsNet: 0,
+        transferMultiplier: null,
+        transferMultiplierMin: null,
+        transferMultiplierMax: null,
+        transferMultiplierStage: 'player',
+        transferRaiseOffer: null,
 
         // Action tokens + action usage
         tokensTotal,
@@ -2703,6 +2750,7 @@ body += `
         pending: null,
         rewardPending: false,
         winnerReward: null,
+        exhaustion: null,
 
         metrics: {
           startedAtMs: performance.now(),
@@ -2721,9 +2769,22 @@ body += `
 
           // NEW: dealer bench tracking
           dealerModifiersBenched: 0,
-          dealerBenchModsUsed: 0
+          dealerBenchModsUsed: 0,
+
+          initialDealComplete: false,
+          laneCards: {
+            playerTotal: Array(5).fill(0),
+            dealerTotal: Array(5).fill(0),
+            playerAfterInitial: Array(5).fill(0),
+            dealerAfterInitial: Array(5).fill(0)
+          }
         }
       };
+
+      const limits = getTransferMultiplierLimits(type);
+      blackjackMatch.transferMultiplier = limits.min;
+      blackjackMatch.transferMultiplierMin = limits.min;
+      blackjackMatch.transferMultiplierMax = limits.max;
 
       logEvent('MATCH_START', {
         type,
@@ -2732,8 +2793,12 @@ body += `
         bankedTokensUsed: addFromBank,
         bankedTokensRemaining: run.bankedTokens,
         dealerExtraMods: extraMods,
+        transferMultiplierMin: limits.min,
+        transferMultiplierMax: limits.max,
         deckSnapshot: deckSnapshot()
       });
+
+      run.ui.mode = 'BLACKJACK';
 
       // Initialize 5 positions each
       for (let i = 0; i < 5; i++) {
@@ -2756,21 +2821,76 @@ body += `
 
       // Deal initial cards (modifiers never go into lane hands)
       for (let i = 0; i < 3; i++) {
-        const okP = dealToPosition(blackjackMatch.playerPositions[i], blackjackMatch.playerDrawPile, run.playerDeck, 'player');
-        if (!okP) { gameOver("No playable cards left in your deck."); return; }
+        const okP = dealToPosition(blackjackMatch.playerPositions[i], blackjackMatch.playerDrawPile, run.playerDeck, 'player', i);
+        if (!okP) { triggerDeckExhaustion('player', 'initial-deal'); return; }
         maybeAward21BonusForPlayerPos(i);
 
-        const okD = dealToPosition(blackjackMatch.dealerPositions[i], blackjackMatch.dealerDrawPile, dealerBaseDeck, 'dealer');
-        if (!okD) { gameOver("Dealer could not draw."); return; }
+        const okD = dealToPosition(blackjackMatch.dealerPositions[i], blackjackMatch.dealerDrawPile, dealerBaseDeck, 'dealer', i);
+        if (!okD) { triggerDeckExhaustion('dealer', 'initial-deal'); return; }
       }
 
+      blackjackMatch.metrics.initialDealComplete = true;
       run.ui.mode = 'BLACKJACK';
       renderAll();
     }
 
+    window.setTransferMultiplier = function(multiplier) {
+      if (!blackjackMatch || blackjackMatch.phase !== 'betting') return;
+      if (blackjackMatch.transferMultiplierStage !== 'player') return;
+      const min = blackjackMatch.transferMultiplierMin || 1;
+      const max = blackjackMatch.transferMultiplierMax || 1;
+      if (multiplier < min || multiplier > max) return;
+      blackjackMatch.transferMultiplier = multiplier;
+      blackjackMatch.transferMultiplierStage = 'dealer';
+      resolveDealerTransferDecision();
+    };
 
-    function drawCardFromPile(pile, fallbackDeck) {
-      if (pile.length === 0) pile.push(...shuffle(fallbackDeck.slice()));
+    function resolveDealerTransferDecision() {
+      if (!blackjackMatch || blackjackMatch.phase !== 'betting') return;
+      if (blackjackMatch.transferMultiplierStage !== 'dealer') return;
+      const current = blackjackMatch.transferMultiplier || 1;
+      const max = blackjackMatch.transferMultiplierMax || current;
+      const canRaise = current < max;
+      const willRaise = canRaise && Math.random() < 0.5;
+
+      if (willRaise) {
+        blackjackMatch.transferRaiseOffer = current + 1;
+        blackjackMatch.transferMultiplierStage = 'response';
+        logEvent('TRANSFER_BET', { playerMultiplier: current, dealerAction: 'raise', offer: blackjackMatch.transferRaiseOffer });
+      } else {
+        logEvent('TRANSFER_BET', { playerMultiplier: current, dealerAction: 'call' });
+        finishTransferBetting();
+      }
+      renderBlackjack();
+    }
+
+    window.acceptTransferRaise = function() {
+      if (!blackjackMatch || blackjackMatch.phase !== 'betting') return;
+      if (blackjackMatch.transferMultiplierStage !== 'response') return;
+      blackjackMatch.transferMultiplier = blackjackMatch.transferRaiseOffer || blackjackMatch.transferMultiplier;
+      logEvent('TRANSFER_BET_RESPONSE', { response: 'accept', finalMultiplier: blackjackMatch.transferMultiplier });
+      finishTransferBetting();
+    };
+
+    window.declineTransferRaise = function() {
+      if (!blackjackMatch || blackjackMatch.phase !== 'betting') return;
+      if (blackjackMatch.transferMultiplierStage !== 'response') return;
+      logEvent('TRANSFER_BET_RESPONSE', { response: 'decline', finalMultiplier: blackjackMatch.transferMultiplier });
+      finishTransferBetting();
+    };
+
+    function finishTransferBetting() {
+      blackjackMatch.transferRaiseOffer = null;
+      blackjackMatch.transferMultiplierStage = 'done';
+      blackjackMatch.phase = 'playing';
+      blackjackMatch.turn = 'player';
+      renderBlackjack();
+      showToast(`Transfer multiplier locked at x${blackjackMatch.transferMultiplier}`);
+    }
+
+
+    function drawCardFromPile(pile) {
+      if (!pile || pile.length === 0) return null;
       return pile.pop();
     }
 
@@ -2786,6 +2906,7 @@ body += `
           : fallbackDeck;
 
         const c = drawCardFromPile(pile, fb);
+        if (!c) return null;
         if (isModifier(c)) {
           if (blackjackMatch) {
             if (side === 'player') {
@@ -2806,19 +2927,35 @@ body += `
     }
 
 
-    function dealToPosition(pos, pile, fallbackDeck, side) {
+    function dealToPosition(pos, pile, fallbackDeck, side, laneIdx) {
       const a = drawNonModifierCard(pile, fallbackDeck, side);
       const b = drawNonModifierCard(pile, fallbackDeck, side);
       if (!a || !b) return false;
       pos.cards.push(a);
       pos.cards.push(b);
+      recordLaneCard(side, laneIdx, 1);
+      recordLaneCard(side, laneIdx, 1);
       return true;
     }
 
     function getPositionTotal(pos) {
-      const base = calcTotal(pos.cards);
       const modSum = (pos.mods || []).reduce((a, b) => a + b, 0);
-      return safeNumber(base + modSum, 0);
+      const base = calcBestTotal(pos.cards, modSum);
+      return safeNumber(base, 0);
+    }
+
+    function recordLaneCard(side, laneIdx, count = 1, afterInitial = null) {
+      if (!blackjackMatch || !blackjackMatch.metrics || laneIdx === null || laneIdx === undefined) return;
+      const laneCards = blackjackMatch.metrics.laneCards;
+      if (!laneCards || laneIdx < 0 || laneIdx > 4) return;
+      const isAfterInitial = afterInitial !== null ? afterInitial : !!blackjackMatch.metrics.initialDealComplete;
+      if (side === 'dealer') {
+        laneCards.dealerTotal[laneIdx] += count;
+        if (isAfterInitial) laneCards.dealerAfterInitial[laneIdx] += count;
+      } else {
+        laneCards.playerTotal[laneIdx] += count;
+        if (isAfterInitial) laneCards.playerAfterInitial[laneIdx] += count;
+      }
     }
 
     // bust is finalized only at end-of-turn (or when explicitly closes a lane)
@@ -2846,8 +2983,11 @@ body += `
       for (let i = 0; i < 5; i++) {
         if (!positions[i].isOpen) {
           positions[i].isOpen = true;
-          const ok = dealToPosition(positions[i], pile, fallbackDeck, side);
-          if (!ok) return -1;
+          const ok = dealToPosition(positions[i], pile, fallbackDeck, side, i);
+          if (!ok) {
+            triggerDeckExhaustion(side, 'open-lane');
+            return -1;
+          }
 
           if (blackjackMatch && side === 'player') maybeAward21BonusForPlayerPos(i);
           return i;
@@ -2863,6 +3003,14 @@ body += `
       }
     }
 
+    function triggerDeckExhaustion(side, reason) {
+      if (!blackjackMatch || blackjackMatch.phase === 'resolved') return;
+      blackjackMatch.exhaustion = { side, reason };
+      logEvent('DECK_EXHAUSTION', { side, reason });
+      const forcedOutcome = side === 'dealer' ? 'WIN' : 'LOSS';
+      resolveMatch({ forcedOutcome, exhaustion: blackjackMatch.exhaustion });
+    }
+
     function allPositionsComplete(positions) {
       return positions.every(p => p.isComplete);
     }
@@ -2871,7 +3019,7 @@ body += `
     // BONUSES: +21 chips for any PLAYER position reaching total==21 (any way)
     // =============================================
     function maybeAward21BonusForPlayerPos(posIdx) {
-      if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (!blackjackMatch || !['playing', 'betting'].includes(blackjackMatch.phase)) return;
       const pos = blackjackMatch.playerPositions[posIdx];
       if (!pos || !pos.isOpen) return;
       if (pos.bonus21Awarded) return;
@@ -2958,6 +3106,7 @@ body += `
       if (!pos || !pos.isOpen || pos.isComplete) return;
 
       pos.cards.push(c);
+      recordLaneCard('player', posIdx);
       blackjackMatch.bench.splice(bi, 1);
       blackjackMatch.armedBenchIdx = null;
 
@@ -2981,6 +3130,10 @@ body += `
       let safety = 0;
       while (safety++ < 300) {
         const c = drawCardFromPile(blackjackMatch.playerDrawPile, run.playerDeck);
+        if (!c) {
+          triggerDeckExhaustion('player', 'draw');
+          return;
+        }
         if (isModifier(c)) {
           benchPush(c, 'player-draw');
           blackjackMatch.metrics.modifiersBenched += 1;
@@ -2996,7 +3149,7 @@ body += `
         return;
       }
 
-      gameOver("No playable cards left in your deck.");
+      triggerDeckExhaustion('player', 'draw');
     };
 
     window.playerPlaceCard = function(posIdx) {
@@ -3008,6 +3161,7 @@ body += `
 
       const placed = blackjackMatch.drawnCard;
       pos.cards.push(placed);
+      recordLaneCard('player', posIdx);
       blackjackMatch.drawnCard = null;
 
       logEvent('PLAYER_PLACE', { card: cardToString(placed), lane: posIdx + 1 });
@@ -3184,6 +3338,7 @@ function dealerLaneScore(idx, total, diff) {
 
       if (targetIdx >= 0) {
         blackjackMatch.dealerPositions[targetIdx].cards.push(card);
+        recordLaneCard('dealer', targetIdx);
 
         blackjackMatch.metrics.dealerDraws += 1;
 
@@ -3195,12 +3350,13 @@ function dealerLaneScore(idx, total, diff) {
     }
 
 
-    function dealerDrawPlayableCard() {
+function dealerDrawPlayableCard() {
   // draw until non-mod; mods go to dealerBench
   let safety = 0;
   while (safety++ < 300) {
     const fb = (blackjackMatch && blackjackMatch.dealerBaseDeck) ? blackjackMatch.dealerBaseDeck : makeStandardDeck52();
     const c = drawCardFromPile(blackjackMatch.dealerDrawPile, fb);
+    if (!c) return null;
     if (isModifier(c)) {
       blackjackMatch.dealerBench = blackjackMatch.dealerBench || [];
       blackjackMatch.dealerBench.push(c);
@@ -3246,7 +3402,7 @@ function dealerFindBestBenchMove(diff, phase) {
 
     for (const { pos, idx } of open) {
       const before = getPositionTotal(pos);
-      const after = before + m.delta;
+      const after = getPositionTotal({ cards: pos.cards, mods: [...(pos.mods || []), m.delta] });
 
       // Phase rules:
       // - salvage: prioritize fixing would-be busts (before>21 -> after<=21)
@@ -3379,7 +3535,11 @@ function dealerStandPhase(diff, maxPasses = 6) {
       clearDealerTimers();
       dealerTimerB = setTimeout(() => {
         const card = dealerDrawPlayableCard();
-        if (card) dealerPlaceOneCard(card);
+        if (!card) {
+          triggerDeckExhaustion('dealer', 'draw');
+          return;
+        }
+        dealerPlaceOneCard(card);
 
         // 4) Salvage: if any lanes would bust at end-of-turn, try negatives first
         const salvageBudget = (diff === 'hard') ? 2 : 1;
@@ -3432,7 +3592,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
       return false;
     }
 
-    function resolveMatch() {
+    function resolveMatch(options = {}) {
       blackjackMatch.phase = 'resolved';
       clearDealerTimers();
 
@@ -3487,6 +3647,9 @@ function dealerStandPhase(diff, maxPasses = 6) {
         }
       }
 
+      const transferMultiplier = blackjackMatch.transferMultiplier || 1;
+      transferNet *= transferMultiplier;
+
       let outcome;
       let payout;
       if (playerWins > dealerWins) {
@@ -3506,14 +3669,36 @@ function dealerStandPhase(diff, maxPasses = 6) {
         payout = 0;
       }
 
+      if (options && options.forcedOutcome) {
+        outcome = options.forcedOutcome;
+        if (outcome === 'WIN') payout = blackjackMatch.buyIn * 2;
+        else if (outcome === 'LOSS') payout = 0;
+        else payout = blackjackMatch.buyIn;
+      }
+
       blackjackMatch.transferChipsNet = transferNet;
+
+      const karmaLaneGain = positionResults.reduce((sum, result, idx) => {
+        if (result !== 'player') return sum;
+        return sum + safeNumber(playerTotals[idx], 0);
+      }, 0);
+      let karmaWinBonus = 0;
+      if (outcome === 'WIN') {
+        const baseBonus = blackjackMatch.type === 'STANDARD' ? 50 : 100;
+        karmaWinBonus = baseBonus * transferMultiplier;
+      }
+      const karmaGained = karmaLaneGain + karmaWinBonus;
+      run.karma = Math.max(0, safeNumber(run.karma, 0) + karmaGained);
 
       blackjackMatch.result = {
         outcome,
         payout,
         playerWins,
         dealerWins,
-        positionResults
+        positionResults,
+        transferMultiplier,
+        exhaustion: options.exhaustion || null,
+        karmaGained
       };
 
       // finalize bust counts for match metrics
@@ -3540,9 +3725,12 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         playerWins,
         dealerWins,
         transferNet,
+        transferMultiplier,
         rake,
         rakeRate,
         bonusChips: blackjackMatch.bonusChipsEarned || 0,
+        karmaGained,
+        exhaustion: options.exhaustion || null,
         durationMs,
         lanes: {
           playerTotals, dealerTotals,
@@ -3550,8 +3738,13 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           laneWinners: positionResults
         },
         metrics: { ...blackjackMatch.metrics },
+        laneCards: blackjackMatch.metrics.laneCards,
         deckSnapshot: deckSnapshot()
       });
+
+      if (karmaGained > 0) {
+        logEvent('KARMA_GAIN', { amount: karmaGained, total: run.karma, laneKarma: karmaLaneGain, winBonus: karmaWinBonus });
+      }
 
       renderAll();
 
@@ -3568,8 +3761,101 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     // WINNER REWARD FLOW (after a WIN)
     // =============================================
     function startWinnerRewardFlow() {
+      if (blackjackMatch.type === 'BOSS') {
+        startBossFusionRewardFlow();
+        return;
+      }
       blackjackMatch.winnerReward = { stage: 'mode', mode: null, candidates: [], selected: null };
       showWinnerRewardModeModal();
+    }
+
+    function startBossFusionRewardFlow() {
+      blackjackMatch.winnerReward = { stage: 'pick', mode: 'fuse', candidates: [], selected: [] };
+      const eligible = run.playerDeck
+        .map((c, i) => ({ card: c, index: i }))
+        .filter(d => isStandardCard(d.card));
+
+      const picks = shuffle(eligible).slice(0, 5);
+      blackjackMatch.winnerReward.candidates = picks;
+      blackjackMatch.winnerReward.selected = [];
+
+      showBossFusionModal();
+    }
+
+    function showBossFusionModal() {
+      const wr = blackjackMatch.winnerReward;
+      const candidates = wr.candidates || [];
+      const selected = wr.selected || [];
+      const canFuse = candidates.length >= 2;
+
+      const body = `
+        <p class="modal-text">Boss reward: pick two cards to fuse (or choose none).</p>
+        <div class="removal-picker">
+          <div class="removal-cards">
+            ${candidates.map((d, idx) => {
+              const sel = selected.includes(idx) ? 'selected' : '';
+              return `
+                <div class="removal-card-option ${sel}" onclick="selectFusionCard(${idx})">
+                  ${renderCard(d.card, false)}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        ${canFuse ? '' : '<p class="modal-text" style="color:var(--text-muted); text-align:center;">Not enough eligible cards to fuse.</p>'}
+      `;
+
+      showModal('Fuse Cards', body, [
+        { text: 'Confirm Fusion', primary: true, disabled: !canFuse || selected.length !== 2, action: confirmFusionReward },
+        { text: 'Choose None', action: () => finishFusionReward(null) }
+      ]);
+    }
+
+    window.selectFusionCard = function(idx) {
+      const wr = blackjackMatch.winnerReward;
+      if (!wr || wr.mode !== 'fuse') return;
+      const selected = wr.selected || [];
+      if (selected.includes(idx)) {
+        wr.selected = selected.filter(i => i !== idx);
+      } else if (selected.length < 2) {
+        wr.selected = [...selected, idx];
+      }
+      showBossFusionModal();
+    };
+
+    function confirmFusionReward() {
+      const wr = blackjackMatch.winnerReward;
+      if (!wr || wr.mode !== 'fuse') return;
+      if (!wr.selected || wr.selected.length !== 2) return;
+      const picks = wr.selected.map(i => wr.candidates[i]).filter(Boolean);
+      if (picks.length !== 2) return;
+      finishFusionReward(picks);
+    }
+
+    function finishFusionReward(picks) {
+      if (!blackjackMatch) return;
+      if (picks && picks.length === 2) {
+        const [a, b] = picks;
+        const sorted = [a.index, b.index].sort((x, y) => y - x);
+        const cardA = run.playerDeck[a.index];
+        const cardB = run.playerDeck[b.index];
+        sorted.forEach(idx => run.playerDeck.splice(idx, 1));
+        run.playerDeck.push({ type: 'FUSE', a: cardA, b: cardB });
+        logEvent('WINNER_REWARD_FUSE', {
+          cards: [cardToString(cardA), cardToString(cardB)],
+          fused: `${cardToString(cardA)}/${cardToString(cardB)}`,
+          deckSnapshot: deckSnapshot()
+        });
+        showToast(`Fused ${cardToString(cardA)} + ${cardToString(cardB)}`);
+      } else {
+        logEvent('WINNER_REWARD_SKIP', { mode: 'fuse' });
+        showToast('Fusion skipped');
+      }
+
+      blackjackMatch.rewardPending = false;
+      blackjackMatch.winnerReward = null;
+      closeModal();
+      renderAll();
     }
 
     function showWinnerRewardModeModal() {
@@ -3790,6 +4076,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       let safety = 0;
       while (safety++ < 300) {
         const c = drawCardFromPile(blackjackMatch.playerDrawPile, run.playerDeck);
+        if (!c) {
+          triggerDeckExhaustion('player', 'action-draw');
+          return null;
+        }
         if (isModifier(c)) {
           benchPush(c, 'action-draw');
           blackjackMatch.metrics.modifiersBenched += 1;
@@ -4118,6 +4408,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             <span class="hud-stat-value chips">${chips}</span>
           </div>
           <div class="hud-stat">
+            <span class="hud-stat-label">Karma</span>
+            <span class="hud-stat-value karma">${safeNumber(run.karma, 0)}</span>
+          </div>
+          <div class="hud-stat">
             <span class="hud-stat-label">Deck</span>
             <span class="hud-stat-value">${run.playerDeck.length}</span>
           </div>
@@ -4325,6 +4619,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       const isResolved = blackjackMatch.phase === 'resolved';
       const result = blackjackMatch.result;
+      const transferMultiplier = blackjackMatch.transferMultiplier || 1;
 
       const typeLabel = blackjackMatch.type === 'BOSS' ? 'BOSS BATTLE' :
                         blackjackMatch.type === 'HIGH_STAKES' ? 'HIGH STAKES' : 'STANDARD TABLE';
@@ -4332,7 +4627,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       let html = `
         <div class="bj-header">
           <div class="bj-title">${typeLabel}</div>
-          <div class="bj-status">Buy-in: ${blackjackMatch.buyIn} chips</div>
+          <div class="bj-status">Buy-in: ${blackjackMatch.buyIn} chips · Transfer x${transferMultiplier}</div>
         </div>
       `;
 
@@ -4377,107 +4672,150 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           ? `<div class="bj-result-score" style="color:var(--accent-gold); font-weight:800;">Winner reward pending…</div>`
           : '';
 
+        const exhaustionNote = result.exhaustion
+          ? `<div class="bj-result-score" style="color:var(--accent-red); font-weight:800;">Deck exhaustion (${result.exhaustion.side})</div>`
+          : '';
+
         html += `
           <div class="bj-result">
             <div class="bj-result-title ${titleCls}">${outcome}</div>
             <div class="bj-result-score">
               Lanes: You ${result.playerWins} — Dealer ${result.dealerWins}<br/>
-              Payout: ${payout} · Transfer: ${transfer >= 0 ? '+' : ''}${transfer}${rakeLine} · Bonus: ${bonus}
+              Payout: ${payout} · Transfer x${transferMultiplier}: ${transfer >= 0 ? '+' : ''}${transfer}${rakeLine} · Bonus: ${bonus}
             </div>
             <div class="bj-result-chips ${netCls}">
               Match Net: ${netFromEnd >= 0 ? '+' : ''}${netFromEnd}
             </div>
             ${rewardNote}
+            ${exhaustionNote}
             <button class="bj-btn" onclick="blackjackContinue()" ${blackjackMatch.rewardPending ? 'disabled' : ''}>Continue</button>
           </div>
         `;
       } else {
-        const isPlayerTurn = blackjackMatch.turn === 'player';
+        if (blackjackMatch.phase === 'betting') {
+          const stage = blackjackMatch.transferMultiplierStage;
+          const min = blackjackMatch.transferMultiplierMin || 1;
+          const max = blackjackMatch.transferMultiplierMax || 1;
+          const options = Array.from({ length: max - min + 1 }, (_, i) => min + i);
 
-        const drawn = blackjackMatch.drawnCard;
-        const drawnHtml = drawn ? `
-          <div class="bj-drawn-card">
-            <div class="bj-drawn-label">Drawn:</div>
-            ${renderCard(drawn, false)}
-            <div class="bj-drawn-label" style="opacity:.9;">Place it into an open lane.</div>
-          </div>
-        ` : `
-          <div class="bj-drawn-card" style="border-color: rgba(42,58,84,0.9); background: rgba(26,36,54,0.35);">
-            <div class="bj-drawn-label">${isPlayerTurn ? 'No drawn card. Draw or use a bench card.' : 'Dealer is acting…'}</div>
-          </div>
-        `;
+          let betButtons = '';
+          let betHint = '';
 
-        // Action tokens UI
-        const tokenTotal = blackjackMatch.tokensTotal || 0;
-        const tokenSpent = blackjackMatch.tokensSpent || 0;
-        const clickable = canClickToken();
+          if (stage === 'player') {
+            betButtons = options.map(val => (
+              `<button class="bj-btn" onclick="setTransferMultiplier(${val})">x${val}</button>`
+            )).join('');
+            betHint = 'Choose your transfer multiplier. Dealer can call or raise by +1.';
+          } else if (stage === 'response' && blackjackMatch.transferRaiseOffer) {
+            betButtons = `
+              <button class="bj-btn success" onclick="acceptTransferRaise()">Accept x${blackjackMatch.transferRaiseOffer}</button>
+              <button class="bj-btn danger" onclick="declineTransferRaise()">Decline</button>
+            `;
+            betHint = `Dealer raised to x${blackjackMatch.transferRaiseOffer}. Accept or decline.`;
+          } else {
+            betButtons = `<button class="bj-btn" disabled>Waiting…</button>`;
+            betHint = 'Dealer is deciding…';
+          }
 
-        const tokensHtml = Array.from({ length: tokenTotal }, (_, i) => {
-          const spent = i < tokenSpent;
-          const disabled = spent || !clickable;
-          const cls = spent ? 'token-icon spent' : (disabled ? 'token-icon disabled' : 'token-icon');
-          const handler = (!spent && clickable) ? `onclick="onActionTokenClick()"` : '';
-          return `<div class="${cls}" ${handler} title="${spent ? 'Spent' : (clickable ? 'Click to use an action token' : 'Unavailable')}">${i+1}</div>`;
-        }).join('');
-
-        // Bench UI
-        const bench = blackjackMatch.bench || [];
-        const armedIdx = blackjackMatch.armedBenchIdx;
-        const armedCard = (armedIdx !== null && armedIdx !== undefined) ? bench[armedIdx] : null;
-        const armedLabel = armedCard ? `Armed: ${cardToString(armedCard)}` : 'Arm a bench card';
-
-        const benchHtml = `
-          <div class="action-bar bench-bar">
-            <div class="action-bar-title">Bench (${bench.length}/${getBenchCapacity()}) · ${armedLabel}</div>
-            <div class="bench-cards">
-              ${bench.length ? bench.map((c, i) => {
-                const ring = (armedIdx === i) ? 'bench-armed-ring' : '';
-                return `
-                  <button class="bench-card-btn ${ring}" onclick="armBench(${i})" ${!isPlayerTurn ? 'disabled' : ''} title="Arm">
-                    <div class="playing-card bench ${cardCssClass(c)}">${cardToString(c)}</div>
-                  </button>
-                `;
-              }).join('') : `<div class="action-hint" style="padding: 6px 2px;">Bench is empty.</div>`}
-            </div>
-            <div class="action-hint">
-              ${armedCard
-                ? (isModifier(armedCard)
-                  ? 'Armed modifier: apply to any open lane (player or dealer).'
-                  : 'Armed card: place into any open player lane (ends your turn).')
-                : 'Modifiers drawn are benched automatically.'}
-            </div>
-          </div>
-        `;
-
-        html += `
-          <div class="bj-controls">
-            <div class="bj-turn-info">${isPlayerTurn ? 'Your Turn' : 'Dealer Turn'}</div>
-
-            ${drawnHtml}
-
-            <div class="bj-action-btns">
-              <button class="bj-btn" onclick="playerDrawCard()" ${(!isPlayerTurn || !!drawn || countOpenPositions(blackjackMatch.playerPositions) === 0) ? 'disabled' : ''}>Draw</button>
-              <button class="bj-btn" onclick="playerEndTurn()" ${(!isPlayerTurn || !!drawn || countOpenPositions(blackjackMatch.playerPositions) > 0) ? 'disabled' : ''}>End Turn</button>
-            </div>
-
-            <div class="controls-row">
-              <div class="action-bar">
-                <div class="action-bar-title">Actions · Tokens</div>
-                <div class="action-tokens">${tokensHtml || '<div class="action-hint">No tokens</div>'}</div>
-                <div class="action-hint">
-                  ${run.ownedActions && run.ownedActions.length
-                    ? 'Click a token to choose a cocktail action.'
-                    : 'No cocktails owned yet. Visit the Bartender.'}
-                </div>
+          html += `
+            <div class="bj-controls">
+              <div class="bj-turn-info">Transfer Multiplier</div>
+              <div class="bj-drawn-card" style="border-color: rgba(42,58,84,0.9); background: rgba(26,36,54,0.35);">
+                <div class="bj-drawn-label">${betHint}</div>
               </div>
-              ${benchHtml}
+              <div class="bj-action-btns">
+                ${betButtons}
+              </div>
             </div>
+          `;
+        } else {
+          const isPlayerTurn = blackjackMatch.turn === 'player';
 
-            <div class="action-hint" style="max-width: 720px;">
-              Tip: You can stand to close a lane immediately. Over-21 totals only bust at end of turn unless you close that lane.
+          const drawn = blackjackMatch.drawnCard;
+          const drawnHtml = drawn ? `
+            <div class="bj-drawn-card">
+              <div class="bj-drawn-label">Drawn:</div>
+              ${renderCard(drawn, false)}
+              <div class="bj-drawn-label" style="opacity:.9;">Place it into an open lane.</div>
             </div>
-          </div>
-        `;
+          ` : `
+            <div class="bj-drawn-card" style="border-color: rgba(42,58,84,0.9); background: rgba(26,36,54,0.35);">
+              <div class="bj-drawn-label">${isPlayerTurn ? 'No drawn card. Draw or use a bench card.' : 'Dealer is acting…'}</div>
+            </div>
+          `;
+
+          // Action tokens UI
+          const tokenTotal = blackjackMatch.tokensTotal || 0;
+          const tokenSpent = blackjackMatch.tokensSpent || 0;
+          const clickable = canClickToken();
+
+          const tokensHtml = Array.from({ length: tokenTotal }, (_, i) => {
+            const spent = i < tokenSpent;
+            const disabled = spent || !clickable;
+            const cls = spent ? 'token-icon spent' : (disabled ? 'token-icon disabled' : 'token-icon');
+            const handler = (!spent && clickable) ? `onclick="onActionTokenClick()"` : '';
+            return `<div class="${cls}" ${handler} title="${spent ? 'Spent' : (clickable ? 'Click to use an action token' : 'Unavailable')}">${i+1}</div>`;
+          }).join('');
+
+          // Bench UI
+          const bench = blackjackMatch.bench || [];
+          const armedIdx = blackjackMatch.armedBenchIdx;
+          const armedCard = (armedIdx !== null && armedIdx !== undefined) ? bench[armedIdx] : null;
+          const armedLabel = armedCard ? `Armed: ${cardToString(armedCard)}` : 'Arm a bench card';
+
+          const benchHtml = `
+            <div class="action-bar bench-bar">
+              <div class="action-bar-title">Bench (${bench.length}/${getBenchCapacity()}) · ${armedLabel}</div>
+              <div class="bench-cards">
+                ${bench.length ? bench.map((c, i) => {
+                  const ring = (armedIdx === i) ? 'bench-armed-ring' : '';
+                  return `
+                    <button class="bench-card-btn ${ring}" onclick="armBench(${i})" ${!isPlayerTurn ? 'disabled' : ''} title="Arm">
+                      <div class="playing-card bench ${cardCssClass(c)}">${cardToString(c)}</div>
+                    </button>
+                  `;
+                }).join('') : `<div class="action-hint" style="padding: 6px 2px;">Bench is empty.</div>`}
+              </div>
+              <div class="action-hint">
+                ${armedCard
+                  ? (isModifier(armedCard)
+                    ? 'Armed modifier: apply to any open lane (player or dealer).'
+                    : 'Armed card: place into any open player lane (ends your turn).')
+                  : 'Modifiers drawn are benched automatically.'}
+              </div>
+            </div>
+          `;
+
+          html += `
+            <div class="bj-controls">
+              <div class="bj-turn-info">${isPlayerTurn ? 'Your Turn' : 'Dealer Turn'}</div>
+
+              ${drawnHtml}
+
+              <div class="bj-action-btns">
+                <button class="bj-btn" onclick="playerDrawCard()" ${(!isPlayerTurn || !!drawn || countOpenPositions(blackjackMatch.playerPositions) === 0) ? 'disabled' : ''}>Draw</button>
+                <button class="bj-btn" onclick="playerEndTurn()" ${(!isPlayerTurn || !!drawn || countOpenPositions(blackjackMatch.playerPositions) > 0) ? 'disabled' : ''}>End Turn</button>
+              </div>
+
+              <div class="controls-row">
+                <div class="action-bar">
+                  <div class="action-bar-title">Actions · Tokens</div>
+                  <div class="action-tokens">${tokensHtml || '<div class="action-hint">No tokens</div>'}</div>
+                  <div class="action-hint">
+                    ${run.ownedActions && run.ownedActions.length
+                      ? 'Click a token to choose a cocktail action.'
+                      : 'No cocktails owned yet. Visit the Bartender.'}
+                  </div>
+                </div>
+                ${benchHtml}
+              </div>
+
+              <div class="action-hint" style="max-width: 720px;">
+                Tip: You can stand to close a lane immediately. Over-21 totals only bust at end of turn unless you close that lane.
+              </div>
+            </div>
+          `;
+        }
       }
 
       blackjackView.innerHTML = html;
