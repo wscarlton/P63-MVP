@@ -1088,7 +1088,9 @@
     const BARTENDER_REWARD = 50;
     const MINIGAME_REWARD = 50;
 
-    const MERCHANT_BUY_COST = 25;
+    const MERCHANT_BUY_BASE_STANDARD = 50;
+    const MERCHANT_BUY_BASE_MOD = 100;
+    const MERCHANT_BUY_INCREMENT = 25;
     const MERCHANT_REMOVE_COST = 50;
     const REMOVAL_REROLL_COST = 25;      // also used as inventory reroll cost
     const MERCHANT_INVENTORY_REROLL_COST = 25;
@@ -1122,13 +1124,11 @@ const CALLING_RANK_THRESHOLDS = [
     const LOAN_REPAY = 750;
 
     const BUYIN_STANDARD = 100;
-    const BUYIN_HIGH = 300;
+    const BUYIN_HIGH = 200;
     const BUYIN_BOSS = 300;
 
     // Action tokens + cocktails
     const COCKTAIL_COST = 150;
-    const ACTION_TOKEN_BASE_PER_MATCH = 1;
-    const ACTION_TOKEN_MAX_PER_MATCH = 3;
     const ACTION_TOKEN_MAX_BANKED = 3;
 
     // Rewards / mechanics
@@ -2146,7 +2146,7 @@ const CALLING_RANK_THRESHOLDS = [
         <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; margin-bottom:14px;">
           <div style="font-family:'Cinzel',serif; color:var(--accent-gold); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Actions</div>
           <ul style="color:var(--text-secondary); line-height:1.6; padding-left:18px;">
-            <li>Each match starts with <strong>${ACTION_TOKEN_BASE_PER_MATCH}</strong> token + up to <strong>${ACTION_TOKEN_MAX_PER_MATCH - ACTION_TOKEN_BASE_PER_MATCH}</strong> from your bank (max <strong>${ACTION_TOKEN_MAX_PER_MATCH}</strong>).</li>
+            <li>Each match starts with <strong>base tokens equal to the current floor</strong> + up to <strong>${ACTION_TOKEN_MAX_BANKED}</strong> from your bank.</li>
             <li>Spend a token to use a cocktail action (each action usable once per match).</li>
             <li>Buy new cocktails at the Bartender for <strong>${COCKTAIL_COST}</strong> chips.</li>
           </ul>
@@ -2157,7 +2157,7 @@ const CALLING_RANK_THRESHOLDS = [
           <ul style="color:var(--text-secondary); line-height:1.6; padding-left:18px;">
             <li><strong>Rest</strong>: choose free removal or +${REST_REWARD} chips, and always gain <strong>+1 banked token</strong>.</li>
             <li><strong>Minigame</strong>: +${MINIGAME_REWARD} chips and <strong>+1 banked token</strong>.</li>
-            <li><strong>Merchant</strong>: buy cards (${MERCHANT_BUY_COST}), remove one card (${MERCHANT_REMOVE_COST}), rerolls cost ${MERCHANT_INVENTORY_REROLL_COST}/${REMOVAL_REROLL_COST}.</li>
+            <li><strong>Merchant</strong>: buy cards (Standard ${MERCHANT_BUY_BASE_STANDARD}+ / Mod ${MERCHANT_BUY_BASE_MOD}+ / +${MERCHANT_BUY_INCREMENT} per buy), remove one card (${MERCHANT_REMOVE_COST}), rerolls cost ${MERCHANT_INVENTORY_REROLL_COST}/${REMOVAL_REROLL_COST}.</li>
             <li><strong>Loan Shark</strong>: borrow ${LOAN_AMOUNT}, repay ${LOAN_REPAY} before final boss.</li>
           </ul>
         </div>
@@ -2462,6 +2462,16 @@ function getMerchantCost(base) {
   return Math.ceil(base * getMerchantPriceMult());
 }
 
+function getMerchantBuyCost(card) {
+  const isMod = isModifier(card);
+  const base = isMod ? MERCHANT_BUY_BASE_MOD : MERCHANT_BUY_BASE_STANDARD;
+  const count = isMod
+    ? safeNumber(run && run.merchantModifierBuys, 0)
+    : safeNumber(run && run.merchantStandardBuys, 0);
+  const scaled = base + (MERCHANT_BUY_INCREMENT * count);
+  return Math.ceil(scaled * getMerchantPriceMult());
+}
+
 function getModKey(delta) { return String(delta); }
 
 function getModifierPurchased(delta) {
@@ -2668,6 +2678,8 @@ function benchPush(card, source = '') {
         bankedTokens: 0,
         bossWins: 0,
         paidRemovalCount: 0,
+        merchantStandardBuys: 0,
+        merchantModifierBuys: 0,
         modPurchaseCounts: Object.fromEntries(MODIFIER_DELTAS.map(d => [String(d), 0])),
         loan: { active: false, repaid: false },
         board: {
@@ -3041,7 +3053,6 @@ function benchPush(card, source = '') {
       const npcLine = npc
         ? `${npc.name} · ${cardToString(npc.callingCard)} · ${affinityIcon(affinity)} · Prices x${priceMult.toFixed(2)}`
         : `Prices x${priceMult.toFixed(2)}`;
-      const buyCost = getMerchantCost(MERCHANT_BUY_COST);
       const rerollInvCost = getMerchantCost(MERCHANT_INVENTORY_REROLL_COST);
       let body = `
         <p class="modal-text">The merchant displays their wares.</p>
@@ -3053,7 +3064,7 @@ function benchPush(card, source = '') {
       const canRerollInv = chipsNow >= rerollInvCost;
       body += `
         <div class="merchant-section">
-          <div class="merchant-section-title">Buy Cards (${buyCost} each)</div>
+          <div class="merchant-section-title">Buy Cards (Standard ${MERCHANT_BUY_BASE_STANDARD}+ · Mod ${MERCHANT_BUY_BASE_MOD}+ · +${MERCHANT_BUY_INCREMENT} per buy)</div>
           <div style="display:flex; justify-content:center; margin-bottom:12px;">
             <button class="modal-btn" ${canRerollInv ? '' : 'disabled'} onclick="rerollMerchantInventory()">Re-roll Inventory (${rerollInvCost})</button>
           </div>
@@ -3064,8 +3075,8 @@ function benchPush(card, source = '') {
   const isMod = isModifier(card);
   const remaining = isMod ? getModifierRemaining(card.delta) : null;
   const soldOut = isMod && remaining <= 0;
-
-  const canBuy = (chipsNow >= buyCost) && !soldOut;
+  const slotCost = getMerchantBuyCost(card);
+  const canBuy = (chipsNow >= slotCost) && !soldOut;
   const stockLine = isMod
     ? `<div style="margin-top:6px; font-size:12px; color:var(--text-muted);">${soldOut ? 'Sold out' : `Stock: ${remaining}/${MOD_PURCHASE_LIMIT_PER_DELTA}`}</div>`
     : '';
@@ -3074,7 +3085,7 @@ function benchPush(card, source = '') {
     <div class="merchant-card-slot">
       <div class="playing-card ${cardCssClass(card)}">${cardToString(card)}</div>
       ${stockLine}
-      <button class="modal-btn" ${canBuy ? '' : 'disabled'} onclick="buyMerchantCard(${idx})">${soldOut ? 'Sold Out' : 'Buy'}</button>
+      <button class="modal-btn" ${canBuy ? '' : 'disabled'} onclick="buyMerchantCard(${idx})">${soldOut ? 'Sold Out' : `Buy (${slotCost})`}</button>
     </div>
   `;
 });
@@ -3157,10 +3168,9 @@ body += `
     };
 
     window.buyMerchantCard = function(idx) {
-  const cost = getMerchantCost(MERCHANT_BUY_COST);
-  if (run.chips < cost) return;
-
   const card = merchantOffers[idx];
+  const cost = getMerchantBuyCost(card);
+  if (run.chips < cost) return;
 
   // Per-run purchase limit on modifiers (-4..+4)
   if (isModifier(card) && getModifierRemaining(card.delta) <= 0) {
@@ -3179,7 +3189,12 @@ body += `
   run.chips -= cost;
   run.playerDeck.push(card);
 
-  if (isModifier(card)) recordModifierPurchase(card.delta);
+  if (isModifier(card)) {
+    recordModifierPurchase(card.delta);
+    run.merchantModifierBuys = safeNumber(run.merchantModifierBuys, 0) + 1;
+  } else {
+    run.merchantStandardBuys = safeNumber(run.merchantStandardBuys, 0) + 1;
+  }
 
   logEvent('MERCHANT_BUY', {
     card: cardToString(card),
@@ -3295,7 +3310,7 @@ body += `
     // =============================================
     function getTransferMultiplierLimits(type) {
       if (type === 'BOSS') return { min: 2, max: 5 };
-      if (type === 'HIGH_STAKES') return { min: 1, max: 5 };
+      if (type === 'HIGH_STAKES') return { min: 1, max: 4 };
       return { min: 1, max: 3 };
     }
 
@@ -3315,10 +3330,11 @@ body += `
       }
       const dealerDrawPile = shuffle(dealerBaseDeck.slice());
 
-      // load tokens: base + from bank up to max
+      // load tokens: base by floor + from bank
+      const baseTokens = Math.max(1, safeNumber(run.floor, 1));
       const banked = run.bankedTokens || 0;
-      const addFromBank = Math.min(banked, ACTION_TOKEN_MAX_PER_MATCH - ACTION_TOKEN_BASE_PER_MATCH);
-      const tokensTotal = Math.min(ACTION_TOKEN_MAX_PER_MATCH, ACTION_TOKEN_BASE_PER_MATCH + addFromBank);
+      const addFromBank = Math.min(banked, ACTION_TOKEN_MAX_BANKED);
+      const tokensTotal = baseTokens + addFromBank;
       run.bankedTokens = Math.max(0, banked - addFromBank);
 
       blackjackMatch = {
@@ -3425,6 +3441,7 @@ body += `
       logEvent('MATCH_START', {
         type,
         buyIn,
+        baseTokens,
         tokensTotal,
         bankedTokensUsed: addFromBank,
         bankedTokensRemaining: run.bankedTokens,
@@ -3705,6 +3722,9 @@ body += `
     window.applyBenchTo = function(side, posIdx) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
       if (blackjackMatch.turn !== 'player') return;
+      if (blackjackMatch.drawnCard) return;
+      if (blackjackMatch.actionUsedThisTurn) return;
+      if (tokensRemaining() <= 0) return;
 
       const bi = blackjackMatch.armedBenchIdx;
       if (bi === null || bi === undefined) return;
@@ -3715,6 +3735,10 @@ body += `
       const positions = side === 'dealer' ? blackjackMatch.dealerPositions : blackjackMatch.playerPositions;
       const pos = positions[posIdx];
       if (!pos || !pos.isOpen || pos.isComplete) return;
+
+      blackjackMatch.tokensSpent += 1;
+      blackjackMatch.actionUsedThisTurn = true;
+      logEvent('TOKEN_SPENT', { amount: 1, source: 'BENCH_USE' });
 
       pos.mods = pos.mods || [];
       pos.mods.push(mod.delta);
@@ -3828,6 +3852,8 @@ body += `
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
       if (blackjackMatch.turn !== 'player') return;
       if (blackjackMatch.drawnCard) return;
+      if (blackjackMatch.actionUsedThisTurn) return;
+      if (tokensRemaining() <= 0) return;
 
       const bi = blackjackMatch.armedBenchIdx;
       if (bi === null || bi === undefined) return;
@@ -3836,6 +3862,10 @@ body += `
 
       const pos = blackjackMatch.playerPositions[posIdx];
       if (!pos || !pos.isOpen || pos.isComplete) return;
+
+      blackjackMatch.tokensSpent += 1;
+      blackjackMatch.actionUsedThisTurn = true;
+      logEvent('TOKEN_SPENT', { amount: 1, source: 'BENCH_USE' });
 
       pos.cards.push(c);
       recordLaneCard('player', posIdx);
@@ -5565,9 +5595,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
               <div class="action-hint">
                 ${armedCard
                   ? (isModifier(armedCard)
-                    ? 'Armed modifier: apply to any open lane (player or dealer).'
-                    : 'Armed card: place into any open player lane (ends your turn).')
-                  : 'Modifiers drawn are benched automatically.'}
+                    ? 'Armed modifier: apply to any open lane (player or dealer). Costs 1 token.'
+                    : 'Armed card: place into any open player lane (ends your turn). Costs 1 token.')
+                  : 'Modifiers drawn are benched automatically. Using the Bench costs 1 token.'}
               </div>
             </div>
           `;
@@ -5615,6 +5645,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       const isPlayerTurn = blackjackMatch.turn === 'player';
       const drawn = blackjackMatch.drawnCard;
+      const benchTokenBlocked = !isPlayerTurn || blackjackMatch.actionUsedThisTurn || tokensRemaining() <= 0 || !!drawn;
 
       const bench = blackjackMatch.bench || [];
       const bi = blackjackMatch.armedBenchIdx;
@@ -5655,12 +5686,16 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
                 const apply = document.createElement('button');
                 apply.className = 'bj-btn apply-mod';
                 apply.textContent = 'Apply Mod';
+                apply.disabled = benchTokenBlocked;
+                apply.title = benchTokenBlocked ? 'Requires 1 token' : '';
                 apply.onclick = () => applyBenchTo('player', i);
                 pEl.appendChild(apply);
               } else {
                 const placeB = document.createElement('button');
                 placeB.className = 'bj-btn place-bench';
                 placeB.textContent = 'Place Bench';
+                placeB.disabled = benchTokenBlocked;
+                placeB.title = benchTokenBlocked ? 'Requires 1 token' : '';
                 placeB.onclick = () => playerPlaceBenchCard(i);
                 pEl.appendChild(placeB);
               }
@@ -5673,6 +5708,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           const apply = document.createElement('button');
           apply.className = 'bj-btn apply-mod';
           apply.textContent = 'Apply Mod';
+          apply.disabled = benchTokenBlocked;
+          apply.title = benchTokenBlocked ? 'Requires 1 token' : '';
           apply.onclick = () => applyBenchTo('dealer', i);
           dEl.appendChild(apply);
         }
