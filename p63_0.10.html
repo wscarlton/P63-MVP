@@ -185,6 +185,14 @@
       pointer-events: none;
       font-weight: 600;
     }
+    .hex-sub {
+      font-family: 'Fira Code', monospace;
+      font-size: 9px;
+      fill: var(--text-secondary);
+      text-anchor: middle;
+      dominant-baseline: middle;
+      pointer-events: none;
+    }
 
     .path-line {
       stroke: var(--accent-blue);
@@ -1093,6 +1101,21 @@ const BENCH_CAPACITY_BONUS_PER_BOSS_WIN = 1; // +1 bench slot after each boss vi
 const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (payout + transfer) only
 const CALLING_PROC_CHANCE = 0.50;
 const DIAMOND_BONUS_CHIPS = 10;
+const CALLING_RANK_THRESHOLDS = [
+  { rank: '2', karma: 0 },
+  { rank: '3', karma: 200 },
+  { rank: '4', karma: 500 },
+  { rank: '5', karma: 900 },
+  { rank: '6', karma: 1400 },
+  { rank: '7', karma: 2000 },
+  { rank: '8', karma: 2700 },
+  { rank: '9', karma: 3500 },
+  { rank: '10', karma: 4400 },
+  { rank: 'J', karma: 5400 },
+  { rank: 'Q', karma: 6500 },
+  { rank: 'K', karma: 7700 },
+  { rank: 'A', karma: 9000 }
+];
 
 
     const LOAN_AMOUNT = 500;
@@ -1498,6 +1521,9 @@ const DIAMOND_BONUS_CHIPS = 10;
       if (t === 'CALLING_PROC_CLUBS') return `Calling (♣): dealer lane #${d.laneIdx} ${d.delta}`;
       if (t === 'CALLING_PROC_SPADES') return `Calling (♠): revealed dealer lane #${d.laneIdx}`;
       if (t === 'CALLING_PROC_HEARTS_TRIAGE') return `Calling (♥): triage lane #${d.laneIdx}`;
+      if (t === 'CALLING_CARD_LEVEL_UP') return `Calling card leveled: ${d.fromRank} → ${d.toRank}`;
+      if (t === 'NPC_ASSIGNED') return `NPC: ${d.npcName} (${d.tileType})`;
+      if (t === 'MERCHANT_ENTER') return `Merchant: ${d.npcName} (prices x${d.priceMult})`;
       if (t === 'WINNER_REWARD_FUSE') return `Fused ${d.cards ? d.cards.join(' + ') : 'cards'}`;
       if (t === 'DECK_EXHAUSTION') return `Deck exhaustion: ${d.side} (${d.reason})`;
       if (t === 'MATCH_END') return `Match end: ${d.outcome} (payout ${d.payout}, transfer ${d.transferNet >= 0 ? '+' : ''}${d.transferNet})`;
@@ -2272,6 +2298,59 @@ const DIAMOND_BONUS_CHIPS = 10;
       return isRedSuit(card.suit) ? 'red' : 'black';
     }
 
+    function rankToValue(rank) {
+      if (rank === 'A') return 14;
+      if (rank === 'K') return 13;
+      if (rank === 'Q') return 12;
+      if (rank === 'J') return 11;
+      const n = Number(rank);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function valueToRank(value) {
+      if (value === 14) return 'A';
+      if (value === 13) return 'K';
+      if (value === 12) return 'Q';
+      if (value === 11) return 'J';
+      return String(value);
+    }
+
+    function suitColor(suit) {
+      return (suit === '♥' || suit === '♦') ? 'red' : 'black';
+    }
+
+    function getAffinity(playerSuit, npcSuit) {
+      if (!playerSuit || !npcSuit) return 'neutral';
+      if (playerSuit === npcSuit) return 'resonant';
+      if (suitColor(playerSuit) === suitColor(npcSuit)) return 'dissonant';
+      return 'neutral';
+    }
+
+    function affinityIcon(affinity) {
+      if (affinity === 'resonant') return '+';
+      if (affinity === 'dissonant') return '-';
+      return '•';
+    }
+
+    function maybeLevelUpCallingCardFromKarma() {
+      if (!run || !run.callingCard) return;
+      const currentRank = run.callingCard.rank || '2';
+      const currentIndex = CALLING_RANK_THRESHOLDS.findIndex(t => t.rank === currentRank);
+      const nextIndex = currentIndex + 1;
+      if (nextIndex <= 0 || nextIndex >= CALLING_RANK_THRESHOLDS.length) return;
+      const next = CALLING_RANK_THRESHOLDS[nextIndex];
+      if (safeNumber(run.karma, 0) < next.karma) return;
+      run.callingCard.rank = next.rank;
+      logEvent('CALLING_CARD_LEVEL_UP', {
+        fromRank: currentRank,
+        toRank: next.rank,
+        totalKarma: run.karma,
+        thresholdMet: next.karma
+      });
+      showToast(`Calling Card leveled up: ${currentRank} → ${next.rank}`);
+      renderHUD();
+    }
+
     function getCardValueOptions(card) {
       if (!card || isModifier(card)) return [];
       if (isFused(card)) {
@@ -2367,11 +2446,20 @@ function getOpponentDifficulty() {
   return (d === 'easy' || d === 'medium' || d === 'hard') ? d : 'hard';
 }
 
-
+function getMerchantPriceMult() {
+  const ctx = run && run.ui && run.ui.merchantContext;
+  const mult = ctx && typeof ctx.priceMult === 'number' ? ctx.priceMult : 1;
+  return Math.max(0.75, Math.min(1.25, mult));
+}
 
 function getMerchantRemovalCost() {
   const n = safeNumber(run && run.paidRemovalCount, 0);
-  return MERCHANT_REMOVE_COST + (n * MERCHANT_REMOVE_INCREMENT);
+  const base = MERCHANT_REMOVE_COST + (n * MERCHANT_REMOVE_INCREMENT);
+  return Math.ceil(base * getMerchantPriceMult());
+}
+
+function getMerchantCost(base) {
+  return Math.ceil(base * getMerchantPriceMult());
 }
 
 function getModKey(delta) { return String(delta); }
@@ -2429,6 +2517,78 @@ function benchPush(card, source = '') {
     // =============================================
     // BOARD GENERATION
     // =============================================
+    const NPC_NAMES = ['Rowan', 'Maris', 'Calder', 'June', 'Sable', 'Nico', 'Arden', 'Vale', 'Tamsin', 'Quinn', 'Otto', 'Liora'];
+
+    function randomChoice(list) {
+      return list[Math.floor(Math.random() * list.length)];
+    }
+
+    function randInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function rollNpcRankValue(floor, type) {
+      const roll = Math.random();
+      if (type === 'STANDARD') {
+        if (floor === 1) {
+          if (roll < 0.02) return randInt(12, 14);
+          if (roll < 0.12) return randInt(9, 11);
+          return randInt(2, 8);
+        }
+        if (floor === 2) {
+          if (roll < 0.02) return 14;
+          if (roll < 0.12) return randInt(11, 13);
+          return randInt(4, 10);
+        }
+        if (roll < 0.10) return randInt(13, 14);
+        return randInt(6, 12);
+      }
+      if (type === 'HIGH_STAKES') {
+        if (floor === 1) {
+          if (roll < 0.10) return randInt(12, 14);
+          return randInt(6, 11);
+        }
+        if (floor === 2) {
+          if (roll < 0.10) return 14;
+          return randInt(8, 13);
+        }
+        return randInt(10, 14);
+      }
+      if (type === 'BOSS') {
+        if (floor === 1) {
+          if (roll < 0.20) return 14;
+          return randInt(10, 13);
+        }
+        if (floor === 2) return randInt(12, 14);
+        return 14;
+      }
+      return randInt(4, 12);
+    }
+
+    function makeNpcName(type) {
+      const base = randomChoice(NPC_NAMES);
+      if (type === 'HIGH_STAKES') return `High Roller ${base}`;
+      if (type === 'BOSS') return `Floor Boss: ${base}`;
+      return base;
+    }
+
+    function createNpcForTile(floor, type) {
+      const tableTypes = ['STANDARD', 'HIGH_STAKES', 'BOSS'];
+      const roleSuits = {
+        BARTENDER: '♥',
+        MERCHANT: '♦',
+        LOAN_SHARK: '♣'
+      };
+
+      if (!tableTypes.includes(type) && !roleSuits[type]) return null;
+
+      const suit = roleSuits[type] || randomChoice(['♥', '♠', '♦', '♣']);
+      const rankValue = rollNpcRankValue(floor, type);
+      const rank = valueToRank(rankValue);
+      const name = makeNpcName(type);
+      return { name, callingCard: { rank, suit } };
+    }
+
     function buildTilePoolForFloor(floor) {
       const pool = [];
       const counts = FLOOR_COUNTS[floor];
@@ -2473,15 +2633,18 @@ function benchPush(card, source = '') {
       const tiles = [];
 
       for (const [id, x, y, connections] of NODES) {
+        const tileType = tileTypes[id];
+        const npc = createNpcForTile(floor, tileType);
         tiles.push({
           id,
-          type: tileTypes[id],
-          label: TILE_LABELS[tileTypes[id]],
-          color: TILE_COLORS[tileTypes[id]],
+          type: tileType,
+          label: TILE_LABELS[tileType],
+          color: TILE_COLORS[tileType],
           center: [x, y],
           svgPath: hexPath(x, y),
           connections,
-          isStartRow: id >= 18
+          isStartRow: id >= 18,
+          npc
         });
       }
 
@@ -2521,8 +2684,7 @@ function benchPush(card, source = '') {
 
       resetLog();
       const chooseSuit = (suit) => {
-        const rank = RANKS[Math.floor(Math.random() * RANKS.length)];
-        run.callingCard = { rank, suit };
+        run.callingCard = { rank: '2', suit };
         run.callingCardChosenSuit = suit;
         logEvent('CALLING_CARD_SET', { callingCard: run.callingCard });
         logEvent('GAME_START', {
@@ -2562,6 +2724,17 @@ function benchPush(card, source = '') {
       run.ui.mode = 'BOARD';
 
       logEvent('FLOOR_START', { floor });
+      run.board.tiles.forEach(tile => {
+        if (tile.npc) {
+          logEvent('NPC_ASSIGNED', {
+            floor,
+            tileId: tile.id,
+            tileType: tile.type,
+            npcName: tile.npc.name,
+            npcCallingCard: tile.npc.callingCard
+          });
+        }
+      });
 
       renderAll();
     }
@@ -2816,6 +2989,27 @@ function benchPush(card, source = '') {
     // MERCHANT
     // =============================================
     function encounterMerchant() {
+      const tile = run.board.tiles[run.board.currentTileId];
+      const npc = tile ? tile.npc : null;
+      let affinity = 'neutral';
+      let edgeDelta = 0;
+      let priceMult = 1;
+      if (npc && run.callingCard) {
+        affinity = getAffinity(run.callingCard.suit, npc.callingCard.suit);
+        edgeDelta = rankToValue(run.callingCard.rank) - rankToValue(npc.callingCard.rank);
+        const affinityMod = affinity === 'resonant' ? -0.10 : (affinity === 'dissonant' ? 0.10 : 0);
+        const edgeMod = Math.max(-0.10, Math.min(0.10, (rankToValue(npc.callingCard.rank) - rankToValue(run.callingCard.rank)) * 0.01));
+        priceMult = Math.max(0.75, Math.min(1.25, 1 + affinityMod + edgeMod));
+      }
+
+      run.ui.merchantContext = {
+        tileId: run.board.currentTileId,
+        npc,
+        affinity,
+        edgeDelta,
+        priceMult
+      };
+
       merchantOffers = [randomCard(), randomCard(), randomCard()];
       removalMode = false;
       removalCandidates = [];
@@ -2825,6 +3019,11 @@ function benchPush(card, source = '') {
       removalPaidCost = 0;
 
       logEvent('MERCHANT_ENTER', {
+        npcName: npc ? npc.name : null,
+        npcCallingCard: npc ? npc.callingCard : null,
+        affinity,
+        edgeDelta,
+        priceMult: Number(priceMult.toFixed(2)),
         offers: merchantOffers.map(c => cardToString(c)),
         chips: safeNumber(run.chips),
         deckSize: run.playerDeck.length
@@ -2835,17 +3034,28 @@ function benchPush(card, source = '') {
 
     function renderMerchant() {
       const chipsNow = safeNumber(run.chips);
+      const ctx = run.ui.merchantContext || {};
+      const npc = ctx.npc;
+      const affinity = ctx.affinity || 'neutral';
+      const priceMult = getMerchantPriceMult();
+      const npcLine = npc
+        ? `${npc.name} · ${cardToString(npc.callingCard)} · ${affinityIcon(affinity)} · Prices x${priceMult.toFixed(2)}`
+        : `Prices x${priceMult.toFixed(2)}`;
+      const buyCost = getMerchantCost(MERCHANT_BUY_COST);
+      const rerollInvCost = getMerchantCost(MERCHANT_INVENTORY_REROLL_COST);
       let body = `
-        <p class="modal-text">The merchant displays their wares. Chips: <strong>${chipsNow}</strong> | Deck: <strong>${run.playerDeck.length}</strong></p>
+        <p class="modal-text">The merchant displays their wares.</p>
+        <div class="log-kv" style="margin-bottom:10px;">${npcLine}</div>
+        <p class="modal-text">Chips: <strong>${chipsNow}</strong> | Deck: <strong>${run.playerDeck.length}</strong></p>
       `;
 
       // Buy cards + inventory reroll (always visible)
-      const canRerollInv = chipsNow >= MERCHANT_INVENTORY_REROLL_COST;
+      const canRerollInv = chipsNow >= rerollInvCost;
       body += `
         <div class="merchant-section">
-          <div class="merchant-section-title">Buy Cards (${MERCHANT_BUY_COST} each)</div>
+          <div class="merchant-section-title">Buy Cards (${buyCost} each)</div>
           <div style="display:flex; justify-content:center; margin-bottom:12px;">
-            <button class="modal-btn" ${canRerollInv ? '' : 'disabled'} onclick="rerollMerchantInventory()">Re-roll Inventory (${MERCHANT_INVENTORY_REROLL_COST})</button>
+            <button class="modal-btn" ${canRerollInv ? '' : 'disabled'} onclick="rerollMerchantInventory()">Re-roll Inventory (${rerollInvCost})</button>
           </div>
           <div class="merchant-cards">
       `;
@@ -2855,7 +3065,7 @@ function benchPush(card, source = '') {
   const remaining = isMod ? getModifierRemaining(card.delta) : null;
   const soldOut = isMod && remaining <= 0;
 
-  const canBuy = (chipsNow >= MERCHANT_BUY_COST) && !soldOut;
+  const canBuy = (chipsNow >= buyCost) && !soldOut;
   const stockLine = isMod
     ? `<div style="margin-top:6px; font-size:12px; color:var(--text-muted);">${soldOut ? 'Sold out' : `Stock: ${remaining}/${MOD_PURCHASE_LIMIT_PER_DELTA}`}</div>`
     : '';
@@ -2891,7 +3101,8 @@ body += `
       `;
 
       if (removalMode) {
-        const canReroll = safeNumber(run.chips) >= REMOVAL_REROLL_COST && run.playerDeck.length >= 1;
+        const removalRerollCost = getMerchantCost(REMOVAL_REROLL_COST);
+        const canReroll = safeNumber(run.chips) >= removalRerollCost && run.playerDeck.length >= 1;
 
         body += `
           <div class="removal-picker">
@@ -2912,7 +3123,7 @@ body += `
         body += `
             </div>
             <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
-              <button class="modal-btn" ${canReroll ? '' : 'disabled'} onclick="rerollRemoval()">Re-roll (${REMOVAL_REROLL_COST})</button>
+              <button class="modal-btn" ${canReroll ? '' : 'disabled'} onclick="rerollRemoval()">Re-roll (${removalRerollCost})</button>
             </div>
           </div>
         `;
@@ -2936,16 +3147,18 @@ body += `
     }
 
     window.rerollMerchantInventory = function() {
-      if (run.chips < MERCHANT_INVENTORY_REROLL_COST) return;
-      run.chips -= MERCHANT_INVENTORY_REROLL_COST;
+      const cost = getMerchantCost(MERCHANT_INVENTORY_REROLL_COST);
+      if (run.chips < cost) return;
+      run.chips -= cost;
       merchantOffers = [randomCard(), randomCard(), randomCard()];
-      logEvent('MERCHANT_REROLL', { which: 'inventory', cost: MERCHANT_INVENTORY_REROLL_COST, offers: merchantOffers.map(c => cardToString(c)) });
+      logEvent('MERCHANT_REROLL', { which: 'inventory', cost, offers: merchantOffers.map(c => cardToString(c)) });
       renderMerchant();
-      showToast(`Re-rolled inventory (-${MERCHANT_INVENTORY_REROLL_COST})`);
+      showToast(`Re-rolled inventory (-${cost})`);
     };
 
     window.buyMerchantCard = function(idx) {
-  if (run.chips < MERCHANT_BUY_COST) return;
+  const cost = getMerchantCost(MERCHANT_BUY_COST);
+  if (run.chips < cost) return;
 
   const card = merchantOffers[idx];
 
@@ -2963,14 +3176,14 @@ body += `
     return;
   }
 
-  run.chips -= MERCHANT_BUY_COST;
+  run.chips -= cost;
   run.playerDeck.push(card);
 
   if (isModifier(card)) recordModifierPurchase(card.delta);
 
   logEvent('MERCHANT_BUY', {
     card: cardToString(card),
-    cost: MERCHANT_BUY_COST,
+    cost,
     isModifier: isModifier(card),
     modifierRemaining: isModifier(card) ? getModifierRemaining(card.delta) : null,
     deckSnapshot: deckSnapshot()
@@ -3009,17 +3222,18 @@ body += `
 
     window.rerollRemoval = function() {
       if (!removalMode) return;
-      if (run.chips < REMOVAL_REROLL_COST) return;
-      run.chips -= REMOVAL_REROLL_COST;
+      const cost = getMerchantCost(REMOVAL_REROLL_COST);
+      if (run.chips < cost) return;
+      run.chips -= cost;
 
       const indices = distinctRandomIndices(3, run.playerDeck.length);
       removalCandidates = indices.map(i => ({ card: run.playerDeck[i] }));
       selectedRemovalIdx = null;
 
-      logEvent('MERCHANT_REROLL', { which: 'removal', cost: REMOVAL_REROLL_COST, candidates: removalCandidates.map(x => cardToString(x.card)) });
+      logEvent('MERCHANT_REROLL', { which: 'removal', cost, candidates: removalCandidates.map(x => cardToString(x.card)) });
 
       renderMerchant();
-      showToast(`Re-rolled removal (-${REMOVAL_REROLL_COST})`);
+      showToast(`Re-rolled removal (-${cost})`);
     };
 
     window.selectRemovalCard = function(idx) {
@@ -3110,6 +3324,7 @@ body += `
       blackjackMatch = {
         type,
         buyIn,
+        npc: null,
         playerPositions: [],
         dealerPositions: [],
         playerDrawPile,
@@ -3190,6 +3405,23 @@ body += `
       blackjackMatch.transferMultiplierMin = limits.min;
       blackjackMatch.transferMultiplierMax = limits.max;
 
+      const currentTile = run.board.tiles[run.board.currentTileId];
+      const npc = currentTile ? currentTile.npc : null;
+      blackjackMatch.npc = npc;
+      let affinity = 'neutral';
+      let edgeDelta = 0;
+      let procChance = CALLING_PROC_CHANCE;
+      if (npc && run.callingCard) {
+        affinity = getAffinity(run.callingCard.suit, npc.callingCard.suit);
+        edgeDelta = rankToValue(run.callingCard.rank) - rankToValue(npc.callingCard.rank);
+        const affinityMod = affinity === 'resonant' ? 0.10 : (affinity === 'dissonant' ? -0.10 : 0);
+        const edgeMod = Math.max(-0.12, Math.min(0.12, edgeDelta * 0.01));
+        procChance = Math.max(0.10, Math.min(0.90, CALLING_PROC_CHANCE + affinityMod + edgeMod));
+      }
+      blackjackMatch.callingProcChance = procChance;
+      blackjackMatch.affinity = affinity;
+      blackjackMatch.edgeDelta = edgeDelta;
+
       logEvent('MATCH_START', {
         type,
         buyIn,
@@ -3199,6 +3431,11 @@ body += `
         dealerExtraMods: extraMods,
         transferMultiplierMin: limits.min,
         transferMultiplierMax: limits.max,
+        npcName: npc ? npc.name : null,
+        npcCallingCard: npc ? npc.callingCard : null,
+        affinity,
+        edgeDelta,
+        callingProcChance: procChance,
         deckSnapshot: deckSnapshot()
       });
 
@@ -4212,6 +4449,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
       }
       const karmaGained = karmaLaneGain + karmaWinBonus;
       run.karma = Math.max(0, safeNumber(run.karma, 0) + karmaGained);
+      maybeLevelUpCallingCardFromKarma();
 
       blackjackMatch.result = {
         outcome,
@@ -5032,11 +5270,19 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         if (isAvailable) tileClass += ' available';
 
         const clickHandler = isAvailable ? `onclick="onTileClick(${tile.id})"` : '';
+        let subLabel = '';
+        if (tile.npc && tile.npc.callingCard) {
+          const calling = `${tile.npc.callingCard.rank}${tile.npc.callingCard.suit}`;
+          const affinity = run.callingCard ? getAffinity(run.callingCard.suit, tile.npc.callingCard.suit) : null;
+          const affIcon = affinity ? ` ${affinityIcon(affinity)}` : '';
+          subLabel = `<text class="hex-sub" x="${tile.center[0]}" y="${tile.center[1] + 12}">${calling}${affIcon}</text>`;
+        }
 
         svg += `
           <g class="${tileClass}" ${clickHandler}>
             <path class="hex-bg" d="${tile.svgPath}" fill="${tile.color}" stroke="#1a2436" stroke-width="2"/>
             <text class="hex-label" x="${tile.center[0]}" y="${tile.center[1]}">${tile.label}</text>
+            ${subLabel}
           </g>
         `;
       }
@@ -5152,6 +5398,13 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const isResolved = blackjackMatch.phase === 'resolved';
       const result = blackjackMatch.result;
       const transferMultiplier = blackjackMatch.transferMultiplier || 1;
+      const npc = blackjackMatch.npc;
+      const affinity = blackjackMatch.affinity || 'neutral';
+      const edgeDelta = blackjackMatch.edgeDelta || 0;
+      const procPct = Math.round((blackjackMatch.callingProcChance || CALLING_PROC_CHANCE) * 100);
+      const npcLine = npc
+        ? `${npc.name} · ${cardToString(npc.callingCard)} · ${affinityIcon(affinity)} · Edge ${edgeDelta >= 0 ? '+' : ''}${edgeDelta} · Proc ${procPct}%`
+        : `Dealer · Proc ${procPct}%`;
 
       const typeLabel = blackjackMatch.type === 'BOSS' ? 'BOSS BATTLE' :
                         blackjackMatch.type === 'HIGH_STAKES' ? 'HIGH STAKES' : 'STANDARD TABLE';
@@ -5160,6 +5413,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         <div class="bj-header">
           <div class="bj-title">${typeLabel}</div>
           <div class="bj-status">Buy-in: ${blackjackMatch.buyIn} chips · Transfer x${transferMultiplier}</div>
+          <div class="bj-status">${npcLine}</div>
         </div>
       `;
 
@@ -5169,7 +5423,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       html += `
         <div class="bj-board">
           <div class="bj-side">
-            <div class="bj-side-label">Dealer</div>
+            <div class="bj-side-label">${npc ? `${npc.name} · ${cardToString(npc.callingCard)}` : 'Dealer'}</div>
             <div class="bj-positions">
               ${blackjackMatch.dealerPositions.map((p, i) => renderPosition(p, i, 'dealer', isResolved, laneWinners[i])).join('')}
             </div>
