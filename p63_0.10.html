@@ -1166,6 +1166,7 @@ const CALLING_RANK_THRESHOLDS = [
       'STANDARD': '#4a6fa5',
       'HIGH_STAKES': '#9b59b6',
       'MERCHANT': '#27ae60',
+      'MODIFY': '#16a085',
       'LOAN_SHARK': '#e67e22',
       'REST_STOP': '#3498db',
       'BARTENDER': '#e74c3c',
@@ -1177,6 +1178,7 @@ const CALLING_RANK_THRESHOLDS = [
       'STANDARD': 'STD',
       'HIGH_STAKES': 'HIGH',
       'MERCHANT': 'MER',
+      'MODIFY': 'MOD',
       'LOAN_SHARK': 'LOAN',
       'REST_STOP': 'REST',
       'BARTENDER': 'BAR',
@@ -1497,6 +1499,10 @@ const CALLING_RANK_THRESHOLDS = [
       if (t === 'LOAN_TAKEN') return `Loan taken +${d.amount}, owe ${d.repay}`;
       if (t === 'LOAN_REPAID') return `Loan repaid -${d.amount}`;
       if (t === 'MERCHANT_ENTER') return `Merchant opened`;
+      if (t === 'MODIFY_ENTER') return `Modify opened`;
+      if (t === 'MODIFY_SERVICE_SELECT') return `Modify service: ${d.serviceId} (-${d.cost})`;
+      if (t === 'MODIFY_APPLY') return `Modify applied: ${d.serviceId} (${d.count || 0} cards)`;
+      if (t === 'MODIFY_LEAVE') return `Modify closed`;
       if (t === 'MERCHANT_BUY') return `Bought ${d.card} (-${d.cost})`;
       if (t === 'MERCHANT_REMOVE_START') return `Removal started (-${d.cost})`;
       if (t === 'MERCHANT_REMOVE_CONFIRM') return `Removed ${d.card}`;
@@ -2472,6 +2478,14 @@ function getMerchantBuyCost(card) {
   return Math.ceil(scaled * getMerchantPriceMult());
 }
 
+function getModifyServiceCost(serviceId, floor) {
+  const baseFloor = Math.max(1, safeNumber(floor, 1));
+  const isPremium = serviceId === 'CALLING_SUIT_SWEEP' || serviceId === 'UNIFORM_RANK_PRESS';
+  const base = isPremium ? 200 : 100;
+  const step = isPremium ? 50 : 25;
+  return base + ((baseFloor - 1) * step);
+}
+
 function getModKey(delta) { return String(delta); }
 
 function getModifierPurchased(delta) {
@@ -2609,7 +2623,7 @@ function benchPush(card, source = '') {
       pool.push('BARTENDER');
       pool.push('MINIGAME');
       pool.push('REST_STOP', 'REST_STOP');
-      pool.push('MERCHANT', 'MERCHANT');
+      pool.push('MERCHANT', 'MODIFY');
       pool.push('LOAN_SHARK');
 
       return pool;
@@ -2783,6 +2797,7 @@ function benchPush(card, source = '') {
         case 'MINIGAME': encounterMinigame(); break;
         case 'LOAN_SHARK': encounterLoanShark(); break;
         case 'MERCHANT': encounterMerchant(); break;
+        case 'MODIFY': encounterModify(); break;
         case 'STANDARD': encounterBlackjackStandard(); break;
         case 'HIGH_STAKES': encounterBlackjackHigh(); break;
         case 'BOSS': encounterBoss(); break;
@@ -3000,6 +3015,303 @@ function benchPush(card, source = '') {
     // =============================================
     // MERCHANT
     // =============================================
+    const MODIFY_SERVICES = {
+      RESUIT: { id: 'RESUIT', name: 'Re-Suit', tier: 'core' },
+      RERANK: { id: 'RERANK', name: 'Re-Rank', tier: 'core' },
+      CALLING_SUIT_SWEEP: { id: 'CALLING_SUIT_SWEEP', name: 'Calling Suit Sweep', tier: 'premium' },
+      UNIFORM_RANK_PRESS: { id: 'UNIFORM_RANK_PRESS', name: 'Uniform Rank Press', tier: 'premium' }
+    };
+
+    function getEligibleStandardIndices() {
+      if (!run || !run.playerDeck) return [];
+      const eligible = [];
+      run.playerDeck.forEach((card, idx) => {
+        if (isStandardCard(card)) eligible.push(idx);
+      });
+      return eligible;
+    }
+
+    function buildModifyOffers() {
+      const eligible = getEligibleStandardIndices();
+      if (!eligible.length) return [];
+      const services = [MODIFY_SERVICES.RESUIT.id, MODIFY_SERVICES.RERANK.id];
+      services.push(MODIFY_SERVICES.UNIFORM_RANK_PRESS.id);
+      if (run && run.callingCard) services.push(MODIFY_SERVICES.CALLING_SUIT_SWEEP.id);
+      return shuffle(services).slice(0, Math.min(2, services.length));
+    }
+
+    function encounterModify() {
+      const offers = buildModifyOffers();
+      const eligibleCount = getEligibleStandardIndices().length;
+
+      run.ui.modifyContext = {
+        tileId: run.board.currentTileId,
+        servicesOffered: offers,
+        serviceUsed: false,
+        selectedServiceId: null,
+        previewIndices: [],
+        rankChoices: null
+      };
+
+      logEvent('MODIFY_ENTER', {
+        tileId: run.board.currentTileId,
+        floor: run.floor,
+        chips: safeNumber(run.chips),
+        deckSize: run.playerDeck.length,
+        eligibleCount,
+        servicesOffered: offers
+      });
+
+      renderModifyMenu();
+    }
+
+    function renderModifyMenu() {
+      const ctx = run.ui.modifyContext || {};
+      const eligibleCount = getEligibleStandardIndices().length;
+      const offers = ctx.servicesOffered || [];
+      const inProgress = !!ctx.selectedServiceId && !ctx.serviceUsed;
+      const chipsNow = safeNumber(run.chips);
+
+      let body = `
+        <p class="modal-text">Modify changes cards already in your deck (base cards only). Choose one service.</p>
+        <p class="modal-text">Chips: <strong>${chipsNow}</strong> | Eligible cards: <strong>${eligibleCount}</strong></p>
+      `;
+
+      if (!eligibleCount) {
+        body += `<p class="modal-text" style="color:var(--text-muted);">No eligible cards to modify.</p>`;
+      } else if (inProgress) {
+        const meta = MODIFY_SERVICES[ctx.selectedServiceId];
+        body += `<p class="modal-text" style="color:var(--accent-gold); font-weight:700;">Service in progress: ${meta ? meta.name : ctx.selectedServiceId}</p>`;
+      } else if (ctx.serviceUsed) {
+        body += `<p class="modal-text" style="color:var(--accent-green); font-weight:700;">Service completed.</p>`;
+      }
+
+      const buttons = [];
+      if (eligibleCount && !ctx.serviceUsed && !inProgress) {
+        offers.forEach(serviceId => {
+          const meta = MODIFY_SERVICES[serviceId];
+          const cost = getModifyServiceCost(serviceId, run.floor);
+          buttons.push({
+            text: `${meta ? meta.name : serviceId} (${cost})`,
+            primary: true,
+            disabled: chipsNow < cost,
+            action: () => selectModifyService(serviceId)
+          });
+        });
+      } else if (inProgress) {
+        buttons.push({
+          text: 'Continue',
+          primary: true,
+          action: () => openModifyService(ctx.selectedServiceId)
+        });
+      }
+
+      if (!inProgress) {
+        buttons.push({
+          text: 'Leave',
+          action: () => {
+            logEvent('MODIFY_LEAVE', { tileId: run.board.currentTileId });
+            run.ui.modifyContext = null;
+            closeModal();
+            renderAll();
+          }
+        });
+      }
+
+      showModal('Modify', body, buttons);
+    }
+
+    function selectModifyService(serviceId) {
+      const ctx = run.ui.modifyContext;
+      if (!ctx || ctx.serviceUsed) return;
+      const cost = getModifyServiceCost(serviceId, run.floor);
+      if (run.chips < cost) return;
+
+      run.chips -= cost;
+      ctx.selectedServiceId = serviceId;
+      logEvent('MODIFY_SERVICE_SELECT', { serviceId, cost });
+      openModifyService(serviceId);
+    }
+
+    function openModifyService(serviceId) {
+      if (serviceId === MODIFY_SERVICES.RESUIT.id) {
+        openModifyCorePicker('Re-Suit', serviceId);
+        return;
+      }
+      if (serviceId === MODIFY_SERVICES.RERANK.id) {
+        openModifyCorePicker('Re-Rank', serviceId);
+        return;
+      }
+      if (serviceId === MODIFY_SERVICES.CALLING_SUIT_SWEEP.id) {
+        openModifyCallingSuitSweep();
+        return;
+      }
+      if (serviceId === MODIFY_SERVICES.UNIFORM_RANK_PRESS.id) {
+        openModifyUniformRankPress();
+      }
+    }
+
+    function openModifyCorePicker(title, serviceId) {
+      const ctx = run.ui.modifyContext;
+      const eligible = getEligibleStandardIndices();
+      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
+      ctx.previewIndices = sample;
+
+      const cardsHtml = sample.map(idx => {
+        const card = run.playerDeck[idx];
+        return `
+          <div class="merchant-card-slot">
+            <div class="playing-card ${cardCssClass(card)}">${cardToString(card)}</div>
+            <button class="modal-btn" onclick="selectModifyCoreCard(${idx})">Select</button>
+          </div>
+        `;
+      }).join('');
+
+      showModal(`Modify - ${title}`, `
+        <p class="modal-text">Choose a card to modify.</p>
+        <div class="merchant-cards">${cardsHtml}</div>
+      `, [
+        { text: 'Back', action: () => renderModifyMenu() }
+      ]);
+
+      window.selectModifyCoreCard = function(deckIdx) {
+        if (serviceId === MODIFY_SERVICES.RESUIT.id) {
+          openModifySuitPicker(deckIdx);
+        } else {
+          openModifyRankPicker(deckIdx);
+        }
+      };
+    }
+
+    function openModifySuitPicker(deckIdx) {
+      const card = run.playerDeck[deckIdx];
+      if (!card || !isStandardCard(card)) return;
+
+      showModal('Modify - Re-Suit', `
+        <p class="modal-text">Choose a new suit for ${cardToString(card)}.</p>
+        <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
+          ${SUITS.map(suit => `<button class="modal-btn" onclick="applyModifyResuit(${deckIdx}, '${suit}')">${suit}</button>`).join('')}
+        </div>
+      `, [
+        { text: 'Back', action: () => renderModifyMenu() }
+      ]);
+    }
+
+    function openModifyRankPicker(deckIdx) {
+      const card = run.playerDeck[deckIdx];
+      if (!card || !isStandardCard(card)) return;
+
+      const ranksHtml = RANKS.map(rank => `<button class="modal-btn" onclick="applyModifyRerank(${deckIdx}, '${rank}')">${rank}</button>`).join('');
+      showModal('Modify - Re-Rank', `
+        <p class="modal-text">Choose a new rank for ${cardToString(card)}.</p>
+        <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:8px;">${ranksHtml}</div>
+      `, [
+        { text: 'Back', action: () => renderModifyMenu() }
+      ]);
+    }
+
+    window.applyModifyResuit = function(deckIdx, suit) {
+      const card = run.playerDeck[deckIdx];
+      if (!card || !isStandardCard(card)) return;
+      applyModifyService('RESUIT', [deckIdx], () => { card.suit = suit; });
+    };
+
+    window.applyModifyRerank = function(deckIdx, rank) {
+      const card = run.playerDeck[deckIdx];
+      if (!card || !isStandardCard(card)) return;
+      applyModifyService('RERANK', [deckIdx], () => { card.rank = rank; });
+    };
+
+    function openModifyCallingSuitSweep() {
+      const ctx = run.ui.modifyContext;
+      const eligible = getEligibleStandardIndices();
+      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
+      ctx.previewIndices = sample;
+
+      const cardsHtml = sample.map(idx => {
+        const card = run.playerDeck[idx];
+        return `<div class="playing-card ${cardCssClass(card)}">${cardToString(card)}</div>`;
+      }).join('');
+
+      showModal('Modify - Calling Suit Sweep', `
+        <p class="modal-text">Preview the cards that will be re-suited to ${run.callingCard ? run.callingCard.suit : ''}.</p>
+        <div class="merchant-cards">${cardsHtml}</div>
+      `, [
+        {
+          text: 'Confirm',
+          primary: true,
+          action: () => {
+            applyModifyService('CALLING_SUIT_SWEEP', sample, () => {
+              sample.forEach(idx => {
+                const card = run.playerDeck[idx];
+                if (card && isStandardCard(card)) card.suit = run.callingCard.suit;
+              });
+            });
+          }
+        },
+        { text: 'Back', action: () => renderModifyMenu() }
+      ]);
+    }
+
+    function openModifyUniformRankPress() {
+      const ctx = run.ui.modifyContext;
+      const eligible = getEligibleStandardIndices();
+      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
+      ctx.previewIndices = sample;
+      const ranks = shuffle(RANKS.slice()).slice(0, 2);
+      ctx.rankChoices = ranks;
+
+      const cardsHtml = sample.map(idx => {
+        const card = run.playerDeck[idx];
+        return `<div class="playing-card ${cardCssClass(card)}">${cardToString(card)}</div>`;
+      }).join('');
+
+      showModal('Modify - Uniform Rank Press', `
+        <p class="modal-text">Choose a rank to press onto these cards.</p>
+        <div class="merchant-cards">${cardsHtml}</div>
+      `, [
+        ...ranks.map(rank => ({
+          text: `Set to ${rank}`,
+          primary: true,
+          action: () => {
+            applyModifyService('UNIFORM_RANK_PRESS', sample, () => {
+              sample.forEach(idx => {
+                const card = run.playerDeck[idx];
+                if (card && isStandardCard(card)) card.rank = rank;
+              });
+            });
+          }
+        })),
+        { text: 'Back', action: () => renderModifyMenu() }
+      ]);
+    }
+
+    function applyModifyService(serviceId, indices, applyFn) {
+      const ctx = run.ui.modifyContext;
+      const before = indices.map(i => cardToString(run.playerDeck[i]));
+      applyFn();
+      const after = indices.map(i => cardToString(run.playerDeck[i]));
+
+      logEvent('MODIFY_APPLY', {
+        serviceId,
+        count: indices.length,
+        affectedBefore: before,
+        affectedAfter: after,
+        deckSnapshot: deckSnapshot()
+      });
+
+      if (ctx) {
+        ctx.serviceUsed = true;
+        ctx.selectedServiceId = null;
+        ctx.previewIndices = [];
+        ctx.rankChoices = null;
+      }
+
+      renderModifyMenu();
+      renderAll();
+      showToast('Modify service applied');
+    }
+
     function encounterMerchant() {
       const tile = run.board.tiles[run.board.currentTileId];
       const npc = tile ? tile.npc : null;
