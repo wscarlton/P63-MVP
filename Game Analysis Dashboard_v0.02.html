@@ -1,0 +1,2783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Project 63 — Run Analyzer (Single-File MVP+)</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --panel:#121b2d;
+      --panel2:#0f1728;
+      --text:#e7eefc;
+      --muted:#9cb0d4;
+      --border:rgba(255,255,255,.10);
+      --accent:#7dd3fc;
+      --good:#34d399;
+      --warn:#fbbf24;
+      --bad:#fb7185;
+      --chip:#1f2a44;
+      --shadow: 0 12px 40px rgba(0,0,0,.40);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; background:linear-gradient(180deg, #071021 0%, #0b1220 60%, #071021 100%);
+      color:var(--text); font-family:var(--sans);
+    }
+    header{
+      padding:18px 16px;
+      border-bottom:1px solid var(--border);
+      background:rgba(10,16,30,.70);
+      position:sticky; top:0; z-index:50;
+      backdrop-filter: blur(10px);
+    }
+    .topbar{
+      max-width:1200px; margin:0 auto;
+      display:flex; gap:14px; align-items:center; justify-content:space-between;
+    }
+    .brand{ display:flex; align-items:center; gap:10px; }
+    .badge{
+      width:34px; height:34px; border-radius:10px;
+      background:radial-gradient(circle at 30% 30%, rgba(125,211,252,.9), rgba(59,130,246,.35) 60%, rgba(15,23,42,.6) 100%);
+      border:1px solid rgba(255,255,255,.15);
+      box-shadow: var(--shadow);
+    }
+    h1{font-size:15px; margin:0}
+    .subtitle{font-size:12px; color:var(--muted); margin-top:2px}
+    nav{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .tabbtn{
+      border:1px solid var(--border);
+      background:rgba(18,27,45,.65);
+      color:var(--text);
+      padding:8px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      font-size:12px;
+      transition:transform .05s ease, background .15s ease;
+    }
+    .tabbtn:hover{background:rgba(31,42,68,.65)}
+    .tabbtn:active{transform:translateY(1px)}
+    .tabbtn.active{
+      background:rgba(125,211,252,.14);
+      border-color:rgba(125,211,252,.35);
+    }
+
+    main{max-width:1200px; margin:0 auto; padding:18px 16px 60px}
+    .grid{ display:grid; gap:14px; }
+    .cols2{grid-template-columns:repeat(2, minmax(0,1fr))}
+    .cols3{grid-template-columns:repeat(3, minmax(0,1fr))}
+    @media (max-width: 980px){
+      .cols2,.cols3{grid-template-columns:1fr}
+    }
+
+    .card{
+      background:rgba(18,27,45,.70);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .cardHeader{
+      padding:12px 12px 10px;
+      border-bottom:1px solid var(--border);
+      display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
+      background:rgba(15,23,40,.45);
+    }
+    .cardTitle{font-size:13px; margin:0}
+    .cardSub{font-size:12px; color:var(--muted); margin-top:4px}
+    .cardBody{padding:12px}
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(31,42,68,.5);
+      color:var(--text);
+      font-size:12px;
+    }
+    .pill b{font-family:var(--mono); font-size:12px}
+    .muted{color:var(--muted)}
+    .btn{
+      border:1px solid var(--border);
+      background:rgba(31,42,68,.55);
+      color:var(--text);
+      padding:9px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      font-size:12px;
+    }
+    .btn:hover{background:rgba(31,42,68,.75)}
+    .btn.danger{border-color:rgba(251,113,133,.35); background:rgba(251,113,133,.10)}
+    .btn.danger:hover{background:rgba(251,113,133,.15)}
+    .btn.primary{border-color:rgba(125,211,252,.35); background:rgba(125,211,252,.12)}
+    .btn.primary:hover{background:rgba(125,211,252,.16)}
+    .btn.small{padding:6px 8px; font-size:11px; border-radius:9px}
+    input, select, textarea{
+      width:100%;
+      background:rgba(10,16,30,.6);
+      border:1px solid var(--border);
+      color:var(--text);
+      padding:10px 10px;
+      border-radius:10px;
+      font-size:12px;
+      outline:none;
+    }
+    textarea{min-height:90px; resize:vertical; font-family:var(--mono); font-size:11px}
+    label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px}
+    .field{display:flex; flex-direction:column; gap:6px}
+    .split{ display:grid; grid-template-columns: 1.4fr .9fr; gap:14px; }
+    @media (max-width:980px){.split{grid-template-columns:1fr}}
+    .dropzone{
+      border:1px dashed rgba(125,211,252,.35);
+      background:rgba(125,211,252,.06);
+      border-radius:var(--radius);
+      padding:14px;
+      text-align:center;
+      color:var(--muted);
+    }
+    .dropzone.dragover{background:rgba(125,211,252,.12)}
+    canvas{width:100%; height:260px; display:block; background:rgba(10,16,30,.25); border:1px solid var(--border); border-radius:12px}
+    .tableWrap{overflow:auto; border-radius:12px; border:1px solid var(--border)}
+    table{width:100%; border-collapse:collapse; font-size:12px}
+    th,td{padding:10px 10px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; white-space:nowrap}
+    th{background:rgba(15,23,40,.45); color:var(--muted); font-weight:600}
+    tr:hover td{background:rgba(125,211,252,.06)}
+    .kpiGrid{
+      display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:10px;
+    }
+    @media (max-width:980px){.kpiGrid{grid-template-columns:repeat(2, minmax(0,1fr))}}
+    .kpi{
+      background:rgba(10,16,30,.35);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+    }
+    .kpi .label{font-size:11px; color:var(--muted)}
+    .kpi .value{font-size:14px; font-family:var(--mono); margin-top:6px}
+    .hint{font-size:12px; color:var(--muted); line-height:1.45}
+    .warnBox{
+      border:1px solid rgba(251,191,36,.35);
+      background:rgba(251,191,36,.10);
+      border-radius:12px;
+      padding:10px;
+      color:rgba(255,255,255,.9);
+      font-size:12px;
+    }
+    .goodBox{
+      border:1px solid rgba(52,211,153,.35);
+      background:rgba(52,211,153,.10);
+      border-radius:12px;
+      padding:10px;
+      color:rgba(255,255,255,.9);
+      font-size:12px;
+    }
+    .badBox{
+      border:1px solid rgba(251,113,133,.35);
+      background:rgba(251,113,133,.10);
+      border-radius:12px;
+      padding:10px;
+      color:rgba(255,255,255,.9);
+      font-size:12px;
+    }
+
+    dialog{
+      border:none;
+      border-radius:16px;
+      background:rgba(18,27,45,.95);
+      color:var(--text);
+      width:min(760px, 92vw);
+      box-shadow: var(--shadow);
+      padding:0;
+    }
+    dialog::backdrop{background:rgba(0,0,0,.55)}
+    .dlgHead{padding:14px 14px 10px; border-bottom:1px solid var(--border); background:rgba(15,23,40,.5)}
+    .dlgBody{padding:14px}
+    .dlgFoot{padding:12px 14px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:10px}
+    .mono{font-family:var(--mono)}
+    .tiny{font-size:11px}
+    .divider{height:1px; background:rgba(255,255,255,.10); margin:10px 0;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="topbar">
+    <div class="brand">
+      <div class="badge" aria-hidden="true"></div>
+      <div>
+        <h1>Project 63 — Run Analyzer</h1>
+        <div class="subtitle">MVP+ • Run outcome • Per-floor rollups • Dual-axis deck chart • Compare runs</div>
+      </div>
+    </div>
+    <nav>
+      <button class="tabbtn active" data-tab="importTab">Import</button>
+      <button class="tabbtn" data-tab="dashboardTab">Dashboard</button>
+      <button class="tabbtn" data-tab="runsTab">Runs</button>
+      <button class="tabbtn" data-tab="configsTab">Configs</button>
+      <button class="tabbtn" data-tab="settingsTab">Settings</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- IMPORT -->
+  <section id="importTab" class="tab">
+    <div class="split">
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Import Logs</div>
+            <div class="cardSub">Drop JSON files or use the file picker. Tag + assign configs so runs are filterable.</div>
+          </div>
+        </div>
+        <div class="cardBody">
+          <div class="grid" style="gap:12px">
+            <div class="dropzone" id="dropzone">
+              <div style="font-size:13px; color:var(--text); margin-bottom:6px;">Drag & drop JSON logs here</div>
+              <div class="tiny">or choose files below</div>
+            </div>
+
+            <div class="row">
+              <input type="file" id="fileInput" accept=".json,application/json" multiple />
+              <button class="btn primary" id="btnImport">Import Selected</button>
+            </div>
+
+            <div class="grid cols2">
+              <div class="field">
+                <label>Assign Config Profile</label>
+                <select id="importConfigSelect"></select>
+                <div class="tiny muted">Config profiles let you segment balance setups.</div>
+              </div>
+              <div class="field">
+                <label>Tags (comma-separated)</label>
+                <input id="importTags" placeholder="e.g., v0.9, merchantCap=5, bonus21=50" />
+              </div>
+            </div>
+
+            <div class="grid cols2">
+              <div class="field">
+                <label>Notes (applied to all imported runs)</label>
+                <input id="importNotes" placeholder="Quick context: what changed in this build?" />
+              </div>
+              <div class="field">
+                <label>Storage Mode</label>
+                <select id="importStorageMode">
+                  <option value="full">Full Raw Log (bigger, best future analysis)</option>
+                  <option value="summary">Summary Only (smaller, scalable)</option>
+                </select>
+                <div class="tiny muted">LocalStorage is limited. Summary-only helps scale.</div>
+              </div>
+            </div>
+
+            <div class="warnBox tiny" id="importWarn" style="display:none"></div>
+
+            <div>
+              <div class="tiny muted">Recently imported:</div>
+              <div id="importResults" class="tiny" style="margin-top:6px; line-height:1.5"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Quick Actions</div>
+            <div class="cardSub">Export/import your analyzer DB, or clear local data.</div>
+          </div>
+        </div>
+        <div class="cardBody">
+          <div class="grid" style="gap:10px">
+            <button class="btn" id="btnExportDB">Export DB (JSON)</button>
+            <div class="row">
+              <input type="file" id="dbImportInput" accept=".json,application/json" />
+              <button class="btn" id="btnImportDB">Import DB</button>
+            </div>
+            <button class="btn danger" id="btnClearDB">Clear All Local Data</button>
+            <div class="hint">
+              Data is stored in <span class="mono">localStorage</span> on this device/browser only.
+              Export regularly if you’re collecting lots of runs.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="dashboardTab" class="tab" style="display:none">
+    <div class="card">
+      <div class="cardHeader">
+        <div>
+          <div class="cardTitle">Run Dashboard</div>
+          <div class="cardSub" id="dashSub">Select a run from Runs tab or after import.</div>
+        </div>
+        <div class="row">
+          <button class="btn small" id="btnEditRun">Edit meta</button>
+          <button class="btn small danger" id="btnDeleteRun">Delete run</button>
+        </div>
+      </div>
+      <div class="cardBody">
+        <div id="dashOverview"></div>
+        <div class="divider"></div>
+        <div id="dashHeader"></div>
+        <div id="dashWarnings" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <!-- Per-floor summary -->
+    <div class="card" style="margin-top:14px">
+      <div class="cardHeader">
+        <div>
+          <div class="cardTitle">Per-Floor Summary</div>
+          <div class="cardSub">Match + lane + economy + deck deltas by floor (this is your balance table).</div>
+        </div>
+        <div class="row">
+          <button class="btn small" id="btnExportFloorCSV">Export Floor Summary CSV</button>
+        </div>
+      </div>
+      <div class="cardBody">
+        <div class="tableWrap">
+          <table id="floorTable"></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid cols2" style="margin-top:14px">
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Chips Over Time</div>
+            <div class="cardSub">Markers: Loan, Merchant, Boss match starts (if present).</div>
+          </div>
+        </div>
+        <div class="cardBody">
+          <canvas id="chartChips"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Profit Per Match</div>
+            <div class="cardSub">Profit = payout − buy-in + bonus + transfer.</div>
+          </div>
+        </div>
+        <div class="cardBody">
+          <canvas id="chartProfit"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Deck Evolution</div>
+            <div class="cardSub">Dual y-axis: Deck size (left) and Mod count (right).</div>
+          </div>
+        </div>
+        <div class="cardBody">
+          <canvas id="chartDeck"></canvas>
+          <div class="tiny muted" style="margin-top:8px">Solid: deckSize • Dashed: modCount</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Outcome Rates</div>
+            <div class="cardSub" id="ratesSub">Segmented outcomes + bust/21. Toggle lane vs match outcomes.</div>
+          </div>
+          <div class="row">
+            <select id="segmentMode" style="width:auto">
+              <option value="tableType">By Table Type</option>
+              <option value="floor">By Floor</option>
+            </select>
+            <select id="outcomeBasis" style="width:auto">
+              <option value="lane">Lane outcomes</option>
+              <option value="match">Match outcomes</option>
+            </select>
+          </div>
+        </div>
+        <div class="cardBody">
+          <canvas id="chartRates"></canvas>
+          <div class="tiny muted" id="ratesCaption" style="margin-top:8px"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Totals Distribution</div>
+            <div class="cardSub">Histogram of final totals (player vs dealer) across lanes.</div>
+          </div>
+        </div>
+        <div class="cardBody">
+          <canvas id="chartTotals"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Economy Sinks</div>
+            <div class="cardSub">Where chips are spent (largest negative deltas by category).</div>
+          </div>
+        </div>
+        <div class="cardBody">
+          <canvas id="chartSinks"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid cols2" style="margin-top:14px">
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Insights</div>
+            <div class="cardSub">Deterministic tuning notes (consistent across runs/configs).</div>
+          </div>
+        </div>
+        <div class="cardBody">
+          <div id="insightsBox"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Drilldown Tables</div>
+            <div class="cardSub">Spot-check correctness and edge cases quickly.</div>
+          </div>
+          <div class="row">
+            <button class="btn small" id="btnExportMatchesCSV">Export Matches CSV</button>
+            <button class="btn small" id="btnExportLanesCSV">Export Lanes CSV</button>
+          </div>
+        </div>
+        <div class="cardBody">
+          <details open>
+            <summary class="tiny muted" style="cursor:pointer">Match table</summary>
+            <div class="tableWrap" style="margin-top:10px">
+              <table id="matchTable"></table>
+            </div>
+          </details>
+          <details style="margin-top:10px">
+            <summary class="tiny muted" style="cursor:pointer">Lane table</summary>
+            <div class="tableWrap" style="margin-top:10px">
+              <table id="laneTable"></table>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RUNS -->
+  <section id="runsTab" class="tab" style="display:none">
+    <div class="card">
+      <div class="cardHeader">
+        <div>
+          <div class="cardTitle">Run Library</div>
+          <div class="cardSub">Filter by config/tags. Open a run, or compare two runs.</div>
+        </div>
+      </div>
+      <div class="cardBody">
+        <div class="grid cols3">
+          <div class="field">
+            <label>Config</label>
+            <select id="filterConfig"></select>
+          </div>
+          <div class="field">
+            <label>Tag contains</label>
+            <input id="filterTag" placeholder="e.g., merchantRemoveCost" />
+          </div>
+          <div class="field">
+            <label>Search (notes / filename / session)</label>
+            <input id="filterSearch" placeholder="type to filter..." />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px; justify-content:space-between">
+          <div class="tiny muted" id="runsCount"></div>
+          <div class="row">
+            <button class="btn small" id="btnRecomputeAll">Recompute summaries</button>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="grid cols2">
+          <div class="card" style="background:rgba(10,16,30,.25); box-shadow:none">
+            <div class="cardHeader">
+              <div>
+                <div class="cardTitle">Compare Runs</div>
+                <div class="cardSub">Pick A and B to see KPI deltas (fast balance iteration).</div>
+              </div>
+            </div>
+            <div class="cardBody">
+              <div class="grid cols2">
+                <div class="field">
+                  <label>Run A</label>
+                  <select id="cmpA"></select>
+                </div>
+                <div class="field">
+                  <label>Run B</label>
+                  <select id="cmpB"></select>
+                </div>
+              </div>
+              <div class="row" style="margin-top:10px">
+                <button class="btn primary" id="btnCompare">Compare</button>
+                <button class="btn" id="btnSwapCompare">Swap</button>
+              </div>
+              <div id="compareOut" style="margin-top:10px"></div>
+            </div>
+          </div>
+
+          <div class="hint">
+            <b>Tip:</b> configs are your experimental “buckets.” When you tweak merchant pricing, bonus rules, boss rules, etc.,
+            create a new config profile and assign runs to it. Then compare runs within the same bucket to isolate variance.
+          </div>
+        </div>
+
+        <div class="tableWrap" style="margin-top:12px">
+          <table id="runsTable"></table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONFIGS -->
+  <section id="configsTab" class="tab" style="display:none">
+    <div class="split">
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Config Profiles</div>
+            <div class="cardSub">Name balance setups and store key settings for filtering.</div>
+          </div>
+          <button class="btn small primary" id="btnNewConfig">New Config</button>
+        </div>
+        <div class="cardBody">
+          <div class="tableWrap">
+            <table id="configsTable"></table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Config Editor</div>
+            <div class="cardSub">Simple key/value object (no schema enforcement in MVP).</div>
+          </div>
+        </div>
+        <div class="cardBody">
+          <div class="grid" style="gap:10px">
+            <div class="field">
+              <label>Name</label>
+              <input id="cfgName" placeholder="e.g., v0.9 baseline" />
+            </div>
+            <div class="field">
+              <label>Fields (JSON object)</label>
+              <textarea id="cfgFields" placeholder='{"bonus21Amount":50,"merchantRemoveCost":50}'></textarea>
+              <div class="tiny muted">Keep this small and stable so filters stay meaningful.</div>
+            </div>
+            <div class="row">
+              <button class="btn primary" id="btnSaveConfig">Save Config</button>
+              <button class="btn danger" id="btnDeleteConfig">Delete Config</button>
+              <div class="tiny muted" id="cfgEditorHint"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="settingsTab" class="tab" style="display:none">
+    <div class="card">
+      <div class="cardHeader">
+        <div>
+          <div class="cardTitle">Insight Thresholds</div>
+          <div class="cardSub">Tune the analyzer’s deterministic messages without changing code.</div>
+        </div>
+      </div>
+      <div class="cardBody">
+        <div class="grid cols3">
+          <div class="field">
+            <label>Bonus dominance threshold</label>
+            <input id="setBonusDom" type="number" step="0.01" min="0" max="1" />
+            <div class="tiny muted">bonusTotal / matchProfitTotal (e.g., 0.25)</div>
+          </div>
+          <div class="field">
+            <label>Merchant dominance threshold</label>
+            <input id="setMerchantDom" type="number" step="0.01" min="0" max="1" />
+            <div class="tiny muted">merchantSpend / totalSpend (e.g., 0.60)</div>
+          </div>
+          <div class="field">
+            <label>Solved-state 21 rate</label>
+            <input id="setSolved21" type="number" step="0.01" min="0" max="1" />
+            <div class="tiny muted">e.g., 0.45</div>
+          </div>
+          <div class="field">
+            <label>Solved-state bust rate</label>
+            <input id="setSolvedBust" type="number" step="0.01" min="0" max="1" />
+            <div class="tiny muted">e.g., 0.12</div>
+          </div>
+          <div class="field">
+            <label>Early cliff risk (chipsLow fraction)</label>
+            <input id="setCliffFrac" type="number" step="0.01" min="0" max="1" />
+            <div class="tiny muted">chipsLow / startChips (e.g., 0.40)</div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn primary" id="btnSaveSettings">Save Settings</button>
+          <div class="tiny muted" id="settingsHint"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Edit Run Modal -->
+<dialog id="editRunDlg">
+  <div class="dlgHead">
+    <div class="cardTitle">Edit Run Meta</div>
+    <div class="tiny muted">Tags/config/notes help segment balance experiments.</div>
+  </div>
+  <div class="dlgBody">
+    <div class="grid cols2">
+      <div class="field">
+        <label>Config Profile</label>
+        <select id="editRunConfig"></select>
+      </div>
+      <div class="field">
+        <label>Tags (comma-separated)</label>
+        <input id="editRunTags" />
+      </div>
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label>Notes</label>
+      <input id="editRunNotes" />
+    </div>
+    <div class="tiny muted" id="editRunInfo" style="margin-top:10px"></div>
+  </div>
+  <div class="dlgFoot">
+    <button class="btn" id="btnCancelEditRun">Cancel</button>
+    <button class="btn primary" id="btnSaveEditRun">Save</button>
+  </div>
+</dialog>
+
+<script>
+/* =========================================================
+   Project 63 Run Analyzer — Single-file MVP+
+   ========================================================= */
+
+const DB_KEY = "P63_ANALYZER_DB_V1";
+
+const defaultSettings = {
+  bonusDominance: 0.25,
+  merchantDominance: 0.60,
+  solved21Rate: 0.45,
+  solvedBustRate: 0.12,
+  earlyCliffFrac: 0.40
+};
+
+let DB = loadDB();
+let currentRunId = null;
+let currentConfigId = null;
+
+function loadDB(){
+  try{
+    const raw = localStorage.getItem(DB_KEY);
+    if(!raw){
+      return {
+        version: 1,
+        runs: {},
+        configs: {
+          "cfg_default": {
+            configId:"cfg_default",
+            name:"(No config)",
+            createdAtISO:new Date().toISOString(),
+            fields:{}
+          }
+        },
+        settings: {...defaultSettings}
+      };
+    }
+    const obj = JSON.parse(raw);
+    if(!obj.settings) obj.settings = {...defaultSettings};
+    if(!obj.configs || Object.keys(obj.configs).length===0){
+      obj.configs = {
+        "cfg_default": {
+          configId:"cfg_default",
+          name:"(No config)",
+          createdAtISO:new Date().toISOString(),
+          fields:{}
+        }
+      };
+    }
+    return obj;
+  }catch(e){
+    console.warn("DB load failed, resetting", e);
+    return {
+      version:1,
+      runs:{},
+      configs:{
+        "cfg_default": {
+          configId:"cfg_default",
+          name:"(No config)",
+          createdAtISO:new Date().toISOString(),
+          fields:{}
+        }
+      },
+      settings:{...defaultSettings}
+    };
+  }
+}
+function saveDB(){
+  localStorage.setItem(DB_KEY, JSON.stringify(DB));
+}
+function uid(prefix="id"){
+  return prefix + "_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+}
+function fmt(n){
+  if(n===null || n===undefined || Number.isNaN(n)) return "—";
+  if(typeof n === "number"){
+    return n.toLocaleString(undefined, {maximumFractionDigits:2});
+  }
+  return String(n);
+}
+function pct(x){
+  if(x===null || x===undefined || Number.isNaN(x)) return "—";
+  return (x*100).toFixed(1) + "%";
+}
+function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+function safeParseJSON(text){
+  try{ return {ok:true, value: JSON.parse(text)}; }
+  catch(e){ return {ok:false, error: e}; }
+}
+function toISO(ts){
+  try{
+    const d = new Date(ts);
+    if(Number.isNaN(d.getTime())) return String(ts);
+    return d.toISOString();
+  }catch{ return String(ts); }
+}
+function escapeHTML(str){
+  return String(str ?? "").replace(/[&<>"']/g, m=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[m]));
+}
+function normalizeOutcome(o){
+  if(o===null || o===undefined) return null;
+  const s = String(o).toUpperCase();
+  if(s==="WIN" || s.includes("PLAYER")) return "WIN";
+  if(s==="LOSS" || s.includes("DEALER")) return "LOSS";
+  if(s==="PUSH" || s==="TIE" || s.includes("PUSH")) return "PUSH";
+  return s;
+}
+function num(x){ return (typeof x==="number" && !Number.isNaN(x)) ? x : 0; }
+function numOrNull(x){ return (typeof x==="number" && !Number.isNaN(x)) ? x : null; }
+function sum(arr){ return arr.reduce((a,b)=>a+num(b),0); }
+function avg(arr){
+  const vals = arr.filter(v=>typeof v==="number" && !Number.isNaN(v));
+  if(!vals.length) return null;
+  return vals.reduce((a,b)=>a+b,0)/vals.length;
+}
+function stddev(arr){
+  const vals = arr.filter(v=>typeof v==="number" && !Number.isNaN(v));
+  if(vals.length<2) return null;
+  const m = vals.reduce((a,b)=>a+b,0)/vals.length;
+  const v = vals.reduce((a,b)=>a+Math.pow(b-m,2),0)/(vals.length-1);
+  return Math.sqrt(v);
+}
+function firstNonNull(arr){
+  for(const v of arr){ if(v!==null && v!==undefined) return v; }
+  return null;
+}
+function lastNonNull(arr){
+  for(let i=arr.length-1;i>=0;i--){
+    const v = arr[i];
+    if(v!==null && v!==undefined) return v;
+  }
+  return null;
+}
+function maxNum(arr){
+  const vals = arr.filter(v=>typeof v==="number" && !Number.isNaN(v));
+  if(!vals.length) return null;
+  return Math.max(...vals);
+}
+
+/* =========================
+   Tabs
+   ========================= */
+document.querySelectorAll(".tabbtn").forEach(btn=>{
+  btn.addEventListener("click", ()=>setTab(btn.dataset.tab));
+});
+function setTab(tabId){
+  document.querySelectorAll(".tab").forEach(t=>t.style.display="none");
+  document.getElementById(tabId).style.display="block";
+  document.querySelectorAll(".tabbtn").forEach(b=>b.classList.toggle("active", b.dataset.tab===tabId));
+  if(tabId==="runsTab") renderRunsTable();
+  if(tabId==="configsTab") renderConfigs();
+  if(tabId==="settingsTab") renderSettings();
+  if(tabId==="dashboardTab" && currentRunId) renderDashboard(currentRunId);
+}
+
+/* =========================
+   Import handlers
+   ========================= */
+const fileInput = document.getElementById("fileInput");
+const dropzone = document.getElementById("dropzone");
+const importResults = document.getElementById("importResults");
+const importWarn = document.getElementById("importWarn");
+
+dropzone.addEventListener("dragover", (e)=>{
+  e.preventDefault();
+  dropzone.classList.add("dragover");
+});
+dropzone.addEventListener("dragleave", ()=> dropzone.classList.remove("dragover"));
+dropzone.addEventListener("drop", (e)=>{
+  e.preventDefault();
+  dropzone.classList.remove("dragover");
+  const files = [...e.dataTransfer.files].filter(f => f.name.toLowerCase().endsWith(".json"));
+  if(files.length===0){
+    showImportWarn("No .json files detected in drop.");
+    return;
+  }
+  fileInput.files = makeFileList(files);
+});
+function makeFileList(files){
+  const dt = new DataTransfer();
+  files.forEach(f => dt.items.add(f));
+  return dt.files;
+}
+document.getElementById("btnImport").addEventListener("click", async ()=>{
+  const files = [...fileInput.files || []];
+  if(!files.length){
+    showImportWarn("Choose one or more JSON logs first.");
+    return;
+  }
+  showImportWarn(null);
+  importResults.textContent = "Importing...";
+  const cfgId = document.getElementById("importConfigSelect").value || "cfg_default";
+  const tags = (document.getElementById("importTags").value || "").split(",").map(s=>s.trim()).filter(Boolean);
+  const notes = document.getElementById("importNotes").value || "";
+  const storageMode = document.getElementById("importStorageMode").value;
+
+  const results = [];
+  for(const file of files){
+    const text = await file.text();
+    const parsed = safeParseJSON(text);
+    if(!parsed.ok){
+      results.push(`❌ ${file.name}: invalid JSON (${parsed.error.message})`);
+      continue;
+    }
+    const log = parsed.value;
+    const runId = deriveRunId(log, file.name);
+    const analysis = analyzeLog(log);
+
+    const meta = {
+      runId,
+      importedAtISO: new Date().toISOString(),
+      sourceFilename: file.name,
+      sessionId: log.sessionId ?? null,
+      startedAtISO: log.startedAt ? toISO(log.startedAt) : (analysis.summary?.startedAtISO ?? null),
+      logVersion: log.logVersion ?? null,
+      tags: [...tags],
+      configId: cfgId,
+      notes: notes
+    };
+
+    const configSnapshot = DB.configs[cfgId]?.fields ? JSON.parse(JSON.stringify(DB.configs[cfgId].fields)) : {};
+
+    const runRec = {
+      meta,
+      configSnapshot,
+      summary: analysis.summary,
+      derived: storageMode==="summary" ? analysis.derived : null,
+      rawLog: storageMode==="full" ? text : null
+    };
+
+    DB.runs[runId] = runRec;
+    results.push(`✅ ${file.name}: imported as ${runId}`);
+    currentRunId = runId;
+  }
+  saveDB();
+  refreshConfigSelects();
+  renderRunsTable();
+  if(currentRunId){
+    setTab("dashboardTab");
+    renderDashboard(currentRunId);
+  }
+  importResults.innerHTML = results.map(r=>`<div>${escapeHTML(r)}</div>`).join("");
+});
+function showImportWarn(msg){
+  if(!msg){ importWarn.style.display="none"; importWarn.textContent=""; return; }
+  importWarn.style.display="block";
+  importWarn.textContent = msg;
+}
+function deriveRunId(log, filename){
+  if(log.sessionId) return String(log.sessionId);
+  if(log.startedAt) return "run_" + String(log.startedAt).replace(/[^0-9a-z]/gi,"").slice(0,24);
+  const n = (log.events && Array.isArray(log.events)) ? log.events.length : 0;
+  return "run_" + filename.replace(/[^0-9a-z]/gi,"").slice(0,24) + "_" + n;
+}
+
+/* =========================
+   Analysis core
+   ========================= */
+
+function categorizeSink(type){
+  const t = String(type||"").toUpperCase();
+  if(t.includes("MERCHANT_REMOVE")) return "Merchant removals";
+  if(t.includes("MERCHANT_BUY")) return "Merchant buys";
+  if(t.includes("MERCHANT_REROLL")) return "Merchant rerolls";
+  if(t.includes("COCKTAIL")) return "Cocktails";
+  if(t.includes("LOAN")) return "Loans/interest";
+  if(t.includes("BUYIN")) return "Buy-ins";
+  if(t.includes("REST")) return "Rest/Heals";
+  return "Other";
+}
+function aggregateSinks(sinks){
+  const out = {};
+  sinks.forEach(s=>{
+    const cat = s.category || "Other";
+    out[cat] = (out[cat]||0) + s.delta; // negative
+  });
+  Object.keys(out).forEach(k=>{
+    if(Math.abs(out[k])<1e-9) delete out[k];
+  });
+  return out;
+}
+function inferTableTypeFromMatchStart(eventRows, matchIndex){
+  if(!matchIndex) return null;
+  const ms = eventRows.find(r=>r.type==="MATCH_START" && r.matchIndex===matchIndex);
+  return ms?.data?.type ?? null;
+}
+function grabDeckSnapshot(d){
+  if(!d || typeof d!=="object") return null;
+  if(d.deckSnapshot && typeof d.deckSnapshot==="object") return d.deckSnapshot;
+  return null;
+}
+function findRunEnd(eventRows){
+  // authoritative: last event matching an end-ish type
+  for(let i=eventRows.length-1;i>=0;i--){
+    const r = eventRows[i];
+    const t = String(r.type||"").toUpperCase();
+    if(/RUN_END|GAME_OVER|VICTORY|DEFEAT|RUN_OVER|END_RUN/.test(t)){
+      const d = r.data||{};
+      const result = normalizeOutcome(d.result || d.outcome || (t.includes("VICTORY")?"WIN":t.includes("DEFEAT")||t.includes("GAME_OVER")?"LOSS":null));
+      return {
+        source:"EVENT",
+        eventType:r.type,
+        result: result || (t.includes("VICTORY")?"WIN":t.includes("DEFEAT")||t.includes("GAME_OVER")?"LOSS":"UNKNOWN"),
+        reason: d.reason || d.cause || null,
+        floor: r.floor ?? null,
+        chips: r.chips ?? null,
+        tableType: d.tableType || d.type || null,
+        matchIndex: d.matchIndex ?? r.matchIndex ?? null
+      };
+    }
+  }
+  return null;
+}
+function inferRunOutcome(summary, matches){
+  // fallback inference when no RUN_END
+  const endChips = summary.endChips;
+  const lastMatch = matches.length ? matches[matches.length-1] : null;
+  const lastBoss = [...matches].reverse().find(m=>String(m.tableType||"").toUpperCase()==="BOSS") || null;
+
+  if(typeof endChips==="number" && endChips<=0){
+    return {source:"INFER", result:"LOSS", reason:"BANKRUPT", floor: summary.floorsReached ?? lastMatch?.floor ?? null, chips:endChips,
+            tableType:lastMatch?.tableType??null, matchIndex:lastMatch?.matchIndex??null};
+  }
+  if(lastBoss && normalizeOutcome(lastBoss.outcome)==="LOSS"){
+    return {source:"INFER", result:"LOSS", reason:"BOSS_DEFEAT", floor:lastBoss.floor??null, chips:endChips??null, tableType:lastBoss.tableType??"BOSS", matchIndex:lastBoss.matchIndex??null};
+  }
+  if(lastBoss && normalizeOutcome(lastBoss.outcome)==="WIN"){
+    return {source:"INFER", result:"WIN", reason:"BOSS_CLEARED", floor:lastBoss.floor??null, chips:endChips??null, tableType:lastBoss.tableType??"BOSS", matchIndex:lastBoss.matchIndex??null};
+  }
+  // if last event suggests cashout/quit
+  return {source:"INFER", result:"UNKNOWN", reason:null, floor: summary.floorsReached ?? lastMatch?.floor ?? null, chips:endChips??null, tableType:lastMatch?.tableType??null, matchIndex:lastMatch?.matchIndex??null};
+}
+
+function analyzeLog(log){
+  const warnings = [];
+  const events = Array.isArray(log.events) ? log.events : [];
+  if(!events.length){
+    return {
+      summary: { warnings:["No events[] in log or empty."] },
+      derived: { events:[], matches:[], lanes:[], deck:[], sinks:[], floorSummary:[] }
+    };
+  }
+
+  // Build event rows: carry-forward chips state so deltas are coherent
+  const eventRows = [];
+  let prevChipsState = null;
+  let sawChipsCount = 0;
+  let missingChipsCount = 0;
+
+  let chipsPeak = -Infinity;
+  let chipsLow = Infinity;
+
+  let t0 = null;
+  let matchIndex = 0;
+  let inMatch = false;
+
+  let firstLoanEventId = null;
+  let firstMerchantEnterId = null;
+  let bossMatchStartIds = [];
+
+  let biggestDrop = {delta: 0, type:null, floor:null, idx:null, eventId:null};
+
+  for(let i=0;i<events.length;i++){
+    const e = events[i] || {};
+    const chipsRaw = (typeof e.chips === "number") ? e.chips : null;
+    if(chipsRaw===null) missingChipsCount++; else sawChipsCount++;
+
+    // carry forward last known chips
+    const chipsState = (chipsRaw!==null) ? chipsRaw : prevChipsState;
+    const delta = (prevChipsState===null || chipsState===null) ? 0 : (chipsState - prevChipsState);
+
+    if(chipsState!==null){
+      chipsPeak = Math.max(chipsPeak, chipsState);
+      chipsLow = Math.min(chipsLow, chipsState);
+    }
+
+    if(delta < biggestDrop.delta){
+      biggestDrop = {delta, type:e.type||"UNKNOWN", floor:e.floor??null, idx:i, eventId:e.id??i};
+    }
+
+    const ts = e.ts ?? null;
+    const t = ts ? new Date(ts).getTime() : null;
+    if(t0===null && t!==null) t0 = t;
+    const t_s = (t0!==null && t!==null) ? (t - t0)/1000 : i;
+
+    if(e.type==="MATCH_START"){ matchIndex += 1; inMatch = true; }
+    if(e.type==="MATCH_END"){ /* included in match */ }
+
+    const row = {
+      idx: i,
+      id: e.id ?? i,
+      ts: e.ts ?? null,
+      t_s,
+      floor: e.floor ?? null,
+      type: e.type ?? "UNKNOWN",
+      chipsRaw,
+      chips: chipsState,
+      deltaChips: delta,
+      matchIndex: inMatch ? matchIndex : null,
+      data: (typeof e.data==="object" && e.data) ? e.data : {}
+    };
+
+    if(!firstLoanEventId && row.type==="LOAN_TAKEN") firstLoanEventId = row.id;
+    if(!firstMerchantEnterId && row.type==="MERCHANT_ENTER") firstMerchantEnterId = row.id;
+    if(row.type==="MATCH_START" && String(row.data.type||"").toUpperCase()==="BOSS"){
+      bossMatchStartIds.push(row.id);
+    }
+
+    if(e.type==="MATCH_END"){
+      row.matchIndex = matchIndex;
+      inMatch = false;
+    }
+
+    eventRows.push(row);
+    prevChipsState = chipsState;
+  }
+
+  // warn if lots of missing chip fields
+  const missFrac = (missingChipsCount / Math.max(1, missingChipsCount + sawChipsCount));
+  if(missFrac > 0.20){
+    warnings.push(`Many events are missing chips (${Math.round(missFrac*100)}%). Consider logging chips on every event for accurate sink attribution.`);
+  }
+
+  // Matches / lanes / deck / sinks
+  const matches = [];
+  const lanes = [];
+  const deckPoints = [];
+  const sinks = [];
+  const actionsByMatch = new Map();
+
+  const laneResolveRows = eventRows.filter(r=>r.type==="LANE_RESOLVE");
+  const hasLaneResolve = laneResolveRows.length>0;
+
+  // deck + sinks + actions
+  for(const r of eventRows){
+    const ds = grabDeckSnapshot(r.data);
+    if(ds && (typeof ds.deckSize==="number" || typeof ds.modCount==="number")){
+      deckPoints.push({
+        eventId: r.id,
+        idx: r.idx,
+        floor: r.floor,
+        type: r.type,
+        deckSize: typeof ds.deckSize==="number" ? ds.deckSize : null,
+        modCount: typeof ds.modCount==="number" ? ds.modCount : null
+      });
+    }
+    if(r.deltaChips < 0){
+      const cat = categorizeSink(r.type);
+      sinks.push({eventId:r.id, idx:r.idx, floor:r.floor, type:r.type, category:cat, delta:r.deltaChips});
+    }
+    if(r.type==="ACTION_USED" && r.matchIndex){
+      const a = (r.data && (r.data.actionId || r.data.actionName)) ? (r.data.actionId || r.data.actionName) : "action";
+      if(!actionsByMatch.has(r.matchIndex)) actionsByMatch.set(r.matchIndex, []);
+      actionsByMatch.get(r.matchIndex).push(String(a));
+    }
+  }
+
+  // lane rows from LANE_RESOLVE if present
+  if(hasLaneResolve){
+    laneResolveRows.forEach(r=>{
+      const d = r.data||{};
+      const lane = d.lane ?? d.laneIndex ?? null;
+      if(lane===null) return;
+      lanes.push({
+        matchIndex: r.matchIndex ?? null,
+        floor: r.floor ?? null,
+        tableType: inferTableTypeFromMatchStart(eventRows, r.matchIndex) ?? d.tableType ?? null,
+        lane: Number(lane),
+        playerTotal: d.playerTotal ?? null,
+        dealerTotal: d.dealerTotal ?? null,
+        playerBust: !!d.playerBust,
+        dealerBust: !!d.dealerBust,
+        outcome: normalizeOutcome(d.outcome ?? d.winner) ?? null,
+        payoutDelta: d.payoutDelta ?? null,
+        endedBy: d.endedBy ?? null
+      });
+    });
+  }
+
+  // parse matches from MATCH_START/MATCH_END
+  let current = null;
+  for(const r of eventRows){
+    if(r.type==="MATCH_START"){
+      const d = r.data||{};
+      const ds = grabDeckSnapshot(d) || {};
+      current = {
+        matchIndex: r.matchIndex,
+        startEventId: r.id,
+        startIdx: r.idx,
+        floor: r.floor,
+        tableType: d.type ?? null,
+        buyIn: d.buyIn ?? null,
+        chipsAfterBuyIn: r.chips ?? null,
+        deckSizeStart: ds.deckSize ?? null,
+        modCountStart: ds.modCount ?? null
+      };
+    } else if(r.type==="MATCH_END" && current && r.matchIndex===current.matchIndex){
+      const d = r.data||{};
+      const ds = grabDeckSnapshot(d) || {};
+      const metrics = (d.metrics && typeof d.metrics==="object") ? d.metrics : {};
+      const lanesObj = (d.lanes && typeof d.lanes==="object") ? d.lanes : null;
+
+      const payout = d.payout ?? null;
+      const buyIn = d.buyIn ?? current.buyIn ?? null;
+      const bonusChips = d.bonusChips ?? 0;
+      const transferNet = d.transferNet ?? 0;
+      const matchProfit = (num(payout)-num(buyIn)) + num(bonusChips) + num(transferNet);
+
+      const actionsUsed = actionsByMatch.get(current.matchIndex) || [];
+
+      const matchRow = {
+        matchIndex: current.matchIndex,
+        floor: current.floor,
+        tableType: d.type ?? current.tableType,
+        outcome: normalizeOutcome(d.outcome) ?? null,
+        buyIn: buyIn,
+        payout: payout,
+        bonusChips: bonusChips,
+        transferNet: transferNet,
+        matchProfit: matchProfit,
+        chipsAfter: r.chips ?? null,
+        playerWins: d.playerWins ?? null,
+        dealerWins: d.dealerWins ?? null,
+        durationMs: d.durationMs ?? null,
+        turns: metrics.turns ?? null,
+        playerBustsFinal: metrics.playerBustsFinal ?? null,
+        dealerBustsFinal: metrics.dealerBustsFinal ?? null,
+        deckSizeStart: current.deckSizeStart,
+        modCountStart: current.modCountStart,
+        deckSizeEnd: ds.deckSize ?? null,
+        modCountEnd: ds.modCount ?? null,
+        actionsUsed: actionsUsed
+      };
+
+      matches.push(matchRow);
+
+      // lanes from MATCH_END if no lane resolve
+      if(!hasLaneResolve && lanesObj){
+        const pt = lanesObj.playerTotals || null;
+        const dt = lanesObj.dealerTotals || null;
+        const pb = lanesObj.playerBusts || null;
+        const db = lanesObj.dealerBusts || null;
+        const winners = lanesObj.laneWinners || null;
+
+        const L = Math.max(
+          Array.isArray(pt) ? pt.length : 0,
+          Array.isArray(dt) ? dt.length : 0,
+          Array.isArray(pb) ? pb.length : 0,
+          Array.isArray(db) ? db.length : 0,
+          Array.isArray(winners) ? winners.length : 0
+        );
+        if(L===0){
+          warnings.push(`Match ${current.matchIndex}: no lane arrays found.`);
+        } else {
+          for(let i=0;i<L;i++){
+            lanes.push({
+              matchIndex: current.matchIndex,
+              floor: current.floor,
+              tableType: matchRow.tableType,
+              lane: i+1,
+              playerTotal: Array.isArray(pt) ? pt[i] : null,
+              dealerTotal: Array.isArray(dt) ? dt[i] : null,
+              playerBust: Array.isArray(pb) ? !!pb[i] : null,
+              dealerBust: Array.isArray(db) ? !!db[i] : null,
+              outcome: normalizeOutcome(Array.isArray(winners) ? winners[i] : null),
+              payoutDelta: null,
+              endedBy: null
+            });
+          }
+        }
+      }
+
+      current = null;
+    }
+  }
+
+  // lane completeness check
+  const lanesByMatch = {};
+  lanes.forEach(l=>{
+    const k = String(l.matchIndex);
+    lanesByMatch[k] = (lanesByMatch[k]||0)+1;
+  });
+  matches.forEach(m=>{
+    const n = lanesByMatch[String(m.matchIndex)] || 0;
+    if(n && n!==5){
+      warnings.push(`Match ${m.matchIndex}: lane rows = ${n} (expected 5).`);
+    }
+  });
+
+  const startChips = firstNonNull(eventRows.map(r=>r.chips));
+  const endChips = lastNonNull(eventRows.map(r=>r.chips));
+  const netChips = (num(endChips) - num(startChips));
+
+  const stats = log.stats && typeof log.stats==="object" ? log.stats : {};
+  const floorsReached = stats.floorsReached ?? maxNum(eventRows.map(r=>r.floor)) ?? null;
+
+  const wins = matches.filter(m=>m.outcome==="WIN").length;
+  const losses = matches.filter(m=>m.outcome==="LOSS").length;
+  const pushes = matches.filter(m=>m.outcome==="PUSH").length;
+
+  const matchProfitTotal = sum(matches.map(m=>m.matchProfit));
+  const bonusTotal = sum(matches.map(m=>num(m.bonusChips)));
+  const bonusShare = matchProfitTotal !== 0 ? bonusTotal / matchProfitTotal : null;
+
+  const sinkAgg = aggregateSinks(sinks);
+  const totalSpend = sum(Object.values(sinkAgg).map(v=>Math.abs(v)));
+  const merchantSpend = Math.abs((sinkAgg["Merchant removals"]||0) + (sinkAgg["Merchant buys"]||0) + (sinkAgg["Merchant rerolls"]||0));
+  const merchantShare = totalSpend>0 ? (merchantSpend / totalSpend) : null;
+
+  const laneN = lanes.length;
+  const playerBustRate = laneN ? (lanes.filter(l=>l.playerBust===true).length / laneN) : null;
+  const dealerBustRate = laneN ? (lanes.filter(l=>l.dealerBust===true).length / laneN) : null;
+  const player21Rate = laneN ? (lanes.filter(l=>l.playerTotal===21).length / laneN) : null;
+  const dealer21Rate = laneN ? (lanes.filter(l=>l.dealerTotal===21).length / laneN) : null;
+  const avgPlayerTotal = avg(lanes.map(l=>numOrNull(l.playerTotal)));
+  const avgDealerTotal = avg(lanes.map(l=>numOrNull(l.dealerTotal)));
+
+  const deckStart = deckPoints.length ? deckPoints[0] : null;
+  const deckEnd = deckPoints.length ? deckPoints[deckPoints.length-1] : null;
+  const modDensityEnd = (deckEnd && typeof deckEnd.modCount==="number" && typeof deckEnd.deckSize==="number" && deckEnd.deckSize>0)
+    ? deckEnd.modCount / deckEnd.deckSize : null;
+
+  // Run end semantics
+  const runEndEvent = findRunEnd(eventRows);
+  const runOutcome = runEndEvent ? runEndEvent : inferRunOutcome({endChips, floorsReached}, matches);
+
+  // Per-floor summary
+  const floorSummary = buildFloorSummary(matches, lanes, deckPoints, sinks);
+
+  // Keep marker ids for charts
+  const runMarkers = {
+    loanEventId: firstLoanEventId,
+    merchantEnterId: firstMerchantEnterId,
+    bossMatchStartIds
+  };
+
+  const summary = {
+    runId: deriveRunId(log, ""),
+    sessionId: log.sessionId ?? null,
+    startedAtISO: log.startedAt ? toISO(log.startedAt) : (eventRows[0]?.ts ?? null),
+    logVersion: log.logVersion ?? null,
+    floorsReached,
+    matches: matches.length,
+    wins, losses, pushes,
+    startChips, endChips, netChips,
+    chipsPeak: (stats.chipsPeak ?? chipsPeak),
+    chipsLow: (stats.chipsLow ?? chipsLow),
+    matchProfitTotal,
+    profitStdDev: stddev(matches.map(m=>m.matchProfit)),
+    bonusTotal,
+    bonusShare,
+    totalSpend,
+    sinkAgg,
+    merchantShare,
+    playerBustRate,
+    dealerBustRate,
+    player21Rate,
+    dealer21Rate,
+    avgPlayerTotal,
+    avgDealerTotal,
+    deckSizeStart: deckStart?.deckSize ?? null,
+    deckSizeEnd: deckEnd?.deckSize ?? null,
+    modCountEnd: deckEnd?.modCount ?? null,
+    modDensityEnd,
+    runOutcome,
+    biggestDrop,
+    markers: runMarkers,
+    warnings
+  };
+
+  const derived = {
+    events: eventRows.map(r=>({
+      idx:r.idx, id:r.id, ts:r.ts, t_s:r.t_s, floor:r.floor, type:r.type,
+      chips:r.chips, chipsRaw:r.chipsRaw, deltaChips:r.deltaChips,
+      matchIndex:r.matchIndex,
+      tableType: r.data?.type ?? null
+    })),
+    matches,
+    lanes,
+    deck: deckPoints,
+    sinks,
+    floorSummary
+  };
+
+  return {summary, derived};
+}
+
+function buildFloorSummary(matches, lanes, deckPoints, sinks){
+  const floorsSet = new Set();
+  matches.forEach(m=>{ if(m.floor!==null && m.floor!==undefined) floorsSet.add(String(m.floor)); });
+  lanes.forEach(l=>{ if(l.floor!==null && l.floor!==undefined) floorsSet.add(String(l.floor)); });
+  deckPoints.forEach(d=>{ if(d.floor!==null && d.floor!==undefined) floorsSet.add(String(d.floor)); });
+  sinks.forEach(s=>{ if(s.floor!==null && s.floor!==undefined) floorsSet.add(String(s.floor)); });
+
+  const floors = [...floorsSet].map(x=>Number(x)).filter(x=>!Number.isNaN(x)).sort((a,b)=>a-b);
+  const rows = [];
+
+  for(const f of floors){
+    const mF = matches.filter(m=>m.floor===f);
+    const lF = lanes.filter(l=>l.floor===f);
+    const dF = deckPoints.filter(d=>d.floor===f);
+    const sF = sinks.filter(s=>s.floor===f);
+
+    const matchesN = mF.length;
+    const matchWinRate = matchesN ? (mF.filter(m=>m.outcome==="WIN").length / matchesN) : null;
+    const matchPushRate = matchesN ? (mF.filter(m=>m.outcome==="PUSH").length / matchesN) : null;
+    const avgBuyIn = avg(mF.map(m=>numOrNull(m.buyIn)));
+    const avgPayout = avg(mF.map(m=>numOrNull(m.payout)));
+    const avgProfit = avg(mF.map(m=>numOrNull(m.matchProfit)));
+    const profitSd = stddev(mF.map(m=>numOrNull(m.matchProfit)));
+
+    // table mix
+    const mix = {};
+    mF.forEach(m=>{
+      const k = String(m.tableType||"—");
+      mix[k] = (mix[k]||0)+1;
+    });
+    const mixStr = Object.entries(mix)
+      .sort((a,b)=>b[1]-a[1])
+      .map(([k,v])=>`${k}:${Math.round((v/Math.max(1,matchesN))*100)}%`)
+      .join(" ");
+
+    // lane metrics
+    const lanesN = lF.length;
+    const laneWinRate = lanesN ? (lF.filter(l=>l.outcome==="WIN").length / lanesN) : null;
+    const lanePushRate = lanesN ? (lF.filter(l=>l.outcome==="PUSH").length / lanesN) : null;
+    const laneLossRate = lanesN ? (lF.filter(l=>l.outcome==="LOSS").length / lanesN) : null;
+    const bustRate = lanesN ? (lF.filter(l=>l.playerBust===true).length / lanesN) : null;
+    const rate21 = lanesN ? (lF.filter(l=>l.playerTotal===21).length / lanesN) : null;
+    const avgPT = avg(lF.map(l=>numOrNull(l.playerTotal)));
+    const avgDT = avg(lF.map(l=>numOrNull(l.dealerTotal)));
+    const swings = lF
+      .filter(l=>typeof l.playerTotal==="number" && typeof l.dealerTotal==="number" && !l.playerBust && !l.dealerBust)
+      .map(l=>l.playerTotal - l.dealerTotal);
+    const avgSwing = avg(swings);
+
+    // deck boundaries within floor
+    const dStart = dF.length ? dF[0] : null;
+    const dEnd = dF.length ? dF[dF.length-1] : null;
+    const deckStart = dStart?.deckSize ?? null;
+    const deckEnd = dEnd?.deckSize ?? null;
+    const modsStart = dStart?.modCount ?? null;
+    const modsEnd = dEnd?.modCount ?? null;
+    const densStart = (typeof modsStart==="number" && typeof deckStart==="number" && deckStart>0) ? modsStart/deckStart : null;
+    const densEnd = (typeof modsEnd==="number" && typeof deckEnd==="number" && deckEnd>0) ? modsEnd/deckEnd : null;
+
+    // economy spend by floor
+    const spend = {};
+    sF.forEach(s=>{
+      const k = s.category || "Other";
+      spend[k] = (spend[k]||0) + s.delta; // negative
+    });
+    const topSpend = Object.entries(spend).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]))[0] || null;
+    const topSpendStr = topSpend ? `${topSpend[0]} ${fmt(topSpend[1])}` : "—";
+
+    rows.push({
+      floor: f,
+      matches: matchesN,
+      matchWinRate,
+      matchPushRate,
+      avgBuyIn,
+      avgPayout,
+      avgProfit,
+      profitSd,
+      tableMix: mixStr || "—",
+      lanes: lanesN,
+      laneWinRate,
+      lanePushRate,
+      laneLossRate,
+      bustRate,
+      rate21,
+      avgPlayerTotal: avgPT,
+      avgDealerTotal: avgDT,
+      avgSwing,
+      deckStart,
+      deckEnd,
+      modsStart,
+      modsEnd,
+      modDensityStart: densStart,
+      modDensityEnd: densEnd,
+      topSpend: topSpendStr
+    });
+  }
+
+  return rows;
+}
+
+/* =========================
+   Charting (canvas)
+   ========================= */
+function setupCanvas(canvas){
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.floor(rect.width * dpr);
+  canvas.height = Math.floor(rect.height * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return ctx;
+}
+function formatCompact(v){
+  if(v===null || v===undefined || Number.isNaN(v)) return "—";
+  if(Math.abs(v)>=1000000) return (v/1000000).toFixed(1)+"M";
+  if(Math.abs(v)>=1000) return (v/1000).toFixed(1)+"k";
+  return Math.round(v).toString();
+}
+function clearChart(ctx, w, h){ ctx.clearRect(0,0,w,h); }
+
+function drawAxes(ctx, w, h, pad, xLabel, yLabel, yMin, yMax){
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.16)";
+  ctx.lineWidth = 1;
+
+  ctx.beginPath();
+  ctx.moveTo(pad, pad);
+  ctx.lineTo(pad, h-pad);
+  ctx.lineTo(w-pad, h-pad);
+  ctx.stroke();
+
+  const ticks = 4;
+  ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+  for(let i=0;i<=ticks;i++){
+    const t = i/ticks;
+    const y = pad + (1-t)*(h-2*pad);
+    const v = yMin + t*(yMax - yMin);
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(w-pad, y);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.fillText(formatCompact(v), 6, y+4);
+  }
+
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  if(yLabel){
+    ctx.save();
+    ctx.translate(10, h/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+  }
+  if(xLabel){
+    ctx.fillText(xLabel, w/2 - ctx.measureText(xLabel).width/2, h-6);
+  }
+  ctx.restore();
+}
+
+function drawAxesDualY(ctx, w, h, pad, xLabel, yLabelL, yMinL, yMaxL, yLabelR, yMinR, yMaxR){
+  drawAxes(ctx, w, h, pad, xLabel, yLabelL, yMinL, yMaxL);
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.16)";
+  ctx.beginPath();
+  ctx.moveTo(w-pad, pad);
+  ctx.lineTo(w-pad, h-pad);
+  ctx.stroke();
+
+  const ticks = 4;
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+  for(let i=0;i<=ticks;i++){
+    const t = i/ticks;
+    const y = pad + (1-t)*(h-2*pad);
+    const v = yMinR + t*(yMaxR - yMinR);
+    ctx.fillText(formatCompact(v), w-pad+6, y+4);
+  }
+  if(yLabelR){
+    ctx.save();
+    ctx.translate(w-10, h/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText(yLabelR, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawLineScaled(ctx, w, h, pad, xs, ys, yMin, yMax, strokeStyle, dash=null){
+  ctx.save();
+  if(dash) ctx.setLineDash(dash);
+  ctx.strokeStyle = strokeStyle;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for(let i=0;i<xs.length;i++){
+    const x = pad + xs[i]*(w-2*pad);
+    const t = (ys[i]-yMin)/(yMax-yMin||1);
+    const y = pad + (1-t)*(h-2*pad);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawMarkers(ctx, w, h, pad, xNorms, labels){
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.fillStyle = "rgba(255,255,255,0.65)";
+  ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+  for(let i=0;i<xNorms.length;i++){
+    const x = pad + xNorms[i]*(w-2*pad);
+    ctx.beginPath();
+    ctx.moveTo(x, pad);
+    ctx.lineTo(x, h-pad);
+    ctx.stroke();
+    const txt = labels[i];
+    ctx.save();
+    ctx.translate(x+4, pad+10);
+    ctx.rotate(Math.PI/2);
+    ctx.fillText(txt, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawBarChart(ctx, w, h, pad, values, labels, yMin, yMax){
+  const n = values.length;
+  const innerW = w-2*pad;
+  const innerH = h-2*pad;
+  const barW = innerW / Math.max(1,n);
+  const zeroY = pad + (1-((0-yMin)/(yMax-yMin||1)))*innerH;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(125,211,252,0.70)";
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.lineWidth = 1;
+
+  for(let i=0;i<n;i++){
+    const v = values[i];
+    const x = pad + i*barW + barW*0.12;
+    const bw = barW*0.76;
+    const y = pad + (1-((v-yMin)/(yMax-yMin||1)))*innerH;
+    const top = Math.min(y, zeroY);
+    const bottom = Math.max(y, zeroY);
+    const bh = Math.max(1, bottom-top);
+
+    ctx.fillRect(x, top, bw, bh);
+    ctx.strokeRect(x, top, bw, bh);
+
+    if(n<=14 || i%2===0){
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+      const lab = labels[i];
+      ctx.fillText(lab, x, h-8);
+      ctx.fillStyle = "rgba(125,211,252,0.70)";
+    }
+  }
+
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.beginPath();
+  ctx.moveTo(pad, zeroY);
+  ctx.lineTo(w-pad, zeroY);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawGroupedRates(ctx, w, h, pad, groups, series){
+  drawAxes(ctx, w, h, pad, "", "Rate", 0, 1);
+
+  ctx.save();
+  const colors = [
+    "rgba(125,211,252,0.72)",
+    "rgba(52,211,153,0.65)",
+    "rgba(251,191,36,0.65)",
+    "rgba(251,113,133,0.65)",
+    "rgba(255,255,255,0.35)"
+  ];
+  ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+
+  const nG = groups.length;
+  const nS = series.length;
+  const innerW = w-2*pad, innerH = h-2*pad;
+  const gW = innerW / Math.max(1,nG);
+  const barW = gW / Math.max(1,nS+1);
+
+  for(let gi=0;gi<nG;gi++){
+    for(let si=0;si<nS;si++){
+      const v = series[si].values[gi] ?? 0;
+      const x = pad + gi*gW + si*barW + barW*0.15;
+      const bw = barW*0.7;
+      const y = pad + (1-v)*innerH;
+      const bh = v*innerH;
+      ctx.fillStyle = colors[si % colors.length];
+      ctx.fillRect(x,y,bw,bh);
+    }
+    const gx = pad + gi*gW + gW*0.08;
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    const lab = groups[gi];
+    ctx.fillText(lab.length>14 ? lab.slice(0,14)+"…" : lab, gx, h-8);
+  }
+
+  // legend
+  let lx = pad, ly = pad-8;
+  series.forEach((s, i)=>{
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fillRect(lx, ly, 10, 10);
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.fillText(s.name, lx+14, ly+10);
+    lx += 14 + ctx.measureText(s.name).width + 14;
+  });
+
+  ctx.restore();
+}
+
+function drawHistogramOverlay(ctx, w, h, pad, valuesA, valuesB, minV, maxV){
+  const bins = maxV-minV+1;
+  const countsA = new Array(bins).fill(0);
+  const countsB = new Array(bins).fill(0);
+
+  valuesA.forEach(v=>{
+    if(typeof v!=="number") return;
+    const idx = Math.round(v) - minV;
+    if(idx>=0 && idx<bins) countsA[idx]+=1;
+  });
+  valuesB.forEach(v=>{
+    if(typeof v!=="number") return;
+    const idx = Math.round(v) - minV;
+    if(idx>=0 && idx<bins) countsB[idx]+=1;
+  });
+  const maxCount = Math.max(...countsA, ...countsB, 1);
+
+  drawAxes(ctx, w, h, pad, "Total", "Count", 0, maxCount);
+
+  const innerW = w-2*pad, innerH = h-2*pad;
+  const bw = innerW / bins;
+
+  ctx.save();
+  for(let i=0;i<bins;i++){
+    const a = countsA[i], b = countsB[i];
+    const x = pad + i*bw;
+
+    const ah = (a/maxCount)*innerH;
+    ctx.fillStyle = "rgba(125,211,252,0.55)";
+    ctx.fillRect(x+bw*0.10, pad + (innerH-ah), bw*0.38, ah);
+
+    const bh = (b/maxCount)*innerH;
+    ctx.fillStyle = "rgba(251,191,36,0.45)";
+    ctx.fillRect(x+bw*0.52, pad + (innerH-bh), bw*0.38, bh);
+
+    const total = minV + i;
+    if(bins<=15 || total%2===0){
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+      ctx.fillText(String(total), x+bw*0.20, h-8);
+    }
+  }
+
+  // legend
+  ctx.fillStyle = "rgba(125,211,252,0.8)";
+  ctx.fillRect(pad, pad-10, 10, 10);
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
+  ctx.fillText("Player", pad+14, pad);
+  ctx.fillStyle = "rgba(251,191,36,0.7)";
+  ctx.fillRect(pad+70, pad-10, 10, 10);
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
+  ctx.fillText("Dealer", pad+84, pad);
+
+  ctx.restore();
+}
+
+/* =========================
+   Dashboard rendering
+   ========================= */
+function getRunRecord(runId){ return DB.runs[runId] || null; }
+function getRunAnalysis(runRec){
+  if(runRec.rawLog){
+    const parsed = safeParseJSON(runRec.rawLog);
+    if(parsed.ok) return analyzeLog(parsed.value);
+  }
+  return { summary: runRec.summary, derived: runRec.derived };
+}
+
+function renderDashboard(runId){
+  const runRec = getRunRecord(runId);
+  if(!runRec){
+    document.getElementById("dashSub").textContent = "Run not found.";
+    return;
+  }
+  currentRunId = runId;
+
+  const analysis = getRunAnalysis(runRec);
+  runRec.summary = analysis.summary;
+  if(runRec.derived) runRec.derived = analysis.derived;
+  saveDB();
+
+  const s = analysis.summary;
+  const derived = analysis.derived;
+
+  document.getElementById("dashSub").textContent =
+    `${runRec.meta.sourceFilename || runId} • ${runRec.meta.sessionId || runId} • ${runRec.meta.startedAtISO || s.startedAtISO || ""}`;
+
+  // Overview strip
+  const cfgName = DB.configs[runRec.meta.configId]?.name || "(No config)";
+  const outcome = s.runOutcome || {result:"UNKNOWN"};
+  const result = outcome.result || "UNKNOWN";
+  const reason = outcome.reason ? String(outcome.reason) : "—";
+  const endFloor = outcome.floor ?? s.floorsReached ?? "—";
+  const endType = outcome.tableType ?? "—";
+  const endMatch = outcome.matchIndex ?? "—";
+  const endChips = outcome.chips ?? s.endChips ?? "—";
+
+  const outcomePill = result==="WIN" ? "goodBox" : result==="LOSS" ? "badBox" : "warnBox";
+  const biggestSink = s.biggestDrop && s.biggestDrop.delta < 0 ? `${s.biggestDrop.type} ${fmt(s.biggestDrop.delta)}` : "—";
+
+  document.getElementById("dashOverview").innerHTML = `
+    <div class="${outcomePill}">
+      <div style="font-weight:700; margin-bottom:6px">
+        Outcome: ${escapeHTML(result)} <span class="muted">(${escapeHTML(reason)})</span>
+      </div>
+      <div class="tiny">
+        End: Floor <b>${escapeHTML(endFloor)}</b> • Table <b>${escapeHTML(endType)}</b> • Match <b>${escapeHTML(endMatch)}</b> • Chips <b>${escapeHTML(endChips)}</b><br/>
+        Peak / Low: <b>${escapeHTML(fmt(s.chipsPeak))}</b> / <b>${escapeHTML(fmt(s.chipsLow))}</b> • Biggest sink event: <b>${escapeHTML(biggestSink)}</b> • Config: <b>${escapeHTML(cfgName)}</b>
+      </div>
+    </div>
+  `;
+
+  // Header KPIs
+  const tags = (runRec.meta.tags||[]).join(", ");
+
+  document.getElementById("dashHeader").innerHTML = `
+    <div class="kpiGrid">
+      <div class="kpi"><div class="label">Config</div><div class="value">${escapeHTML(cfgName)}</div></div>
+      <div class="kpi"><div class="label">Floors</div><div class="value">${fmt(s.floorsReached)}</div></div>
+      <div class="kpi"><div class="label">Matches</div><div class="value">${fmt(s.matches)}</div></div>
+      <div class="kpi"><div class="label">W / L / P</div><div class="value">${fmt(s.wins)} / ${fmt(s.losses)} / ${fmt(s.pushes)}</div></div>
+      <div class="kpi"><div class="label">Chips (start → end)</div><div class="value">${fmt(s.startChips)} → ${fmt(s.endChips)}</div></div>
+      <div class="kpi"><div class="label">Net Chips</div><div class="value">${fmt(s.netChips)}</div></div>
+
+      <div class="kpi"><div class="label">Match profit total</div><div class="value">${fmt(s.matchProfitTotal)}</div></div>
+      <div class="kpi"><div class="label">Profit volatility (sd)</div><div class="value">${fmt(s.profitStdDev)}</div></div>
+      <div class="kpi"><div class="label">Player bust rate</div><div class="value">${pct(s.playerBustRate)}</div></div>
+      <div class="kpi"><div class="label">Player 21 rate</div><div class="value">${pct(s.player21Rate)}</div></div>
+      <div class="kpi"><div class="label">Merchant share</div><div class="value">${pct(s.merchantShare)}</div></div>
+      <div class="kpi"><div class="label">Tags</div><div class="value" title="${escapeHTML(tags)}">${escapeHTML(tags || "—")}</div></div>
+    </div>
+    <div class="hint" style="margin-top:10px">
+      <b>Notes:</b> <span class="muted">${escapeHTML(runRec.meta.notes || "—")}</span>
+    </div>
+  `;
+
+  // Warnings
+  const warnBox = document.getElementById("dashWarnings");
+  warnBox.innerHTML = "";
+  if(s.warnings && s.warnings.length){
+    warnBox.innerHTML = `<div class="warnBox"><b>Telemetry warnings:</b><ul style="margin:8px 0 0 18px">${s.warnings.map(w=>`<li>${escapeHTML(w)}</li>`).join("")}</ul></div>`;
+  }
+
+  // Per-floor table
+  renderFloorTable(derived.floorSummary || []);
+
+  // Charts
+  renderChipsChart(derived, s);
+  renderProfitChart(derived);
+  renderDeckChart(derived);
+  renderRatesChart(derived, document.getElementById("segmentMode").value, document.getElementById("outcomeBasis").value);
+  renderTotalsChart(derived);
+  renderSinksChart(derived);
+
+  // Insights
+  renderInsights(analysis, runRec);
+
+  // Tables
+  renderMatchTable(derived.matches || []);
+  renderLaneTable(derived.lanes || []);
+}
+
+document.getElementById("segmentMode").addEventListener("change", ()=>{
+  if(!currentRunId) return;
+  const rr = getRunRecord(currentRunId);
+  if(!rr) return;
+  const a = getRunAnalysis(rr);
+  renderRatesChart(a.derived, document.getElementById("segmentMode").value, document.getElementById("outcomeBasis").value);
+});
+document.getElementById("outcomeBasis").addEventListener("change", ()=>{
+  if(!currentRunId) return;
+  const rr = getRunRecord(currentRunId);
+  if(!rr) return;
+  const a = getRunAnalysis(rr);
+  renderRatesChart(a.derived, document.getElementById("segmentMode").value, document.getElementById("outcomeBasis").value);
+});
+
+function renderFloorTable(rows){
+  const el = document.getElementById("floorTable");
+  if(!rows.length){
+    el.innerHTML = `<tr><td class="muted">No floor summary rows.</td></tr>`;
+    return;
+  }
+  const cols = [
+    ["floor","Floor"],
+    ["matches","Matches"],
+    ["matchWinRate","M.Win"],
+    ["matchPushRate","M.Push"],
+    ["avgBuyIn","Avg BuyIn"],
+    ["avgProfit","Avg Profit"],
+    ["profitSd","Profit SD"],
+    ["tableMix","Mix"],
+    ["lanes","Lanes"],
+    ["laneWinRate","L.Win"],
+    ["lanePushRate","L.Push"],
+    ["bustRate","Bust"],
+    ["rate21","21"],
+    ["avgPlayerTotal","P.Avg"],
+    ["avgDealerTotal","D.Avg"],
+    ["avgSwing","Swing"],
+    ["deckStart","Deck S"],
+    ["deckEnd","Deck E"],
+    ["modsStart","Mods S"],
+    ["modsEnd","Mods E"],
+    ["modDensityEnd","ModDen E"],
+    ["topSpend","Top Spend"]
+  ];
+  el.innerHTML = `
+    <thead><tr>${cols.map(c=>`<th>${escapeHTML(c[1])}</th>`).join("")}</tr></thead>
+    <tbody>
+      ${rows.map(r=>`<tr>${cols.map(c=>{
+        const k=c[0];
+        const v=r[k];
+        if(k.endsWith("Rate") || k==="bustRate" || k==="rate21" || k==="modDensityEnd") return `<td>${escapeHTML(pct(v))}</td>`;
+        return `<td>${escapeHTML(fmt(v))}</td>`;
+      }).join("")}</tr>`).join("")}
+    </tbody>
+  `;
+}
+
+/* =========================
+   Charts
+   ========================= */
+function renderChipsChart(derived, summary){
+  const canvas = document.getElementById("chartChips");
+  const ctx = setupCanvas(canvas);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const pad = 42;
+
+  const ev = (derived.events||[]);
+  if(!ev.length){ clearChart(ctx,w,h); return; }
+
+  const chips = ev.map(r=>r.chips).filter(v=>typeof v==="number");
+  const yMin = Math.min(...chips, 0);
+  const yMax = Math.max(...chips, 1);
+
+  clearChart(ctx,w,h);
+  drawAxes(ctx,w,h,pad,"Event","Chips",yMin,yMax);
+
+  const xs = ev.map((r,i)=> i/(Math.max(1,ev.length-1)));
+  const ys = ev.map(r=> (typeof r.chips==="number"?r.chips:yMin));
+  drawLineScaled(ctx,w,h,pad,xs,ys,yMin,yMax,"rgba(125,211,252,0.9)");
+
+  const markers = [];
+  const labels = [];
+  const loanId = summary?.markers?.loanEventId;
+  const merchId = summary?.markers?.merchantEnterId;
+  const bossStartIds = summary?.markers?.bossMatchStartIds || [];
+
+  function addMarker(eventId, label){
+    if(eventId===null || eventId===undefined) return;
+    const idx = ev.findIndex(r=>String(r.id)===String(eventId));
+    if(idx>=0){
+      markers.push(idx/(Math.max(1,ev.length-1)));
+      labels.push(label);
+    }
+  }
+  addMarker(loanId, "Loan");
+  addMarker(merchId, "Merchant");
+  bossStartIds.slice(0,3).forEach(id=> addMarker(id, "Boss"));
+  if(markers.length) drawMarkers(ctx,w,h,pad,markers,labels);
+}
+
+function renderProfitChart(derived){
+  const canvas = document.getElementById("chartProfit");
+  const ctx = setupCanvas(canvas);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const pad = 42;
+
+  const matches = derived.matches||[];
+  if(!matches.length){ clearChart(ctx,w,h); return; }
+
+  const vals = matches.map(m=>num(m.matchProfit));
+  const yMin = Math.min(0, ...vals);
+  const yMax = Math.max(1, ...vals);
+
+  clearChart(ctx,w,h);
+  drawAxes(ctx,w,h,pad,"Match","Chips",yMin,yMax);
+
+  const labels = matches.map(m=>String(m.matchIndex));
+  drawBarChart(ctx,w,h,pad,vals,labels,yMin,yMax);
+}
+
+function renderDeckChart(derived){
+  const canvas = document.getElementById("chartDeck");
+  const ctx = setupCanvas(canvas);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const pad = 42;
+
+  const deck = derived.deck||[];
+  if(deck.length<2){ clearChart(ctx,w,h); return; }
+
+  const deckSizes = deck.map(d=>d.deckSize).filter(v=>typeof v==="number");
+  const modCounts = deck.map(d=>d.modCount).filter(v=>typeof v==="number");
+  if(!deckSizes.length){ clearChart(ctx,w,h); return; }
+
+  const yMinL = Math.min(...deckSizes);
+  const yMaxL = Math.max(...deckSizes);
+  const yMinR = modCounts.length ? Math.min(...modCounts) : 0;
+  const yMaxR = modCounts.length ? Math.max(...modCounts) : 1;
+
+  clearChart(ctx,w,h);
+  drawAxesDualY(ctx,w,h,pad,"Event","Deck size",yMinL,yMaxL,"Mod count",yMinR,yMaxR);
+
+  const xs = deck.map((d,i)=> i/(Math.max(1,deck.length-1)));
+  const ysL = deck.map(d=> (typeof d.deckSize==="number"?d.deckSize:yMinL));
+  drawLineScaled(ctx,w,h,pad,xs,ysL,yMinL,yMaxL,"rgba(125,211,252,0.9)");
+
+  if(modCounts.length){
+    const ysR = deck.map(d=> (typeof d.modCount==="number"?d.modCount:yMinR));
+    drawLineScaled(ctx,w,h,pad,xs,ysR,yMinR,yMaxR,"rgba(251,191,36,0.85)",[6,4]);
+  }
+}
+
+function renderRatesChart(derived, mode, basis){
+  const canvas = document.getElementById("chartRates");
+  const ctx = setupCanvas(canvas);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const pad = 42;
+
+  const lanes = derived.lanes||[];
+  const matches = derived.matches||[];
+  if(!lanes.length && !matches.length){ clearChart(ctx,w,h); return; }
+
+  const keyFn = (mode==="floor") ? (x=>String(x.floor ?? "—")) : (x=>String(x.tableType ?? "—"));
+
+  // Build groups
+  const groupsSet = new Set();
+  if(mode==="floor"){
+    lanes.forEach(l=>groupsSet.add(String(l.floor ?? "—")));
+    matches.forEach(m=>groupsSet.add(String(m.floor ?? "—")));
+  } else {
+    lanes.forEach(l=>groupsSet.add(String(l.tableType ?? "—")));
+    matches.forEach(m=>groupsSet.add(String(m.tableType ?? "—")));
+  }
+
+  const groups = [...groupsSet].sort((a,b)=>{
+    const na = Number(a), nb = Number(b);
+    if(!Number.isNaN(na) && !Number.isNaN(nb)) return na-nb;
+    return a.localeCompare(b);
+  });
+
+  const bust = [];
+  const rate21 = [];
+  const win = [];
+  const push = [];
+  const loss = [];
+  const captionParts = [];
+
+  groups.forEach(g=>{
+    const lG = lanes.filter(l=>keyFn(l)===g);
+    const mG = matches.filter(m=>keyFn(m)===g);
+
+    const ln = lG.length || 0;
+    const mn = mG.length || 0;
+
+    // bust/21 always lane based (but labeled in subtitle/caption)
+    bust.push(ln ? (lG.filter(x=>x.playerBust===true).length / ln) : 0);
+    rate21.push(ln ? (lG.filter(x=>x.playerTotal===21).length / ln) : 0);
+
+    if(basis==="lane"){
+      win.push(ln ? (lG.filter(x=>x.outcome==="WIN").length / ln) : 0);
+      push.push(ln ? (lG.filter(x=>x.outcome==="PUSH").length / ln) : 0);
+      loss.push(ln ? (lG.filter(x=>x.outcome==="LOSS").length / ln) : 0);
+      captionParts.push(`${g}: n=${ln} lanes`);
+    } else {
+      win.push(mn ? (mG.filter(x=>x.outcome==="WIN").length / mn) : 0);
+      push.push(mn ? (mG.filter(x=>x.outcome==="PUSH").length / mn) : 0);
+      loss.push(mn ? (mG.filter(x=>x.outcome==="LOSS").length / mn) : 0);
+      captionParts.push(`${g}: n=${mn} matches (lanes=${ln})`);
+    }
+  });
+
+  document.getElementById("ratesSub").textContent =
+    basis==="lane"
+      ? "Lane outcomes + lane bust/21 (good for hand-level tuning)."
+      : "Match outcomes (win/loss/push) + lane bust/21 (useful for progression gates).";
+
+  document.getElementById("ratesCaption").textContent = captionParts.join(" • ");
+
+  clearChart(ctx,w,h);
+  drawGroupedRates(ctx,w,h,pad,groups,[
+    {name:"Bust", values:bust},
+    {name:"21", values:rate21},
+    {name:(basis==="lane"?"Win":"Win"), values:win},
+    {name:(basis==="lane"?"Push":"Push"), values:push},
+    {name:(basis==="lane"?"Loss":"Loss"), values:loss},
+  ]);
+}
+
+function renderTotalsChart(derived){
+  const canvas = document.getElementById("chartTotals");
+  const ctx = setupCanvas(canvas);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const pad = 42;
+
+  const lanes = derived.lanes||[];
+  if(!lanes.length){ clearChart(ctx,w,h); return; }
+
+  const p = lanes.map(l=>numOrNull(l.playerTotal)).filter(v=>typeof v==="number");
+  const d = lanes.map(l=>numOrNull(l.dealerTotal)).filter(v=>typeof v==="number");
+  if(!p.length || !d.length){ clearChart(ctx,w,h); return; }
+
+  const minV = Math.min(Math.min(...p), Math.min(...d));
+  const maxV = Math.max(Math.max(...p), Math.max(...d));
+
+  clearChart(ctx,w,h);
+  drawHistogramOverlay(ctx,w,h,pad,p,d, Math.floor(minV), Math.ceil(maxV));
+}
+
+function renderSinksChart(derived){
+  const canvas = document.getElementById("chartSinks");
+  const ctx = setupCanvas(canvas);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const pad = 42;
+
+  const sinks = derived.sinks||[];
+  if(!sinks.length){ clearChart(ctx,w,h); return; }
+
+  const agg = {};
+  sinks.forEach(s=>{
+    const cat = s.category || "Other";
+    agg[cat] = (agg[cat]||0) + s.delta; // negative
+  });
+  const entries = Object.entries(agg)
+    .sort((a,b)=> Math.abs(b[1]) - Math.abs(a[1]))
+    .slice(0,8);
+
+  const labels = entries.map(e=>e[0]);
+  const vals = entries.map(e=>e[1]); // negative
+  const yMin = Math.min(...vals, 0);
+  const yMax = 0;
+
+  clearChart(ctx,w,h);
+  drawAxes(ctx,w,h,pad,"","Chips (negative)",yMin,yMax);
+  drawBarChart(ctx,w,h,pad,vals,labels,yMin,yMax);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(255,255,255,0.65)";
+  ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+  ctx.fillText("Largest negative deltas by category", pad, pad-10);
+  ctx.restore();
+}
+
+/* =========================
+   Insights
+   ========================= */
+function renderInsights(analysis, runRec){
+  const s = analysis.summary;
+  const settings = DB.settings || defaultSettings;
+
+  const insights = [];
+
+  if(typeof s.bonusShare === "number" && s.bonusShare > settings.bonusDominance){
+    insights.push({
+      kind:"warn",
+      title:`Bonus chips dominate EV (${pct(s.bonusShare)} of match profit)`,
+      body:`If wins should matter more than bonuses, tighten the trigger (natural-only), add per-match caps, or add diminishing returns.`
+    });
+  } else if(typeof s.bonusShare === "number"){
+    insights.push({
+      kind:"good",
+      title:`Bonus share is ${pct(s.bonusShare)} of match profit`,
+      body:`Within default non-dominant band (≤ ${pct(settings.bonusDominance)}).`
+    });
+  }
+
+  if(typeof s.merchantShare === "number" && s.merchantShare > settings.merchantDominance){
+    insights.push({
+      kind:"warn",
+      title:`Merchant sinks dominate spending (${pct(s.merchantShare)} of all spend)`,
+      body:`Deck surgery is likely the main power lever. Consider removal caps, escalating removal cost, or gating removals by risk.`
+    });
+  }
+
+  if(typeof s.player21Rate==="number" && typeof s.playerBustRate==="number"){
+    if(s.player21Rate > settings.solved21Rate && s.playerBustRate < settings.solvedBustRate){
+      insights.push({
+        kind:"warn",
+        title:`Control looks high (21 rate ${pct(s.player21Rate)} + bust rate ${pct(s.playerBustRate)})`,
+        body:`This resembles a “solved” distribution. Tune: reduce modifier density, limit thinning, or increase dealer pressure/boss constraints.`
+      });
+    }
+  }
+
+  if(typeof s.startChips==="number" && typeof s.chipsLow==="number"){
+    const frac = s.chipsLow / (s.startChips||1);
+    if(frac < settings.earlyCliffFrac){
+      insights.push({
+        kind:"bad",
+        title:`Early bankroll cliff: chipsLow ${fmt(s.chipsLow)} (${pct(frac)} of start)`,
+        body:`If common, early buy-ins are too punishing. Consider smoothing high-stakes density or adding early safety valves.`
+      });
+    }
+  }
+
+  // Boss strictness hint
+  const matches = analysis.derived.matches||[];
+  const lanes = analysis.derived.lanes||[];
+  const bossMatches = matches.filter(m=>String(m.tableType||"").toUpperCase()==="BOSS");
+  bossMatches.forEach(m=>{
+    if(m.outcome==="LOSS"){
+      const lm = lanes.filter(l=>l.matchIndex===m.matchIndex);
+      const n = lm.length || 1;
+      const pushes = lm.filter(l=>l.outcome==="PUSH").length / n;
+      const wins = lm.filter(l=>l.outcome==="WIN").length;
+      const losses = lm.filter(l=>l.outcome==="LOSS").length;
+
+      if(pushes >= 0.5 && wins >= losses){
+        insights.push({
+          kind:"warn",
+          title:`Boss loss with many pushes (push share ${pct(pushes)})`,
+          body:`Boss rule may require strict lane wins (pushes don’t help). If unintended, add push tiebreaks or alternate boss pressure.`
+        });
+      }
+    }
+  });
+
+  if(typeof s.deckSizeEnd==="number" && typeof s.modCountEnd==="number"){
+    insights.push({
+      kind:"good",
+      title:`Deck end: size ${fmt(s.deckSizeEnd)}, mods ${fmt(s.modCountEnd)} (density ${pct(s.modDensityEnd)})`,
+      body:`Track this across configs to see how quickly players reach high control states.`
+    });
+  }
+
+  if(s.runOutcome && s.runOutcome.source==="INFER"){
+    insights.push({
+      kind:"warn",
+      title:`Run outcome is inferred (no RUN_END event detected)`,
+      body:`Add a final RUN_END telemetry event (result + reason + matchIndex) for fully reliable analytics.`
+    });
+  }
+
+  if(!insights.length){
+    insights.push({kind:"good", title:"No strong heuristic flags triggered.", body:"Use per-floor table + match/lane drilldowns to spot-check anomalies."});
+  }
+
+  const box = document.getElementById("insightsBox");
+  box.innerHTML = insights.map(i=>{
+    const cls = i.kind==="good" ? "goodBox" : i.kind==="bad" ? "badBox" : "warnBox";
+    return `<div class="${cls}" style="margin-bottom:10px">
+      <div style="font-weight:700; margin-bottom:4px">${escapeHTML(i.title)}</div>
+      <div class="tiny">${escapeHTML(i.body)}</div>
+    </div>`;
+  }).join("");
+}
+
+/* =========================
+   Tables
+   ========================= */
+function renderMatchTable(rows){
+  const el = document.getElementById("matchTable");
+  if(!rows.length){
+    el.innerHTML = `<tr><td class="muted">No match rows.</td></tr>`;
+    return;
+  }
+  const cols = [
+    ["matchIndex","#"],
+    ["floor","Floor"],
+    ["tableType","Type"],
+    ["outcome","Outcome"],
+    ["buyIn","BuyIn"],
+    ["payout","Payout"],
+    ["bonusChips","Bonus"],
+    ["transferNet","Transfer"],
+    ["matchProfit","Profit"],
+    ["turns","Turns"],
+    ["deckSizeStart","DeckS"],
+    ["deckSizeEnd","DeckE"]
+  ];
+  el.innerHTML = `
+    <thead><tr>${cols.map(c=>`<th>${escapeHTML(c[1])}</th>`).join("")}</tr></thead>
+    <tbody>
+      ${rows.map(r=>`<tr>${cols.map(c=>`<td>${escapeHTML(fmt(r[c[0]]))}</td>`).join("")}</tr>`).join("")}
+    </tbody>
+  `;
+}
+function renderLaneTable(rows){
+  const el = document.getElementById("laneTable");
+  if(!rows.length){
+    el.innerHTML = `<tr><td class="muted">No lane rows.</td></tr>`;
+    return;
+  }
+  const cols = [
+    ["matchIndex","Match"],
+    ["floor","Floor"],
+    ["tableType","Type"],
+    ["lane","Lane"],
+    ["playerTotal","P.Total"],
+    ["playerBust","P.Bust"],
+    ["dealerTotal","D.Total"],
+    ["dealerBust","D.Bust"],
+    ["outcome","Outcome"]
+  ];
+  el.innerHTML = `
+    <thead><tr>${cols.map(c=>`<th>${escapeHTML(c[1])}</th>`).join("")}</tr></thead>
+    <tbody>
+      ${rows.slice(0,350).map(r=>`<tr>${cols.map(c=>`<td>${escapeHTML(fmt(r[c[0]]))}</td>`).join("")}</tr>`).join("")}
+    </tbody>
+  `;
+}
+
+/* =========================
+   CSV export
+   ========================= */
+function toCSV(rows, cols){
+  const esc = (v)=>{
+    const s = (v===null || v===undefined) ? "" : String(v);
+    if(/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+    return s;
+  };
+  const header = cols.map(c=>esc(c[1])).join(",");
+  const lines = rows.map(r=>{
+    return cols.map(c=>{
+      const key = c[0];
+      const v = (typeof c[2]==="function") ? c[2](r) : r[key];
+      return esc(v);
+    }).join(",");
+  });
+  return [header, ...lines].join("\n");
+}
+function downloadText(filename, text){
+  const blob = new Blob([text], {type:"text/plain"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* Dashboard export buttons */
+document.getElementById("btnExportMatchesCSV").addEventListener("click", ()=>{
+  if(!currentRunId) return;
+  const rr = getRunRecord(currentRunId);
+  if(!rr) return;
+  const a = getRunAnalysis(rr);
+  const rows = a.derived.matches||[];
+  const cols = [
+    ["matchIndex","matchIndex"],
+    ["floor","floor"],
+    ["tableType","tableType"],
+    ["outcome","outcome"],
+    ["buyIn","buyIn"],
+    ["payout","payout"],
+    ["bonusChips","bonusChips"],
+    ["transferNet","transferNet"],
+    ["matchProfit","matchProfit"],
+    ["turns","turns"],
+    ["playerBustsFinal","playerBustsFinal"],
+    ["dealerBustsFinal","dealerBustsFinal"],
+    ["deckSizeStart","deckSizeStart"],
+    ["deckSizeEnd","deckSizeEnd"]
+  ];
+  downloadText(`p63_matches_${currentRunId}.csv`, toCSV(rows, cols));
+});
+document.getElementById("btnExportLanesCSV").addEventListener("click", ()=>{
+  if(!currentRunId) return;
+  const rr = getRunRecord(currentRunId);
+  if(!rr) return;
+  const a = getRunAnalysis(rr);
+  const rows = a.derived.lanes||[];
+  const cols = [
+    ["matchIndex","matchIndex"],
+    ["floor","floor"],
+    ["tableType","tableType"],
+    ["lane","lane"],
+    ["playerTotal","playerTotal"],
+    ["playerBust","playerBust"],
+    ["dealerTotal","dealerTotal"],
+    ["dealerBust","dealerBust"],
+    ["outcome","outcome"]
+  ];
+  downloadText(`p63_lanes_${currentRunId}.csv`, toCSV(rows, cols));
+});
+document.getElementById("btnExportFloorCSV").addEventListener("click", ()=>{
+  if(!currentRunId) return;
+  const rr = getRunRecord(currentRunId);
+  if(!rr) return;
+  const a = getRunAnalysis(rr);
+  const rows = a.derived.floorSummary||[];
+  const cols = [
+    ["floor","floor"],
+    ["matches","matches"],
+    ["matchWinRate","matchWinRate"],
+    ["matchPushRate","matchPushRate"],
+    ["avgBuyIn","avgBuyIn"],
+    ["avgPayout","avgPayout"],
+    ["avgProfit","avgProfit"],
+    ["profitSd","profitSd"],
+    ["tableMix","tableMix"],
+    ["lanes","lanes"],
+    ["laneWinRate","laneWinRate"],
+    ["lanePushRate","lanePushRate"],
+    ["laneLossRate","laneLossRate"],
+    ["bustRate","bustRate"],
+    ["rate21","rate21"],
+    ["avgPlayerTotal","avgPlayerTotal"],
+    ["avgDealerTotal","avgDealerTotal"],
+    ["avgSwing","avgSwing"],
+    ["deckStart","deckStart"],
+    ["deckEnd","deckEnd"],
+    ["modsStart","modsStart"],
+    ["modsEnd","modsEnd"],
+    ["modDensityStart","modDensityStart"],
+    ["modDensityEnd","modDensityEnd"],
+    ["topSpend","topSpend"]
+  ];
+  downloadText(`p63_floor_summary_${currentRunId}.csv`, toCSV(rows, cols));
+});
+
+/* =========================
+   Runs table + filtering + compare
+   ========================= */
+document.getElementById("filterConfig").addEventListener("change", renderRunsTable);
+document.getElementById("filterTag").addEventListener("input", renderRunsTable);
+document.getElementById("filterSearch").addEventListener("input", renderRunsTable);
+document.getElementById("btnRecomputeAll").addEventListener("click", ()=>{
+  Object.keys(DB.runs).forEach(runId=>{
+    const rr = DB.runs[runId];
+    if(rr.rawLog){
+      const parsed = safeParseJSON(rr.rawLog);
+      if(parsed.ok){
+        const a = analyzeLog(parsed.value);
+        rr.summary = a.summary;
+        if(rr.derived) rr.derived = a.derived;
+      }
+    }
+  });
+  saveDB();
+  renderRunsTable();
+});
+
+function getDeep(obj, path){
+  return path.split(".").reduce((o,k)=> (o && o[k]!==undefined)?o[k]:null, obj);
+}
+
+function refreshCompareSelects(runList){
+  const aSel = document.getElementById("cmpA");
+  const bSel = document.getElementById("cmpB");
+  const opts = runList.map(r=>{
+    const label = `${r.meta.sourceFilename || r.meta.runId} • ${r.summary?.runOutcome?.result||"?"} • F${r.summary?.floorsReached??"—"} • Net ${fmt(r.summary?.netChips)}`;
+    return `<option value="${escapeHTML(r.meta.runId)}">${escapeHTML(label)}</option>`;
+  }).join("");
+  aSel.innerHTML = opts;
+  bSel.innerHTML = opts;
+  if(runList.length>=2){
+    aSel.value = runList[0].meta.runId;
+    bSel.value = runList[1].meta.runId;
+  } else if(runList.length===1){
+    aSel.value = runList[0].meta.runId;
+    bSel.value = runList[0].meta.runId;
+  }
+}
+
+document.getElementById("btnCompare").addEventListener("click", ()=>{
+  const aId = document.getElementById("cmpA").value;
+  const bId = document.getElementById("cmpB").value;
+  const a = DB.runs[aId], b = DB.runs[bId];
+  if(!a || !b) return;
+  const out = compareRuns(a.summary, b.summary);
+  document.getElementById("compareOut").innerHTML = out;
+});
+document.getElementById("btnSwapCompare").addEventListener("click", ()=>{
+  const aSel = document.getElementById("cmpA");
+  const bSel = document.getElementById("cmpB");
+  const t = aSel.value;
+  aSel.value = bSel.value;
+  bSel.value = t;
+});
+
+function compareRuns(A, B){
+  const rows = [
+    ["Outcome", A?.runOutcome?.result, B?.runOutcome?.result],
+    ["Floors", A?.floorsReached, B?.floorsReached],
+    ["Matches", A?.matches, B?.matches],
+    ["Net chips", A?.netChips, B?.netChips],
+    ["Player bust rate", pct(A?.playerBustRate), pct(B?.playerBustRate)],
+    ["Player 21 rate", pct(A?.player21Rate), pct(B?.player21Rate)],
+    ["Bonus share", pct(A?.bonusShare), pct(B?.bonusShare)],
+    ["Merchant share", pct(A?.merchantShare), pct(B?.merchantShare)],
+    ["Deck end size", A?.deckSizeEnd, B?.deckSizeEnd],
+    ["Mod density end", pct(A?.modDensityEnd), pct(B?.modDensityEnd)],
+    ["Profit total", A?.matchProfitTotal, B?.matchProfitTotal],
+    ["Profit sd", A?.profitStdDev, B?.profitStdDev]
+  ];
+  return `
+    <div class="tableWrap">
+      <table>
+        <thead><tr><th>Metric</th><th>A</th><th>B</th></tr></thead>
+        <tbody>
+          ${rows.map(r=>`<tr><td>${escapeHTML(r[0])}</td><td>${escapeHTML(fmt(r[1]))}</td><td>${escapeHTML(fmt(r[2]))}</td></tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderRunsTable(){
+  refreshConfigSelects();
+
+  const cfgFilter = document.getElementById("filterConfig").value || "all";
+  const tagFilter = (document.getElementById("filterTag").value || "").toLowerCase().trim();
+  const search = (document.getElementById("filterSearch").value || "").toLowerCase().trim();
+
+  const runs = Object.values(DB.runs);
+
+  const filtered = runs.filter(r=>{
+    if(cfgFilter!=="all" && String(r.meta.configId)!==String(cfgFilter)) return false;
+    if(tagFilter){
+      const tags = (r.meta.tags||[]).join(",").toLowerCase();
+      if(!tags.includes(tagFilter)) return false;
+    }
+    if(search){
+      const hay = [
+        r.meta.sourceFilename||"",
+        r.meta.sessionId||"",
+        r.meta.notes||"",
+        r.meta.runId||""
+      ].join(" ").toLowerCase();
+      if(!hay.includes(search)) return false;
+    }
+    return true;
+  }).sort((a,b)=>{
+    const ta = new Date(a.meta.importedAtISO||0).getTime();
+    const tb = new Date(b.meta.importedAtISO||0).getTime();
+    return tb-ta;
+  });
+
+  document.getElementById("runsCount").textContent =
+    `${filtered.length} run(s) shown • ${runs.length} total stored`;
+
+  // Update compare selects with current filtered list (or all if filtered empty)
+  refreshCompareSelects(filtered.length ? filtered : runs.sort((a,b)=>{
+    const ta = new Date(a.meta.importedAtISO||0).getTime();
+    const tb = new Date(b.meta.importedAtISO||0).getTime();
+    return tb-ta;
+  }));
+
+  const el = document.getElementById("runsTable");
+  const cols = [
+    ["meta.startedAtISO","Started"],
+    ["meta.sourceFilename","File"],
+    ["meta.configId","Config"],
+    ["summary.runOutcome.result","Outcome"],
+    ["summary.floorsReached","Floors"],
+    ["summary.matches","Matches"],
+    ["summary.netChips","Net"],
+    ["summary.playerBustRate","P.Bust"],
+    ["summary.player21Rate","P.21"],
+    ["summary.modDensityEnd","ModDen"],
+    ["meta.tags","Tags"]
+  ];
+
+  el.innerHTML = `
+    <thead><tr>
+      ${cols.map(c=>`<th>${escapeHTML(c[1])}</th>`).join("")}
+      <th>Action</th>
+    </tr></thead>
+    <tbody>
+      ${filtered.map(r=>{
+        const cfgName = DB.configs[r.meta.configId]?.name || "(No config)";
+        return `<tr>
+          <td>${escapeHTML(fmt(r.meta.startedAtISO || r.summary?.startedAtISO || ""))}</td>
+          <td title="${escapeHTML(r.meta.runId)}">${escapeHTML(r.meta.sourceFilename || "—")}</td>
+          <td>${escapeHTML(cfgName)}</td>
+          <td>${escapeHTML(r.summary?.runOutcome?.result || "—")}</td>
+          <td>${escapeHTML(fmt(r.summary?.floorsReached))}</td>
+          <td>${escapeHTML(fmt(r.summary?.matches))}</td>
+          <td>${escapeHTML(fmt(r.summary?.netChips))}</td>
+          <td>${escapeHTML(pct(r.summary?.playerBustRate))}</td>
+          <td>${escapeHTML(pct(r.summary?.player21Rate))}</td>
+          <td>${escapeHTML(pct(r.summary?.modDensityEnd))}</td>
+          <td title="${escapeHTML((r.meta.tags||[]).join(", "))}">${escapeHTML((r.meta.tags||[]).slice(0,3).join(", ") || "—")}</td>
+          <td><button class="btn small primary" data-open="${escapeHTML(r.meta.runId)}">Open</button></td>
+        </tr>`;
+      }).join("")}
+    </tbody>
+  `;
+
+  el.querySelectorAll("button[data-open]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const id = btn.getAttribute("data-open");
+      currentRunId = id;
+      setTab("dashboardTab");
+      renderDashboard(id);
+    });
+  });
+}
+
+/* =========================
+   Configs
+   ========================= */
+function refreshConfigSelects(){
+  const cfgs = Object.values(DB.configs).sort((a,b)=>a.name.localeCompare(b.name));
+  const importSel = document.getElementById("importConfigSelect");
+  const filterSel = document.getElementById("filterConfig");
+  const editSel = document.getElementById("editRunConfig");
+
+  importSel.innerHTML = cfgs.map(c=>`<option value="${escapeHTML(c.configId)}">${escapeHTML(c.name)}</option>`).join("");
+  filterSel.innerHTML = `<option value="all">All configs</option>` +
+    cfgs.map(c=>`<option value="${escapeHTML(c.configId)}">${escapeHTML(c.name)}</option>`).join("");
+  editSel.innerHTML = cfgs.map(c=>`<option value="${escapeHTML(c.configId)}">${escapeHTML(c.name)}</option>`).join("");
+}
+
+function renderConfigs(){
+  refreshConfigSelects();
+  const el = document.getElementById("configsTable");
+  const cfgs = Object.values(DB.configs).sort((a,b)=>a.name.localeCompare(b.name));
+  el.innerHTML = `
+    <thead><tr>
+      <th>Name</th><th>Config ID</th><th>Fields</th><th>Action</th>
+    </tr></thead>
+    <tbody>
+      ${cfgs.map(c=>{
+        return `<tr>
+          <td>${escapeHTML(c.name)}</td>
+          <td class="mono">${escapeHTML(c.configId)}</td>
+          <td class="mono tiny">${escapeHTML(JSON.stringify(c.fields||{}))}</td>
+          <td><button class="btn small primary" data-edit="${escapeHTML(c.configId)}">Edit</button></td>
+        </tr>`;
+      }).join("")}
+    </tbody>
+  `;
+  el.querySelectorAll("button[data-edit]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const id = btn.getAttribute("data-edit");
+      openConfigEditor(id);
+    });
+  });
+}
+
+document.getElementById("btnNewConfig").addEventListener("click", ()=>{
+  const id = uid("cfg");
+  DB.configs[id] = {
+    configId: id,
+    name: "New config",
+    createdAtISO: new Date().toISOString(),
+    fields: {}
+  };
+  saveDB();
+  renderConfigs();
+  openConfigEditor(id);
+});
+document.getElementById("btnSaveConfig").addEventListener("click", ()=>{
+  if(!currentConfigId) return;
+  const name = document.getElementById("cfgName").value.trim() || "Unnamed config";
+  const fieldsText = document.getElementById("cfgFields").value.trim() || "{}";
+  const parsed = safeParseJSON(fieldsText);
+  if(!parsed.ok || typeof parsed.value!=="object" || Array.isArray(parsed.value)){
+    document.getElementById("cfgEditorHint").textContent = "Fields must be a JSON object.";
+    return;
+  }
+  DB.configs[currentConfigId].name = name;
+  DB.configs[currentConfigId].fields = parsed.value;
+  saveDB();
+  document.getElementById("cfgEditorHint").textContent = "Saved.";
+  renderConfigs();
+  refreshConfigSelects();
+});
+document.getElementById("btnDeleteConfig").addEventListener("click", ()=>{
+  if(!currentConfigId) return;
+  if(currentConfigId==="cfg_default"){
+    document.getElementById("cfgEditorHint").textContent = "Default config cannot be deleted.";
+    return;
+  }
+  if(!confirm("Delete this config? Runs referencing it will keep the configId but name will be missing.")) return;
+  delete DB.configs[currentConfigId];
+  currentConfigId = null;
+  saveDB();
+  renderConfigs();
+  refreshConfigSelects();
+  document.getElementById("cfgName").value = "";
+  document.getElementById("cfgFields").value = "";
+});
+function openConfigEditor(id){
+  currentConfigId = id;
+  const c = DB.configs[id];
+  document.getElementById("cfgName").value = c?.name || "";
+  document.getElementById("cfgFields").value = JSON.stringify(c?.fields||{}, null, 2);
+  document.getElementById("cfgEditorHint").textContent = `Editing ${id}`;
+}
+
+/* =========================
+   Settings
+   ========================= */
+function renderSettings(){
+  const s = DB.settings || {...defaultSettings};
+  document.getElementById("setBonusDom").value = s.bonusDominance;
+  document.getElementById("setMerchantDom").value = s.merchantDominance;
+  document.getElementById("setSolved21").value = s.solved21Rate;
+  document.getElementById("setSolvedBust").value = s.solvedBustRate;
+  document.getElementById("setCliffFrac").value = s.earlyCliffFrac;
+  document.getElementById("settingsHint").textContent = "";
+}
+document.getElementById("btnSaveSettings").addEventListener("click", ()=>{
+  DB.settings = {
+    bonusDominance: Number(document.getElementById("setBonusDom").value),
+    merchantDominance: Number(document.getElementById("setMerchantDom").value),
+    solved21Rate: Number(document.getElementById("setSolved21").value),
+    solvedBustRate: Number(document.getElementById("setSolvedBust").value),
+    earlyCliffFrac: Number(document.getElementById("setCliffFrac").value),
+  };
+  saveDB();
+  document.getElementById("settingsHint").textContent = "Saved.";
+});
+
+/* =========================
+   Edit/Delete run
+   ========================= */
+const editDlg = document.getElementById("editRunDlg");
+document.getElementById("btnEditRun").addEventListener("click", ()=>{
+  if(!currentRunId) return;
+  const r = DB.runs[currentRunId];
+  if(!r) return;
+  refreshConfigSelects();
+  document.getElementById("editRunConfig").value = r.meta.configId || "cfg_default";
+  document.getElementById("editRunTags").value = (r.meta.tags||[]).join(", ");
+  document.getElementById("editRunNotes").value = r.meta.notes || "";
+  document.getElementById("editRunInfo").textContent = `Run ID: ${currentRunId} • Imported: ${r.meta.importedAtISO || "—"}`;
+  editDlg.showModal();
+});
+document.getElementById("btnCancelEditRun").addEventListener("click", ()=> editDlg.close());
+document.getElementById("btnSaveEditRun").addEventListener("click", ()=>{
+  const r = DB.runs[currentRunId];
+  if(!r) return;
+  r.meta.configId = document.getElementById("editRunConfig").value;
+  r.meta.tags = document.getElementById("editRunTags").value.split(",").map(s=>s.trim()).filter(Boolean);
+  r.meta.notes = document.getElementById("editRunNotes").value;
+  saveDB();
+  editDlg.close();
+  renderDashboard(currentRunId);
+  renderRunsTable();
+});
+document.getElementById("btnDeleteRun").addEventListener("click", ()=>{
+  if(!currentRunId) return;
+  if(!confirm("Delete this run from local storage?")) return;
+  delete DB.runs[currentRunId];
+  saveDB();
+  currentRunId = null;
+  setTab("runsTab");
+});
+
+/* =========================
+   Export / Import DB
+   ========================= */
+document.getElementById("btnExportDB").addEventListener("click", ()=>{
+  downloadText("project63_run_analyzer_db.json", JSON.stringify(DB,null,2));
+});
+document.getElementById("btnImportDB").addEventListener("click", async ()=>{
+  const input = document.getElementById("dbImportInput");
+  const file = input.files?.[0];
+  if(!file){ alert("Choose a DB JSON file first."); return; }
+  const text = await file.text();
+  const parsed = safeParseJSON(text);
+  if(!parsed.ok){ alert("Invalid DB JSON."); return; }
+  const incoming = parsed.value;
+  if(!incoming || typeof incoming!=="object" || !incoming.runs || !incoming.configs){
+    alert("DB file doesn’t look like a P63 analyzer DB.");
+    return;
+  }
+  DB = {
+    version: 1,
+    runs: {...DB.runs, ...incoming.runs},
+    configs: {...DB.configs, ...incoming.configs},
+    settings: incoming.settings || DB.settings || {...defaultSettings}
+  };
+  saveDB();
+  refreshConfigSelects();
+  renderRunsTable();
+  alert("DB imported/merged.");
+});
+document.getElementById("btnClearDB").addEventListener("click", ()=>{
+  if(!confirm("Clear all local analyzer data? This cannot be undone.")) return;
+  localStorage.removeItem(DB_KEY);
+  DB = loadDB();
+  saveDB();
+  currentRunId = null;
+  refreshConfigSelects();
+  importResults.textContent = "";
+  renderRunsTable();
+  alert("Cleared.");
+});
+
+/* =========================
+   Init
+   ========================= */
+function init(){
+  refreshConfigSelects();
+  renderRunsTable();
+  renderSettings();
+
+  const runs = Object.values(DB.runs).sort((a,b)=>{
+    const ta = new Date(a.meta.importedAtISO||0).getTime();
+    const tb = new Date(b.meta.importedAtISO||0).getTime();
+    return tb-ta;
+  });
+  if(runs.length){
+    currentRunId = runs[0].meta.runId;
+  }
+}
+init();
+</script>
+</body>
+</html>
