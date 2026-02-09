@@ -1315,8 +1315,8 @@ const CALLING_RANK_THRESHOLDS = [
         activate: () => activateBenched()
       },
       spyGlass: {
-        name: "Spy Glass",
-        desc: "Reveal the current total of a Dealer open lane for the rest of the match.",
+        name: "Spy Network",
+        desc: "Reveal the current totals of all Dealer lanes for the rest of the match.",
         isUsable: (m) => isPlayerActionContextOK(m) && anyOpenIncomplete(m.dealerPositions),
         activate: () => activateSpyGlass()
       },
@@ -1376,7 +1376,7 @@ const CALLING_RANK_THRESHOLDS = [
     let uiSettings = {
       autoOpenLogOnEnd: true,
 
-      // if false, dealer totals + hole cards reveal only at match resolution (unless Spy Glass)
+      // if false, dealer totals + hole cards reveal only at match resolution (unless Spy Network)
       revealTotalsOnClose: false,
 
       // NEW: opponent AI difficulty
@@ -2384,7 +2384,7 @@ const CALLING_RANK_THRESHOLDS = [
               <div>
                 <div style="font-weight:800; color:var(--text-primary);">Reveal Dealer totals + hole card when a lane closes</div>
                 <div style="color:var(--text-secondary); font-size:12px; line-height:1.4; margin-top:4px;">
-                  If off, Dealer totals + hole card reveal only at match resolution (Spy Glass still works).
+                  If off, Dealer totals + hole card reveal only at match resolution (Spy Network still works).
                 </div>
               </div>
             </label>
@@ -6445,15 +6445,13 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       endPlayerTurn();
     }
 
-    // Spy Glass
+    // Spy Network
     function activateSpyGlass() {
-      pickDealerLaneModal('Spy Glass', 'Choose a Dealer lane to reveal.', (idx) => {
-        blackjackMatch.spyReveals.add(idx);
-        markActionUsed('spyGlass');
-        closeModal();
-        renderAll();
-        showToast(`Revealed Dealer lane #${idx + 1}`);
-      });
+      for (let i = 0; i < 5; i++) blackjackMatch.spyReveals.add(i);
+      markActionUsed('spyGlass');
+      closeModal();
+      renderAll();
+      showToast('Revealed all Dealer lanes');
     }
 
     // Forced Play
@@ -6926,7 +6924,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
   const state = posState(pos);
   const total = getPositionTotal(pos);
 
-  // Spy Glass should always override visibility for that lane
+  // Spy Network should always override visibility for that lane
   const spy = (side === 'dealer')
     && blackjackMatch
     && blackjackMatch.spyReveals
