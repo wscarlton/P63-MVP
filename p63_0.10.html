@@ -318,6 +318,16 @@
 
     .merchant-card-slot .playing-card { font-size: 18px; }
 
+    .rarity-pip {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+    .rarity-common { background: #94a3b8; }
+    .rarity-uncommon { background: #22c55e; }
+    .rarity-rare { background: #f59e0b; }
+
     /* Blackjack View */
     #blackjackView {
       padding: 20px;
@@ -423,6 +433,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      position: relative;
       font-family: 'Fira Code', monospace;
       font-size: 12px;
       font-weight: 700;
@@ -440,12 +451,67 @@
       color: #dbeafe;
     }
 
+    .playing-card.sleeve-blue {
+      background: rgba(77, 166, 255, 0.18);
+      border-color: rgba(77, 166, 255, 0.65);
+      color: #dbeafe;
+    }
+
+    .playing-card.sleeve-crystal {
+      box-shadow: 0 2px 6px rgba(148, 163, 184, 0.8);
+      background: linear-gradient(135deg, rgba(226,232,240,0.7), rgba(255,255,255,0.9));
+    }
+
+    .playing-card.sleeve-steel {
+      border-color: rgba(148, 163, 184, 0.9);
+      box-shadow: 0 2px 6px rgba(100, 116, 139, 0.6);
+    }
+
+    .playing-card.sleeve-gold {
+      border-color: rgba(234, 179, 8, 0.9);
+      box-shadow: 0 2px 6px rgba(234, 179, 8, 0.6);
+      background: linear-gradient(135deg, rgba(254, 243, 199, 0.9), rgba(255,255,255,0.9));
+    }
+
     .playing-card.fused {
       background: linear-gradient(135deg, rgba(168,85,247,0.22), rgba(77,166,255,0.22));
       border-color: rgba(168,85,247,0.65);
       color: #1f2937;
       font-size: 11px;
     }
+
+    .stamp-icon {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: var(--accent-gold);
+      color: #1b1f2a;
+      font-size: 9px;
+      font-weight: 800;
+      border-radius: 999px;
+      padding: 2px 5px;
+      border: 1px solid rgba(0,0,0,0.2);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+      pointer-events: none;
+    }
+
+    .card-tooltip {
+      position: fixed;
+      z-index: 9999;
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text-primary);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 12px;
+      max-width: 220px;
+      pointer-events: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+
+    .card-tooltip.hidden { display: none; }
+    .card-tooltip .tooltip-title { font-weight: 800; margin-bottom: 4px; }
+    .card-tooltip .tooltip-line { color: var(--text-secondary); line-height: 1.35; }
 
     /* Bench styling (subtle blue “bench” tint) */
     .playing-card.bench {
@@ -1075,6 +1141,7 @@
   </div>
 
   <div id="toast" class="hidden"></div>
+  <div id="cardTooltip" class="card-tooltip hidden"></div>
 
   <!-- Log Panel -->
   <aside id="logPanel" aria-label="Run Log"></aside>
@@ -1094,6 +1161,7 @@
     const MERCHANT_REMOVE_COST = 50;
     const REMOVAL_REROLL_COST = 25;      // also used as inventory reroll cost
     const MERCHANT_INVENTORY_REROLL_COST = 25;
+    const COLLECTOR_ITEM_COST = 150;
 
 // Economy tuning
 const MERCHANT_REMOVE_INCREMENT = 25; // removal cost increases by this amount each time you start a paid removal
@@ -1167,6 +1235,7 @@ const CALLING_RANK_THRESHOLDS = [
       'HIGH_STAKES': '#9b59b6',
       'MERCHANT': '#27ae60',
       'MODIFY': '#16a085',
+      'COLLECTOR': '#f39c12',
       'LOAN_SHARK': '#e67e22',
       'REST_STOP': '#3498db',
       'BARTENDER': '#e74c3c',
@@ -1179,6 +1248,7 @@ const CALLING_RANK_THRESHOLDS = [
       'HIGH_STAKES': 'HIGH',
       'MERCHANT': 'MER',
       'MODIFY': 'MOD',
+      'COLLECTOR': 'COL',
       'LOAN_SHARK': 'LOAN',
       'REST_STOP': 'REST',
       'BARTENDER': 'BAR',
@@ -1503,6 +1573,11 @@ const CALLING_RANK_THRESHOLDS = [
       if (t === 'MODIFY_SERVICE_SELECT') return `Modify service: ${d.serviceId} (-${d.cost})`;
       if (t === 'MODIFY_APPLY') return `Modify applied: ${d.serviceId} (${d.count || 0} cards)`;
       if (t === 'MODIFY_LEAVE') return `Modify closed`;
+      if (t === 'COLLECTOR_ENTER') return `Collector opened`;
+      if (t === 'COLLECTOR_BUY') return `Collector buy: ${d.name} (-${d.cost})`;
+      if (t === 'STAMP_APPLY') return `Stamp applied: ${d.stampId} on ${d.rank}`;
+      if (t === 'SLEEVE_APPLY') return `Sleeve applied: ${d.sleeveId} on ${d.card}`;
+      if (t === 'COLLECTOR_LEAVE') return `Collector closed`;
       if (t === 'MERCHANT_BUY') return `Bought ${d.card} (-${d.cost})`;
       if (t === 'MERCHANT_REMOVE_START') return `Removal started (-${d.cost})`;
       if (t === 'MERCHANT_REMOVE_CONFIRM') return `Removed ${d.card}`;
@@ -1529,6 +1604,9 @@ const CALLING_RANK_THRESHOLDS = [
       if (t === 'CALLING_PROC_HEARTS_TRIAGE') return `Calling (♥): triage lane #${d.laneIdx}`;
       if (t === 'CALLING_CARD_LEVEL_UP') return `Calling card leveled: ${d.fromRank} → ${d.toRank}`;
       if (t === 'NPC_ASSIGNED') return `NPC: ${d.npcName} (${d.tileType})`;
+      if (t === 'CRYSTAL_SLEEVE_SAVE') return `Crystal sleeve saved lane #${d.laneIdx}`;
+      if (t === 'GOLD_SLEEVE_BONUS') return `Gold sleeve bonus +${d.amount} (lane #${d.laneIdx})`;
+      if (t === 'BURN_AFTER_READING') return `Burned ${d.count} stamped card(s)`;
       if (t === 'MERCHANT_ENTER') return `Merchant: ${d.npcName} (prices x${d.priceMult})`;
       if (t === 'WINNER_REWARD_FUSE') return `Fused ${d.cards ? d.cards.join(' + ') : 'cards'}`;
       if (t === 'DECK_EXHAUSTION') return `Deck exhaustion: ${d.side} (${d.reason})`;
@@ -2270,7 +2348,7 @@ const CALLING_RANK_THRESHOLDS = [
     function makeStandardDeck52() {
       const deck = [];
       for (const s of SUITS) {
-        for (const r of RANKS) deck.push({ rank: r, suit: s });
+        for (const r of RANKS) deck.push({ rank: r, suit: s, sleeveId: null, laminationId: null });
       }
       return deck;
     }
@@ -2287,6 +2365,57 @@ const CALLING_RANK_THRESHOLDS = [
       return c && !c.type && c.rank && c.suit;
     }
 
+    const STAMP_DEFS = {
+      PLUS_FIVE: { id: 'PLUS_FIVE', name: 'Plus Five', rarity: 'uncommon', desc: '+5 karma per stamped card in a winning lane.', icon: '+5' },
+      PLUS_TEN: { id: 'PLUS_TEN', name: 'Plus Ten', rarity: 'rare', desc: '+10 karma per stamped card in a winning lane.', icon: '+10' },
+      DOUBLE_DIP: { id: 'DOUBLE_DIP', name: 'Double Dip', rarity: 'uncommon', desc: 'x2 karma contribution per stamped card in a winning lane.', icon: 'x2' },
+      TRIPLE_PLAY: { id: 'TRIPLE_PLAY', name: 'Triple Play', rarity: 'rare', desc: 'x3 karma contribution per stamped card in a winning lane.', icon: 'x3' },
+      LANE_COUNT_MULT: { id: 'LANE_COUNT_MULT', name: 'Lane Count Mult', rarity: 'rare', desc: 'Multiply stamped-card karma by lane card count.', icon: 'N×' },
+      PROXY_SUIT: { id: 'PROXY_SUIT', name: 'Proxy Suit', rarity: 'common', desc: 'Counts as calling suit for proc checks.', icon: 'PS' },
+      DEJA_VU: { id: 'DEJA_VU', name: 'Deja Vu', rarity: 'rare', desc: 'Doubles card actions and karma contribution.', icon: 'DV' },
+      BURN_AFTER_READING: { id: 'BURN_AFTER_READING', name: 'Burn After Reading', rarity: 'uncommon', desc: 'Remove stamped cards from deck after match.', icon: 'BR' }
+    };
+
+    const SLEEVE_DEFS = {
+      CRYSTAL: { id: 'CRYSTAL', name: 'Crystal Sleeve', rarity: 'rare', desc: 'Prevent bust once by burning this card.', className: 'sleeve-crystal' },
+      STEEL: { id: 'STEEL', name: 'Steel Sleeve', rarity: 'uncommon', desc: 'Lane cannot be targeted by opponent effects.', className: 'sleeve-steel' },
+      GOLD: { id: 'GOLD', name: 'Gold Sleeve', rarity: 'rare', desc: 'Gain chips equal to lane total at close.', className: 'sleeve-gold' },
+      BLUE: { id: 'BLUE', name: 'Blue Sleeve', rarity: 'common', desc: 'Drawn card goes to bench instead of forced play.', className: 'sleeve-blue' }
+    };
+
+    function getStampDef(id) {
+      return id ? STAMP_DEFS[id] : null;
+    }
+
+    function getSleeveDef(id) {
+      return id ? SLEEVE_DEFS[id] : null;
+    }
+
+    function getCardStampId(card) {
+      if (!run || !run.stampsByRank) return null;
+      if (!isStandardCard(card)) return null;
+      return run.stampsByRank[card.rank] || null;
+    }
+
+    function getStampKarmaContribution(stampId, baseValue, laneSize) {
+      switch (stampId) {
+        case 'PLUS_FIVE':
+          return 5;
+        case 'PLUS_TEN':
+          return 10;
+        case 'DOUBLE_DIP':
+          return baseValue;
+        case 'TRIPLE_PLAY':
+          return baseValue * 2;
+        case 'LANE_COUNT_MULT':
+          return baseValue * laneSize;
+        case 'DEJA_VU':
+          return baseValue;
+        default:
+          return 0;
+      }
+    }
+
     function cardToString(c) {
       if (!c) return '';
       if (isModifier(c)) return c.delta > 0 ? `+${c.delta}` : `${c.delta}`;
@@ -2301,7 +2430,12 @@ const CALLING_RANK_THRESHOLDS = [
     function cardCssClass(card) {
       if (isModifier(card)) return 'mod';
       if (isFused(card)) return 'fused';
-      return isRedSuit(card.suit) ? 'red' : 'black';
+      const classes = [isRedSuit(card.suit) ? 'red' : 'black'];
+      if (card && card.sleeveId) {
+        const sleeve = getSleeveDef(card.sleeveId);
+        if (sleeve && sleeve.className) classes.push(sleeve.className);
+      }
+      return classes.join(' ');
     }
 
     function rankToValue(rank) {
@@ -2422,7 +2556,9 @@ const CALLING_RANK_THRESHOLDS = [
       }
       return {
         rank: RANKS[Math.floor(Math.random() * RANKS.length)],
-        suit: SUITS[Math.floor(Math.random() * SUITS.length)]
+        suit: SUITS[Math.floor(Math.random() * SUITS.length)],
+        sleeveId: null,
+        laminationId: null
       };
     }
 
@@ -2617,8 +2753,14 @@ function benchPush(card, source = '') {
       const pool = [];
       const counts = FLOOR_COUNTS[floor];
 
-      for (let i = 0; i < counts.standard; i++) pool.push('STANDARD');
-      for (let i = 0; i < counts.high; i++) pool.push('HIGH_STAKES');
+      let standardCount = counts.standard;
+      let highCount = counts.high;
+      if (standardCount > 0) standardCount -= 1;
+      else if (highCount > 0) highCount -= 1;
+
+      for (let i = 0; i < standardCount; i++) pool.push('STANDARD');
+      for (let i = 0; i < highCount; i++) pool.push('HIGH_STAKES');
+      pool.push('COLLECTOR');
 
       pool.push('BARTENDER');
       pool.push('MINIGAME');
@@ -2688,6 +2830,8 @@ function benchPush(card, source = '') {
         callingCard: null,
         callingCardChosenSuit: null,
         playerDeck: makeStandardDeck52(),
+        stampsByRank: {},
+        collectorShop: null,
         ownedActions: [],
         bankedTokens: 0,
         bossWins: 0,
@@ -2798,6 +2942,7 @@ function benchPush(card, source = '') {
         case 'LOAN_SHARK': encounterLoanShark(); break;
         case 'MERCHANT': encounterMerchant(); break;
         case 'MODIFY': encounterModify(); break;
+        case 'COLLECTOR': encounterCollector(); break;
         case 'STANDARD': encounterBlackjackStandard(); break;
         case 'HIGH_STAKES': encounterBlackjackHigh(); break;
         case 'BOSS': encounterBoss(); break;
@@ -2860,7 +3005,7 @@ function benchPush(card, source = '') {
                 const sel = selected === idx ? 'selected' : '';
                 return `
                   <div class="removal-card-option ${sel}" onclick="selectFreeRemoval(${idx})">
-                    <div class="playing-card ${cardCssClass(d.card)}">${cardToString(d.card)}</div>
+                    ${renderCard(d.card, false)}
                   </div>
                 `;
               }).join('')}
@@ -3013,7 +3158,7 @@ function benchPush(card, source = '') {
     }
 
     // =============================================
-    // MERCHANT
+    // MODIFY
     // =============================================
     const MODIFY_SERVICES = {
       RESUIT: { id: 'RESUIT', name: 'Re-Suit', tier: 'core' },
@@ -3161,7 +3306,7 @@ function benchPush(card, source = '') {
         const card = run.playerDeck[idx];
         return `
           <div class="merchant-card-slot">
-            <div class="playing-card ${cardCssClass(card)}">${cardToString(card)}</div>
+            ${renderCard(card, false)}
             <button class="modal-btn" onclick="selectModifyCoreCard(${idx})">Select</button>
           </div>
         `;
@@ -3230,7 +3375,7 @@ function benchPush(card, source = '') {
 
       const cardsHtml = sample.map(idx => {
         const card = run.playerDeck[idx];
-        return `<div class="playing-card ${cardCssClass(card)}">${cardToString(card)}</div>`;
+        return renderCard(card, false);
       }).join('');
 
       showModal('Modify - Calling Suit Sweep', `
@@ -3263,7 +3408,7 @@ function benchPush(card, source = '') {
 
       const cardsHtml = sample.map(idx => {
         const card = run.playerDeck[idx];
-        return `<div class="playing-card ${cardCssClass(card)}">${cardToString(card)}</div>`;
+        return renderCard(card, false);
       }).join('');
 
       showModal('Modify - Uniform Rank Press', `
@@ -3312,6 +3457,232 @@ function benchPush(card, source = '') {
       showToast('Modify service applied');
     }
 
+    // =============================================
+    // COLLECTOR
+    // =============================================
+    const COLLECTOR_CATALOG = [
+      ...Object.values(STAMP_DEFS).map(def => ({ ...def, type: 'STAMP' })),
+      ...Object.values(SLEEVE_DEFS).map(def => ({ ...def, type: 'SLEEVE' }))
+    ];
+
+    function rollCollectorRarity() {
+      const roll = Math.random();
+      if (roll < 0.70) return 'common';
+      if (roll < 0.95) return 'uncommon';
+      return 'rare';
+    }
+
+    function randomCollectorItem() {
+      const rarity = rollCollectorRarity();
+      const pool = COLLECTOR_CATALOG.filter(item => item.rarity === rarity);
+      const fallback = COLLECTOR_CATALOG;
+      const source = pool.length ? pool : fallback;
+      const pick = source[Math.floor(Math.random() * source.length)];
+      return { ...pick, purchased: false };
+    }
+
+    function getEligibleStampRanks() {
+      const ranks = new Set();
+      for (const card of run.playerDeck) {
+        if (!isStandardCard(card)) continue;
+        if (run.stampsByRank && run.stampsByRank[card.rank]) continue;
+        ranks.add(card.rank);
+      }
+      return Array.from(ranks);
+    }
+
+    function getEligibleSleeveCardIndices() {
+      const eligible = [];
+      run.playerDeck.forEach((card, idx) => {
+        if (!isStandardCard(card)) return;
+        if (card.sleeveId) return;
+        eligible.push(idx);
+      });
+      return eligible;
+    }
+
+    function encounterCollector() {
+      const tileId = run.board.currentTileId;
+      if (!run.collectorShop || run.collectorShop.tileId !== tileId) {
+        run.collectorShop = {
+          tileId,
+          items: Array.from({ length: 3 }, () => randomCollectorItem()),
+          activeItemIdx: null
+        };
+      }
+
+      logEvent('COLLECTOR_ENTER', {
+        tileId,
+        floor: run.floor,
+        chips: safeNumber(run.chips),
+        deckSize: run.playerDeck.length
+      });
+
+      renderCollector();
+    }
+
+    function renderCollector() {
+      const shop = run.collectorShop;
+      if (!shop) return;
+      const chipsNow = safeNumber(run.chips);
+      const activeIdx = shop.activeItemIdx;
+      const inProgress = activeIdx !== null && activeIdx !== undefined;
+
+      let body = `
+        <p class="modal-text">The Collector offers stamps and sleeves to shape your deck.</p>
+        <p class="modal-text">Chips: <strong>${chipsNow}</strong></p>
+      `;
+
+      if (inProgress) {
+        const active = shop.items[activeIdx];
+        body += `<p class="modal-text" style="color:var(--accent-gold); font-weight:700;">Selection in progress: ${active ? active.name : ''}</p>`;
+      }
+
+      const itemsHtml = shop.items.map((item, idx) => {
+        const eligible = item.type === 'STAMP' ? getEligibleStampRanks().length : getEligibleSleeveCardIndices().length;
+        const disabled = item.purchased || chipsNow < COLLECTOR_ITEM_COST || eligible === 0 || inProgress;
+        const status = item.purchased ? 'Purchased' : (eligible === 0 ? 'No eligible cards' : '');
+        const rarityClass = `rarity-${item.rarity}`;
+        return `
+          <div class="merchant-card-slot" style="min-width:180px;">
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+              <span class="rarity-pip ${rarityClass}"></span>
+              <strong>${item.name}</strong>
+            </div>
+            <div style="font-size:12px; color:var(--text-secondary); min-height:32px;">${item.desc}</div>
+            <button class="modal-btn" ${disabled ? 'disabled' : ''} onclick="buyCollectorItem(${idx})">
+              ${item.purchased ? 'Purchased' : `Buy (${COLLECTOR_ITEM_COST})`}
+            </button>
+            ${status ? `<div style="font-size:11px; color:var(--text-muted); margin-top:6px;">${status}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+
+      body += `<div class="merchant-cards">${itemsHtml}</div>`;
+
+      const buttons = [];
+      if (inProgress) {
+        buttons.push({
+          text: 'Continue',
+          primary: true,
+          action: () => openCollectorSelection(activeIdx)
+        });
+      } else {
+        buttons.push({
+          text: 'Leave',
+          action: () => {
+            logEvent('COLLECTOR_LEAVE', { tileId: run.board.currentTileId });
+            run.collectorShop = null;
+            closeModal();
+            renderAll();
+          }
+        });
+      }
+
+      showModal('Collector', body, buttons);
+    }
+
+    window.buyCollectorItem = function(idx) {
+      const shop = run.collectorShop;
+      if (!shop) return;
+      const item = shop.items[idx];
+      if (!item || item.purchased) return;
+      if (run.chips < COLLECTOR_ITEM_COST) return;
+
+      if (item.type === 'STAMP' && getEligibleStampRanks().length === 0) return;
+      if (item.type === 'SLEEVE' && getEligibleSleeveCardIndices().length === 0) return;
+
+      run.chips -= COLLECTOR_ITEM_COST;
+      shop.activeItemIdx = idx;
+      logEvent('COLLECTOR_BUY', { itemId: item.id, name: item.name, type: item.type, cost: COLLECTOR_ITEM_COST });
+      openCollectorSelection(idx);
+    };
+
+    function openCollectorSelection(idx) {
+      const shop = run.collectorShop;
+      if (!shop) return;
+      const item = shop.items[idx];
+      if (!item) return;
+      if (item.type === 'STAMP') openStampSelection(item);
+      else openSleeveSelection(item);
+    }
+
+    function openStampSelection(item) {
+      const ranks = getEligibleStampRanks();
+      if (!ranks.length) {
+        renderCollector();
+        return;
+      }
+      const options = shuffle(ranks).slice(0, Math.min(2, ranks.length));
+      showModal(`Collector - ${item.name}`, `
+        <p class="modal-text">Choose a rank to stamp.</p>
+      `, options.map(rank => ({
+        text: rank,
+        primary: true,
+        action: () => applyStampToRank(item, rank)
+      })));
+    }
+
+    function applyStampToRank(item, rank) {
+      if (!run.stampsByRank) run.stampsByRank = {};
+      run.stampsByRank[rank] = item.id;
+
+      logEvent('STAMP_APPLY', { stampId: item.id, rank });
+      finalizeCollectorItem();
+      showToast(`${item.name} applied to ${rank}`);
+    }
+
+    function openSleeveSelection(item) {
+      const eligible = getEligibleSleeveCardIndices();
+      if (!eligible.length) {
+        renderCollector();
+        return;
+      }
+      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
+      const cardsHtml = sample.map(idx => {
+        const card = run.playerDeck[idx];
+        return `
+          <div class="merchant-card-slot">
+            ${renderCard(card, false)}
+            <button class="modal-btn" onclick="applySleeveToCard('${item.id}', ${idx})">Select</button>
+          </div>
+        `;
+      }).join('');
+
+      showModal(`Collector - ${item.name}`, `
+        <p class="modal-text">Choose a card to sleeve.</p>
+        <div class="merchant-cards">${cardsHtml}</div>
+      `, [
+        { text: 'Back', action: () => renderCollector() }
+      ]);
+    }
+
+    window.applySleeveToCard = function(sleeveId, deckIdx) {
+      const card = run.playerDeck[deckIdx];
+      if (!card || !isStandardCard(card) || card.sleeveId) return;
+      card.sleeveId = sleeveId;
+      if (card.laminationId === undefined) card.laminationId = null;
+      logEvent('SLEEVE_APPLY', { sleeveId, card: cardToString(card) });
+      finalizeCollectorItem();
+      showToast(`${getSleeveDef(sleeveId).name} applied`);
+    };
+
+    function finalizeCollectorItem() {
+      const shop = run.collectorShop;
+      if (!shop) return;
+      const idx = shop.activeItemIdx;
+      if (idx !== null && idx !== undefined) {
+        const item = shop.items[idx];
+        if (item) item.purchased = true;
+      }
+      shop.activeItemIdx = null;
+      renderCollector();
+      renderAll();
+    }
+
+    // =============================================
+    // MERCHANT
+    // =============================================
     function encounterMerchant() {
       const tile = run.board.tiles[run.board.currentTileId];
       const npc = tile ? tile.npc : null;
@@ -3395,7 +3766,7 @@ function benchPush(card, source = '') {
 
   body += `
     <div class="merchant-card-slot">
-      <div class="playing-card ${cardCssClass(card)}">${cardToString(card)}</div>
+      ${renderCard(card, false)}
       ${stockLine}
       <button class="modal-btn" ${canBuy ? '' : 'disabled'} onclick="buyMerchantCard(${idx})">${soldOut ? 'Sold Out' : `Buy (${slotCost})`}</button>
     </div>
@@ -3438,7 +3809,7 @@ body += `
           const selected = selectedRemovalIdx === idx;
           body += `
             <div class="removal-card-option ${selected ? 'selected' : ''}" onclick="selectRemovalCard(${idx})">
-              <div class="playing-card ${cardCssClass(card)}">${cardToString(card)}</div>
+              ${renderCard(card, false)}
             </div>
           `;
         });
@@ -3698,6 +4069,7 @@ body += `
         rewardPending: false,
         winnerReward: null,
         exhaustion: null,
+        burnedSleeveCards: [],
 
         metrics: {
           startedAtMs: performance.now(),
@@ -3929,14 +4301,35 @@ body += `
     }
 
     // bust is finalized only at end-of-turn (or when explicitly closes a lane)
-    function finalizeBusts(positions) {
-      for (const pos of positions) {
+    function finalizeBusts(positions, side) {
+      for (let i = 0; i < positions.length; i++) {
+        const pos = positions[i];
         if (!pos.isOpen) continue;
         if (pos.isComplete) continue;
         const total = getPositionTotal(pos);
         if (total > 21) {
-          pos.isBust = true;
-          pos.isComplete = true;
+          let crystalSaved = false;
+          if (side === 'player') {
+            const crystalIdx = (pos.cards || []).findIndex(c => c && c.sleeveId === 'CRYSTAL');
+            if (crystalIdx >= 0) {
+              const burned = pos.cards.splice(crystalIdx, 1)[0];
+              blackjackMatch.burnedSleeveCards = blackjackMatch.burnedSleeveCards || [];
+              blackjackMatch.burnedSleeveCards.push(burned);
+              logEvent('CRYSTAL_SLEEVE_SAVE', { laneIdx: i + 1, card: cardToString(burned) });
+              showToast(`Crystal Sleeve saved lane #${i + 1}`);
+              crystalSaved = true;
+              pos.isBust = false;
+              pos.isComplete = false;
+            }
+          }
+
+          if (!crystalSaved) {
+            pos.isBust = true;
+            pos.isComplete = true;
+          } else if (getPositionTotal(pos) > 21) {
+            pos.isBust = true;
+            pos.isComplete = true;
+          }
         }
       }
     }
@@ -4074,7 +4467,13 @@ body += `
       if (!run || !run.callingCard) return false;
       if (!isStandardCard(placedCard)) return false;
 
-      if (placedCard.suit !== run.callingCard.suit) {
+      const stampId = getCardStampId(placedCard);
+      const proxySuit = stampId === 'PROXY_SUIT';
+      const matchesCalling = placedCard.suit === run.callingCard.suit || proxySuit;
+      const procMult = stampId === 'DEJA_VU' ? 2 : 1;
+      const effectiveSuit = proxySuit ? run.callingCard.suit : placedCard.suit;
+
+      if (!matchesCalling) {
         blackjackMatch.lastCallingSuitPlay = null;
         return false;
       }
@@ -4082,40 +4481,44 @@ body += `
       const procced = Math.random() < blackjackMatch.callingProcChance;
       blackjackMatch.lastCallingSuitPlay = {
         laneIdx,
-        suit: placedCard.suit,
+        suit: effectiveSuit,
         procced,
-        card: placedCard
+        card: placedCard,
+        procMult
       };
 
       if (!procced) return false;
 
-      if (placedCard.suit === '♦') {
-        run.chips += DIAMOND_BONUS_CHIPS;
-        blackjackMatch.bonusChipsEarned += DIAMOND_BONUS_CHIPS;
+      if (effectiveSuit === '♦') {
+        const bonus = DIAMOND_BONUS_CHIPS * procMult;
+        run.chips += bonus;
+        blackjackMatch.bonusChipsEarned += bonus;
         logEvent('CALLING_PROC_DIAMOND', {
           laneIdx: laneIdx + 1,
-          amount: DIAMOND_BONUS_CHIPS,
+          amount: bonus,
           callingCard: run.callingCard,
-          playedCard: placedCard
+          playedCard: placedCard,
+          multiplier: procMult
         });
         renderHUD();
-        showToast(`+${DIAMOND_BONUS_CHIPS} chips (Wealth)`);
+        showToast(`+${bonus} chips (Wealth)`);
         return false;
       }
 
-      if (placedCard.suit === '♠') {
+      if (effectiveSuit === '♠') {
         blackjackMatch.spadePeekLanes.add(laneIdx);
         logEvent('CALLING_PROC_SPADES', {
           laneIdx: laneIdx + 1,
           callingCard: run.callingCard,
-          playedCard: placedCard
+          playedCard: placedCard,
+          multiplier: procMult
         });
         showToast(`Intel: Revealed Dealer lane #${laneIdx + 1}`);
         renderBlackjack();
         return false;
       }
 
-      if (placedCard.suit === '♣') {
+      if (effectiveSuit === '♣') {
         const dPos = blackjackMatch.dealerPositions[laneIdx];
         if (!dPos || !dPos.isOpen || dPos.isComplete) {
           logEvent('CALLING_PROC_CLUBS', {
@@ -4123,7 +4526,8 @@ body += `
             delta: null,
             blocked: true,
             callingCard: run.callingCard,
-            playedCard: placedCard
+            playedCard: placedCard,
+            multiplier: procMult
           });
           return false;
         }
@@ -4140,12 +4544,13 @@ body += `
           const target = blackjackMatch.dealerPositions[targetIdx];
           if (target && target.isOpen && !target.isComplete) {
             target.mods = target.mods || [];
-            target.mods.push(delta);
+            for (let i = 0; i < procMult; i++) target.mods.push(delta);
             logEvent('CALLING_PROC_CLUBS', {
               laneIdx: targetIdx + 1,
               delta,
               callingCard: run.callingCard,
-              playedCard: placedCard
+              playedCard: placedCard,
+              multiplier: procMult
             });
             showToast(`Power: Dealer lane #${targetIdx + 1} ${delta > 0 ? '+1' : '-1'}`);
           }
@@ -4214,6 +4619,14 @@ body += `
           logEvent('PLAYER_DRAW_BENCH', { card: cardToString(c) });
           renderBlackjack();
           showToast(`Benched ${cardToString(c)}`);
+          continue;
+        }
+        if (c && c.sleeveId === 'BLUE') {
+          benchPush(c, 'blue-sleeve');
+          blackjackMatch.metrics.modifiersBenched += 1;
+          logEvent('PLAYER_DRAW_BENCH', { card: cardToString(c), source: 'blue-sleeve' });
+          renderBlackjack();
+          showToast(`Benched ${cardToString(c)} (Blue Sleeve)`);
           continue;
         }
         blackjackMatch.drawnCard = c;
@@ -4296,7 +4709,7 @@ body += `
 
       // Finalize busts at end of player's turn (per spec)
       const preBust = blackjackMatch.playerPositions.map(p => !!p.isBust);
-      finalizeBusts(blackjackMatch.playerPositions);
+      finalizeBusts(blackjackMatch.playerPositions, 'player');
 
       const lastPlay = blackjackMatch.lastCallingSuitPlay;
       if (lastPlay && lastPlay.procced && lastPlay.suit === '♥') {
@@ -4304,9 +4717,13 @@ body += `
           .map((p, idx) => ({ p, idx }))
           .filter(({ p, idx }) => !preBust[idx] && p.isBust);
 
-        if (newlyBusted.length) {
-          let target = newlyBusted.find(n => n.idx === lastPlay.laneIdx);
-          if (!target) target = newlyBusted[0];
+        const triageCount = Math.max(1, safeNumber(lastPlay.procMult, 1));
+        let remaining = triageCount;
+
+        while (newlyBusted.length && remaining > 0) {
+          let targetIdx = newlyBusted.findIndex(n => n.idx === lastPlay.laneIdx);
+          if (targetIdx === -1) targetIdx = 0;
+          const target = newlyBusted.splice(targetIdx, 1)[0];
           const pos = target.p;
           const discarded = pos.cards.pop();
           pos.isBust = false;
@@ -4315,9 +4732,11 @@ body += `
             laneIdx: target.idx + 1,
             discardedCard: cardToString(discarded),
             callingCard: run.callingCard,
-            playedCard: lastPlay.card
+            playedCard: lastPlay.card,
+            multiplier: triageCount
           });
           showToast(`Health: Triage saved lane #${target.idx + 1}`);
+          remaining -= 1;
         }
       }
       blackjackMatch.lastCallingSuitPlay = null;
@@ -4660,7 +5079,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
     function endDealerTurn() {
       // Finalize busts at end of dealer turn
-      finalizeBusts(blackjackMatch.dealerPositions);
+      finalizeBusts(blackjackMatch.dealerPositions, 'dealer');
 
       const fb = blackjackMatch.dealerBaseDeck || makeStandardDeck52();
       maintainOpenPositions(blackjackMatch.dealerPositions, blackjackMatch.dealerDrawPile, fb, 'dealer');
@@ -4699,8 +5118,8 @@ function dealerStandPhase(diff, maxPasses = 6) {
       clearDealerTimers();
 
       // defensive finalize
-      finalizeBusts(blackjackMatch.playerPositions);
-      finalizeBusts(blackjackMatch.dealerPositions);
+      finalizeBusts(blackjackMatch.playerPositions, 'player');
+      finalizeBusts(blackjackMatch.dealerPositions, 'dealer');
 
       let playerWins = 0;
       let dealerWins = 0;
@@ -4780,9 +5199,33 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
       blackjackMatch.transferChipsNet = transferNet;
 
+      let goldBonusTotal = 0;
+      for (let i = 0; i < 5; i++) {
+        const pPos = blackjackMatch.playerPositions[i];
+        const hasGold = (pPos.cards || []).some(c => c && c.sleeveId === 'GOLD');
+        if (hasGold) {
+          const amount = safeNumber(playerTotals[i], 0);
+          goldBonusTotal += amount;
+          logEvent('GOLD_SLEEVE_BONUS', { laneIdx: i + 1, amount });
+        }
+      }
+      if (goldBonusTotal > 0) {
+        run.chips = safeNumber(run.chips) + goldBonusTotal;
+        blackjackMatch.bonusChipsEarned += goldBonusTotal;
+      }
+
       const karmaLaneGain = positionResults.reduce((sum, result, idx) => {
         if (result !== 'player') return sum;
-        return sum + safeNumber(playerTotals[idx], 0);
+        const base = safeNumber(playerTotals[idx], 0);
+        const laneCards = blackjackMatch.playerPositions[idx].cards || [];
+        const laneSize = laneCards.length || 1;
+        let laneKarma = base;
+        laneCards.forEach(card => {
+          const stampId = getCardStampId(card);
+          if (!stampId) return;
+          laneKarma += getStampKarmaContribution(stampId, base, laneSize);
+        });
+        return sum + laneKarma;
       }, 0);
       let karmaWinBonus = 0;
       if (outcome === 'WIN') {
@@ -4807,6 +5250,21 @@ function dealerStandPhase(diff, maxPasses = 6) {
       // finalize bust counts for match metrics
       blackjackMatch.metrics.playerBustsFinal = blackjackMatch.playerPositions.filter(p => p.isBust).length;
       blackjackMatch.metrics.dealerBustsFinal = blackjackMatch.dealerPositions.filter(p => p.isBust).length;
+
+      const burnCards = [];
+      blackjackMatch.playerPositions.forEach(pos => {
+        (pos.cards || []).forEach(card => {
+          if (getCardStampId(card) === 'BURN_AFTER_READING') burnCards.push(card);
+        });
+      });
+      const burnedSleeves = blackjackMatch.burnedSleeveCards || [];
+      if (burnCards.length || burnedSleeves.length) {
+        const burnSet = new Set([...burnCards, ...burnedSleeves]);
+        run.playerDeck = run.playerDeck.filter(card => !burnSet.has(card));
+      }
+      if (burnCards.length) {
+        logEvent('BURN_AFTER_READING', { count: burnCards.length, cards: burnCards.map(cardToString) });
+      }
 
       // House rake applies to positive net results (payout + transfer) only
 const grossWin = payout + transferNet;
@@ -5006,11 +5464,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           <div class="removal-cards">
             ${candidates.map((d, idx) => {
               const sel = selected === idx ? 'selected' : '';
-              return `
-                <div class="removal-card-option ${sel}" onclick="selectWinnerRewardCard(${idx})">
-                  <div class="playing-card ${cardCssClass(d.card)}">${cardToString(d.card)}</div>
-                </div>
-              `;
+            return `
+              <div class="removal-card-option ${sel}" onclick="selectWinnerRewardCard(${idx})">
+                  ${renderCard(d.card, false)}
+              </div>
+            `;
             }).join('')}
           </div>
         </div>
@@ -5645,7 +6103,97 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     function renderCard(card, faceDown=false, extraClass='') {
       const cls = ['playing-card', extraClass, faceDown ? 'face-down' : cardCssClass(card)].filter(Boolean).join(' ');
       const text = faceDown ? '' : cardToString(card);
-      return `<div class="${cls}">${text}</div>`;
+      const stampId = !faceDown ? getCardStampId(card) : null;
+      const stampDef = stampId ? getStampDef(stampId) : null;
+      const sleeveId = !faceDown && card ? card.sleeveId : null;
+      const dataAttrs = [
+        `data-card-label="${text}"`,
+        `data-card-type="${isModifier(card) ? 'MOD' : (isFused(card) ? 'FUSE' : 'STANDARD')}"`,
+        card && card.rank ? `data-card-rank="${card.rank}"` : '',
+        card && card.suit ? `data-card-suit="${card.suit}"` : '',
+        stampId ? `data-card-stamp="${stampId}"` : '',
+        sleeveId ? `data-card-sleeve="${sleeveId}"` : ''
+      ].filter(Boolean).join(' ');
+      const stampIcon = (stampDef && stampDef.icon) ? `<div class="stamp-icon">${stampDef.icon}</div>` : '';
+      return `<div class="${cls}" ${dataAttrs}>${text}${stampIcon}</div>`;
+    }
+
+    function setupCardTooltip() {
+      const tooltip = document.getElementById('cardTooltip');
+      if (!tooltip) return;
+
+      let activeCard = null;
+      let longPressTimer = null;
+
+      const buildTooltipHtml = (cardEl) => {
+        const ds = cardEl.dataset || {};
+        const label = ds.cardLabel || 'Card';
+        const type = ds.cardType || '';
+        const stamp = ds.cardStamp ? getStampDef(ds.cardStamp) : null;
+        const sleeve = ds.cardSleeve ? getSleeveDef(ds.cardSleeve) : null;
+        const lines = [];
+
+        if (type && type !== 'STANDARD') lines.push(`${type} card`);
+        if (stamp) lines.push(`Stamp: ${stamp.name} — ${stamp.desc}`);
+        if (sleeve) lines.push(`Sleeve: ${sleeve.name} — ${sleeve.desc}`);
+
+        return `
+          <div class="tooltip-title">${label}</div>
+          ${lines.map(line => `<div class="tooltip-line">${line}</div>`).join('')}
+        `;
+      };
+
+      const showTooltip = (cardEl, x, y) => {
+        if (!cardEl || !cardEl.dataset || !cardEl.dataset.cardLabel) return;
+        tooltip.innerHTML = buildTooltipHtml(cardEl);
+        tooltip.classList.remove('hidden');
+        tooltip.style.left = `${x + 12}px`;
+        tooltip.style.top = `${y + 12}px`;
+        activeCard = cardEl;
+      };
+
+      const hideTooltip = () => {
+        tooltip.classList.add('hidden');
+        activeCard = null;
+      };
+
+      document.addEventListener('mouseover', (e) => {
+        const cardEl = e.target.closest('.playing-card');
+        if (!cardEl || cardEl.classList.contains('face-down')) return;
+        showTooltip(cardEl, e.clientX, e.clientY);
+      });
+
+      document.addEventListener('mouseout', (e) => {
+        if (activeCard && !e.relatedTarget?.closest('.playing-card')) {
+          hideTooltip();
+        }
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!activeCard) return;
+        tooltip.style.left = `${e.clientX + 12}px`;
+        tooltip.style.top = `${e.clientY + 12}px`;
+      });
+
+      document.addEventListener('pointerdown', (e) => {
+        const cardEl = e.target.closest('.playing-card');
+        if (!cardEl || cardEl.classList.contains('face-down')) return;
+        longPressTimer = setTimeout(() => showTooltip(cardEl, e.clientX, e.clientY), 450);
+      });
+
+      document.addEventListener('pointerup', () => {
+        if (longPressTimer) clearTimeout(longPressTimer);
+        longPressTimer = null;
+      });
+
+      document.addEventListener('pointercancel', () => {
+        if (longPressTimer) clearTimeout(longPressTimer);
+        longPressTimer = null;
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.playing-card')) hideTooltip();
+      });
     }
 
     function posState(pos) {
@@ -5899,7 +6447,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
                   const ring = (armedIdx === i) ? 'bench-armed-ring' : '';
                   return `
                     <button class="bench-card-btn ${ring}" onclick="armBench(${i})" ${!isPlayerTurn ? 'disabled' : ''} title="Arm">
-                      <div class="playing-card bench ${cardCssClass(c)}">${cardToString(c)}</div>
+                      ${renderCard(c, false, 'bench')}
                     </button>
                   `;
                 }).join('') : `<div class="action-hint" style="padding: 6px 2px;">Bench is empty.</div>`}
@@ -6105,6 +6653,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         }
       } catch (e) {}
 
+      setupCardTooltip();
       initRun();
       renderAll();
     })();
