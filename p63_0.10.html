@@ -1340,7 +1340,7 @@ const CALLING_RANK_THRESHOLDS = [
       autoOpenLogOnEnd: true,
 
       // if false, dealer totals + hole cards reveal only at match resolution (unless Spy Glass)
-      revealTotalsOnClose: true,
+      revealTotalsOnClose: false,
 
       // NEW: opponent AI difficulty
       opponentDifficulty: 'hard', // 'easy' | 'medium' | 'hard'
@@ -4489,6 +4489,10 @@ body += `
         callingProcChance: CALLING_PROC_CHANCE,
         spadePeekLanes: new Set(),
         lastCallingSuitPlay: null,
+        traps: {
+          player: Array(5).fill(0),
+          dealer: Array(5).fill(0)
+        },
 
         // Action tokens + action usage
         tokensTotal,
@@ -4583,6 +4587,7 @@ body += `
         blackjackMatch.playerPositions.push({
           cards: [],
           mods: [],
+          lastPlay: null,
           isOpen: i < 3,
           isComplete: false,
           isBust: false,
@@ -4591,6 +4596,7 @@ body += `
         blackjackMatch.dealerPositions.push({
           cards: [],
           mods: [],
+          lastPlay: null,
           isOpen: i < 3,
           isComplete: false,
           isBust: false
@@ -4711,6 +4717,7 @@ body += `
       if (!a || !b) return false;
       pos.cards.push(a);
       pos.cards.push(b);
+      pos.lastPlay = { kind: 'card', rank: b.rank, value: getStrikeValueFromCard(b) };
       recordLaneCard(side, laneIdx, 1);
       recordLaneCard(side, laneIdx, 1);
       return true;
@@ -4720,6 +4727,79 @@ body += `
       const modSum = (pos.mods || []).reduce((a, b) => a + b, 0);
       const base = calcBestTotal(pos.cards, modSum);
       return safeNumber(base, 0);
+    }
+
+    function getStrikeValueFromCard(card) {
+      if (!card || isModifier(card)) return 0;
+      if (isFused(card)) {
+        const options = getCardValueOptions(card);
+        if (options.includes(11)) return 11;
+        return options.length ? Math.min(10, Math.max(...options)) : 0;
+      }
+      if (card.rank === 'A') return 11;
+      if (['J', 'Q', 'K'].includes(card.rank)) return 10;
+      const n = Number(card.rank);
+      return Number.isFinite(n) ? Math.min(10, n) : 0;
+    }
+
+    function computeStrikeDeltaFromLastPlay(lastPlay) {
+      if (!lastPlay) return 0;
+      if (lastPlay.kind === 'mod') return -lastPlay.delta;
+      if (lastPlay.kind === 'card') return -safeNumber(lastPlay.value, 0);
+      return 0;
+    }
+
+    function applyLaneMod(side, laneIdx, delta) {
+      const positions = side === 'dealer' ? blackjackMatch.dealerPositions : blackjackMatch.playerPositions;
+      const pos = positions[laneIdx];
+      if (!pos) return 'invalid';
+      if (pos.isComplete) return 'closed';
+      if (!pos.isOpen) {
+        blackjackMatch.traps[side][laneIdx] += delta;
+        return 'unopened';
+      }
+      pos.mods = pos.mods || [];
+      pos.mods.push(delta);
+      return 'open';
+    }
+
+    function tryTempoStrike(attackerSide, laneIdx, reason) {
+      if (!blackjackMatch) return;
+      const attackerPositions = attackerSide === 'dealer' ? blackjackMatch.dealerPositions : blackjackMatch.playerPositions;
+      const targetSide = attackerSide === 'dealer' ? 'player' : 'dealer';
+      const targetPositions = targetSide === 'dealer' ? blackjackMatch.dealerPositions : blackjackMatch.playerPositions;
+      const attackerPos = attackerPositions[laneIdx];
+      const targetPos = targetPositions[laneIdx];
+      if (!attackerPos || !targetPos) return;
+      if (!attackerPos.isComplete || attackerPos.isBust) return;
+
+      const delta = computeStrikeDeltaFromLastPlay(attackerPos.lastPlay);
+      if (!delta) return;
+
+      if (targetPos.isComplete) {
+        logEvent('TEMPO_STRIKE_BLOCKED', {
+          attacker: attackerSide,
+          lane: laneIdx + 1,
+          delta,
+          lastPlay: attackerPos.lastPlay,
+          targetState: 'closed',
+          trapTotalAfter: blackjackMatch.traps[targetSide][laneIdx],
+          reason
+        });
+        return;
+      }
+
+      const targetState = applyLaneMod(targetSide, laneIdx, delta);
+      const eventType = (targetState === 'unopened') ? 'TEMPO_STRIKE_TRAP_SET' : 'TEMPO_STRIKE_APPLIED';
+      logEvent(eventType, {
+        attacker: attackerSide,
+        lane: laneIdx + 1,
+        delta,
+        lastPlay: attackerPos.lastPlay,
+        targetState,
+        trapTotalAfter: blackjackMatch.traps[targetSide][laneIdx],
+        reason
+      });
     }
 
     function recordLaneCard(side, laneIdx, count = 1, afterInitial = null) {
@@ -4786,6 +4866,22 @@ body += `
           if (!ok) {
             triggerDeckExhaustion(side, 'open-lane');
             return -1;
+          }
+
+          const trapDelta = blackjackMatch && blackjackMatch.traps ? blackjackMatch.traps[side][i] : 0;
+          if (trapDelta) {
+            positions[i].mods = positions[i].mods || [];
+            positions[i].mods.push(trapDelta);
+            blackjackMatch.traps[side][i] = 0;
+            const attacker = side === 'dealer' ? 'player' : 'dealer';
+            logEvent('TEMPO_STRIKE_TRAP_TRIGGERED', {
+              attacker,
+              lane: i + 1,
+              delta: trapDelta,
+              lastPlay: null,
+              targetState: 'open',
+              trapTotalAfter: blackjackMatch.traps[side][i]
+            });
           }
 
           if (blackjackMatch && side === 'player') maybeAward21BonusForPlayerPos(i);
@@ -4883,6 +4979,7 @@ body += `
 
       pos.mods = pos.mods || [];
       pos.mods.push(mod.delta);
+      pos.lastPlay = { kind: 'mod', delta: mod.delta };
 
       blackjackMatch.bench.splice(bi, 1);
       blackjackMatch.armedBenchIdx = null;
@@ -5021,6 +5118,7 @@ body += `
       logEvent('TOKEN_SPENT', { amount: 1, source: 'BENCH_USE' });
 
       pos.cards.push(c);
+      pos.lastPlay = { kind: 'card', rank: c.rank, value: getStrikeValueFromCard(c) };
       recordLaneCard('player', posIdx);
       blackjackMatch.bench.splice(bi, 1);
       blackjackMatch.armedBenchIdx = null;
@@ -5084,6 +5182,7 @@ body += `
 
       const placed = blackjackMatch.drawnCard;
       pos.cards.push(placed);
+      pos.lastPlay = { kind: 'card', rank: placed.rank, value: getStrikeValueFromCard(placed) };
       recordLaneCard('player', posIdx);
       blackjackMatch.drawnCard = null;
 
@@ -5119,6 +5218,10 @@ body += `
       blackjackMatch.metrics.playerStands += 1;
 
       logEvent('PLAYER_STAND', { lane: posIdx + 1, total, bust: pos.isBust });
+
+      if (!pos.isBust) {
+        tryTempoStrike('player', posIdx, 'stand');
+      }
 
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
 
@@ -5294,6 +5397,7 @@ function dealerLaneScore(idx, total, diff) {
 
       if (targetIdx >= 0) {
         blackjackMatch.dealerPositions[targetIdx].cards.push(card);
+        blackjackMatch.dealerPositions[targetIdx].lastPlay = { kind: 'card', rank: card.rank, value: getStrikeValueFromCard(card) };
         recordLaneCard('dealer', targetIdx);
         if (blackjackMatch.spadePeekLanes) blackjackMatch.spadePeekLanes.delete(targetIdx);
 
@@ -5333,6 +5437,7 @@ function dealerApplyBenchMod(bestMove) {
 
   pos.mods = pos.mods || [];
   pos.mods.push(modCard.delta);
+  pos.lastPlay = { kind: 'mod', delta: modCard.delta };
 
   blackjackMatch.dealerBench.splice(modIdx, 1);
   blackjackMatch.metrics.dealerBenchModsUsed = safeNumber(blackjackMatch.metrics.dealerBenchModsUsed, 0) + 1;
@@ -5451,6 +5556,10 @@ function dealerStandPhase(diff, maxPasses = 6) {
         pos.isBust = (getPositionTotal(pos) > 21);
         blackjackMatch.metrics.dealerStands += 1;
         changed = true;
+
+        if (!pos.isBust) {
+          tryTempoStrike('dealer', i, 'stand');
+        }
 
         // Keep 3 open lanes
         const fb = blackjackMatch.dealerBaseDeck || makeStandardDeck52();
@@ -6667,7 +6776,6 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     function renderPosition(pos, idx, side, isResolved, laneWinner) {
   const state = posState(pos);
   const total = getPositionTotal(pos);
-  const totalBustVisual = total > 21 ? 'bust' : '';
 
   // Spy Glass should always override visibility for that lane
   const spy = (side === 'dealer')
@@ -6686,16 +6794,19 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
   const showDealerTotal = spy || spadeReveal || isResolved || (revealTotalsOnClose && pos.isComplete);
 
   const showTotal = (side === 'player') ? true : showDealerTotal;
+  const canReveal = (side === 'player') ? true : showDealerTotal;
   const totalText = showTotal ? `${total}` : '??';
+  const totalBustVisual = canReveal && total > 21 ? 'bust' : '';
 
   // Hole card reveals when we reveal totals (or via spy, or on match resolve)
   const revealHole = (side === 'dealer') ? showDealerTotal : true;
 
-  let cls = `bj-position ${state}`;
-  if (state === 'open') cls += ' open';
-  if (state === 'stand') cls += ' stand';
-  if (state === 'bust') cls += ' bust';
-  if (state === 'closed') cls += ' closed';
+  const displayState = (state === 'bust' && !canReveal) ? 'stand' : state;
+  let cls = `bj-position ${displayState}`;
+  if (displayState === 'open') cls += ' open';
+  if (displayState === 'stand') cls += ' stand';
+  if (displayState === 'bust') cls += ' bust';
+  if (displayState === 'closed') cls += ' closed';
 
   if (isResolved) {
     if (laneWinner === side) cls += ' winner';
@@ -6711,17 +6822,19 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
   }).join('');
 
   const mods = (pos.mods || []);
-  const modsText = mods.length ? mods.map(m => (m > 0 ? `+${m}` : `${m}`)).join(' ') : '';
-  const modsLine = mods.length
-    ? `<div class="bj-position-num" style="color: var(--accent-blue); font-weight:800;">mods: ${modsText}</div>`
-    : `<div class="bj-position-num">mods: —</div>`;
+  const trapDelta = (!pos.isOpen && blackjackMatch && blackjackMatch.traps) ? blackjackMatch.traps[side][idx] : 0;
+  const displayMods = mods.length ? mods : (trapDelta ? [trapDelta] : []);
+  const modsText = displayMods.length ? displayMods.map(m => (m > 0 ? `+${m}` : `${m}`)).join(' ') : '';
+  const modsLine = displayMods.length
+    ? `<div class="bj-position-num" style="color: var(--accent-blue); font-weight:800;">MOD: ${modsText}</div>`
+    : `<div class="bj-position-num">MOD: —</div>`;
 
   return `
     <div class="${cls}">
       <div class="bj-position-num">${side.toUpperCase()} #${idx+1}</div>
       <div class="bj-cards">${cardsHtml}</div>
       <div class="bj-total ${totalBustVisual}">${totalText}</div>
-      ${stateBadge(state)}
+      ${stateBadge(displayState)}
       ${modsLine}
       <div id="${side}_lane_actions_${idx}" style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center;"></div>
     </div>
