@@ -185,6 +185,14 @@
       pointer-events: none;
       font-weight: 600;
     }
+    .hex-sub {
+      font-family: 'Fira Code', monospace;
+      font-size: 9px;
+      fill: var(--text-secondary);
+      text-anchor: middle;
+      dominant-baseline: middle;
+      pointer-events: none;
+    }
 
     .path-line {
       stroke: var(--accent-blue);
@@ -310,6 +318,16 @@
 
     .merchant-card-slot .playing-card { font-size: 18px; }
 
+    .rarity-pip {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+    .rarity-common { background: #94a3b8; }
+    .rarity-uncommon { background: #22c55e; }
+    .rarity-rare { background: #f59e0b; }
+
     /* Blackjack View */
     #blackjackView {
       padding: 20px;
@@ -415,6 +433,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      position: relative;
       font-family: 'Fira Code', monospace;
       font-size: 12px;
       font-weight: 700;
@@ -432,12 +451,67 @@
       color: #dbeafe;
     }
 
+    .playing-card.sleeve-blue {
+      background: rgba(77, 166, 255, 0.18);
+      border-color: rgba(77, 166, 255, 0.65);
+      color: #dbeafe;
+    }
+
+    .playing-card.sleeve-crystal {
+      box-shadow: 0 2px 6px rgba(148, 163, 184, 0.8);
+      background: linear-gradient(135deg, rgba(226,232,240,0.7), rgba(255,255,255,0.9));
+    }
+
+    .playing-card.sleeve-steel {
+      border-color: rgba(148, 163, 184, 0.9);
+      box-shadow: 0 2px 6px rgba(100, 116, 139, 0.6);
+    }
+
+    .playing-card.sleeve-gold {
+      border-color: rgba(234, 179, 8, 0.9);
+      box-shadow: 0 2px 6px rgba(234, 179, 8, 0.6);
+      background: linear-gradient(135deg, rgba(254, 243, 199, 0.9), rgba(255,255,255,0.9));
+    }
+
     .playing-card.fused {
       background: linear-gradient(135deg, rgba(168,85,247,0.22), rgba(77,166,255,0.22));
       border-color: rgba(168,85,247,0.65);
       color: #1f2937;
       font-size: 11px;
     }
+
+    .stamp-icon {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: var(--accent-gold);
+      color: #1b1f2a;
+      font-size: 9px;
+      font-weight: 800;
+      border-radius: 999px;
+      padding: 2px 5px;
+      border: 1px solid rgba(0,0,0,0.2);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+      pointer-events: none;
+    }
+
+    .card-tooltip {
+      position: fixed;
+      z-index: 9999;
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text-primary);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 12px;
+      max-width: 220px;
+      pointer-events: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+
+    .card-tooltip.hidden { display: none; }
+    .card-tooltip .tooltip-title { font-weight: 800; margin-bottom: 4px; }
+    .card-tooltip .tooltip-line { color: var(--text-secondary); line-height: 1.35; }
 
     /* Bench styling (subtle blue “bench” tint) */
     .playing-card.bench {
@@ -997,6 +1071,37 @@
       grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
+    .log-section-title{
+      margin: 18px 0 8px;
+      font-weight: 800;
+      color: var(--accent-gold);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-size: 12px;
+    }
+    .log-table{
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .log-table th,
+    .log-table td{
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border-color);
+      text-align: left;
+    }
+    .log-table th{
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.8px;
+      background: rgba(18, 26, 42, 0.6);
+    }
+    .log-table tr:last-child td{ border-bottom: none; }
     .stat-box{
       background: var(--bg-card);
       border: 1px solid var(--border-color);
@@ -1036,6 +1141,7 @@
   </div>
 
   <div id="toast" class="hidden"></div>
+  <div id="cardTooltip" class="card-tooltip hidden"></div>
 
   <!-- Log Panel -->
   <aside id="logPanel" aria-label="Run Log"></aside>
@@ -1049,10 +1155,13 @@
     const BARTENDER_REWARD = 50;
     const MINIGAME_REWARD = 50;
 
-    const MERCHANT_BUY_COST = 25;
+    const MERCHANT_BUY_BASE_STANDARD = 50;
+    const MERCHANT_BUY_BASE_MOD = 100;
+    const MERCHANT_BUY_INCREMENT = 25;
     const MERCHANT_REMOVE_COST = 50;
     const REMOVAL_REROLL_COST = 25;      // also used as inventory reroll cost
     const MERCHANT_INVENTORY_REROLL_COST = 25;
+    const COLLECTOR_ITEM_COST = 150;
 
 // Economy tuning
 const MERCHANT_REMOVE_INCREMENT = 25; // removal cost increases by this amount each time you start a paid removal
@@ -1060,19 +1169,34 @@ const MOD_PURCHASE_LIMIT_PER_DELTA = 2; // only this many of each modifier (-4..
 const BENCH_BASE_CAPACITY = 2; // bench slots at start of run
 const BENCH_CAPACITY_BONUS_PER_BOSS_WIN = 1; // +1 bench slot after each boss victory
 const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (payout + transfer) only
+const CALLING_PROC_CHANCE = 0.50;
+const DIAMOND_BONUS_CHIPS = 10;
+const CALLING_RANK_THRESHOLDS = [
+  { rank: '2', karma: 0 },
+  { rank: '3', karma: 200 },
+  { rank: '4', karma: 500 },
+  { rank: '5', karma: 900 },
+  { rank: '6', karma: 1400 },
+  { rank: '7', karma: 2000 },
+  { rank: '8', karma: 2700 },
+  { rank: '9', karma: 3500 },
+  { rank: '10', karma: 4400 },
+  { rank: 'J', karma: 5400 },
+  { rank: 'Q', karma: 6500 },
+  { rank: 'K', karma: 7700 },
+  { rank: 'A', karma: 9000 }
+];
 
 
     const LOAN_AMOUNT = 500;
     const LOAN_REPAY = 750;
 
     const BUYIN_STANDARD = 100;
-    const BUYIN_HIGH = 300;
+    const BUYIN_HIGH = 200;
     const BUYIN_BOSS = 300;
 
     // Action tokens + cocktails
     const COCKTAIL_COST = 150;
-    const ACTION_TOKEN_BASE_PER_MATCH = 1;
-    const ACTION_TOKEN_MAX_PER_MATCH = 3;
     const ACTION_TOKEN_MAX_BANKED = 3;
 
     // Rewards / mechanics
@@ -1110,6 +1234,8 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
       'STANDARD': '#4a6fa5',
       'HIGH_STAKES': '#9b59b6',
       'MERCHANT': '#27ae60',
+      'MODIFY': '#16a085',
+      'COLLECTOR': '#f39c12',
       'LOAN_SHARK': '#e67e22',
       'REST_STOP': '#3498db',
       'BARTENDER': '#e74c3c',
@@ -1121,6 +1247,8 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
       'STANDARD': 'STD',
       'HIGH_STAKES': 'HIGH',
       'MERCHANT': 'MER',
+      'MODIFY': 'MOD',
+      'COLLECTOR': 'COL',
       'LOAN_SHARK': 'LOAN',
       'REST_STOP': 'REST',
       'BARTENDER': 'BAR',
@@ -1212,7 +1340,7 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
       autoOpenLogOnEnd: true,
 
       // if false, dealer totals + hole cards reveal only at match resolution (unless Spy Glass)
-      revealTotalsOnClose: true,
+      revealTotalsOnClose: false,
 
       // NEW: opponent AI difficulty
       opponentDifficulty: 'hard', // 'easy' | 'medium' | 'hard'
@@ -1231,7 +1359,7 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
 
     let gameLog = null;
     let logPanelOpen = false;
-    let logPanelTab = 'events'; // 'events' | 'stats'
+    let logPanelTab = 'stats'; // 'events' | 'stats'
 
     let persistTimer = null;
     function persistLogSoon() {
@@ -1247,22 +1375,165 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
       return 'S' + Math.random().toString(16).slice(2, 8).toUpperCase() + '-' + Date.now().toString(16).toUpperCase().slice(-6);
     }
 
-    function deckSnapshot() {
+    function getSettingsSnapshot() {
+      return {
+        revealTotalsOnClose: (uiSettings && uiSettings.revealTotalsOnClose) !== false,
+        opponentDifficulty: (uiSettings && (uiSettings.opponentDifficulty || uiSettings.difficulty)) || 'hard',
+        rakeMode: (uiSettings && uiSettings.rakeMode) || 'hard',
+        benchHardCap: safeNumber(uiSettings && uiSettings.benchHardCap, 3),
+        autoOpenLogOnEnd: !!(uiSettings && uiSettings.autoOpenLogOnEnd),
+        rulesContext: {
+          benchBaseCapacity: BENCH_BASE_CAPACITY,
+          benchBonusPerBossWin: BENCH_CAPACITY_BONUS_PER_BOSS_WIN,
+          modifierPurchaseLimitPerDelta: MOD_PURCHASE_LIMIT_PER_DELTA,
+          startingChips: STARTING_CHIPS,
+          buyins: {
+            standard: BUYIN_STANDARD,
+            highStakes: BUYIN_HIGH,
+            boss: BUYIN_BOSS
+          },
+          blackjack21Reward: BLACKJACK_21_REWARD,
+          allFive21Bonus: ALL_FIVE_21_BONUS
+        }
+      };
+    }
+
+    function buildDeckSummary() {
       const deck = run ? (run.playerDeck || []) : [];
+      const bySuit = { '♠': 0, '♥': 0, '♦': 0, '♣': 0 };
+      const byRank = Object.fromEntries(RANKS.map(r => [r, 0]));
       let modCount = 0;
-      for (const c of deck) if (isModifier(c)) modCount++;
-      return { deckSize: deck.length, modCount };
+      let fusedCount = 0;
+      let sleevedCount = 0;
+
+      for (const c of deck) {
+        if (isModifier(c)) {
+          modCount += 1;
+          continue;
+        }
+        if (isFused(c)) {
+          fusedCount += 1;
+          continue;
+        }
+        if (isStandardCard(c)) {
+          if (bySuit[c.suit] !== undefined) bySuit[c.suit] += 1;
+          if (byRank[c.rank] !== undefined) byRank[c.rank] += 1;
+          if (c.sleeveId) sleevedCount += 1;
+        }
+      }
+
+      return {
+        deckSize: deck.length,
+        modCount,
+        fusedCount,
+        sleevedCount,
+        stampsByRank: { ...(run && run.stampsByRank ? run.stampsByRank : {}) },
+        bySuit,
+        byRank
+      };
+    }
+
+    function serializeCard(card) {
+      if (!card) return null;
+      if (isModifier(card)) return { uid: card.uid || null, kind: 'MOD', delta: card.delta };
+      if (isFused(card)) {
+        return {
+          uid: card.uid || null,
+          kind: 'FUSE',
+          a: serializeCard(card.a),
+          b: serializeCard(card.b)
+        };
+      }
+      return {
+        uid: card.uid || null,
+        kind: 'STD',
+        rank: card.rank,
+        suit: card.suit,
+        sleeveId: card.sleeveId || null,
+        laminationId: card.laminationId ?? null
+      };
+    }
+
+    function serializeDeck() {
+      const deck = run ? (run.playerDeck || []) : [];
+      return {
+        cards: deck.map(serializeCard),
+        stampsByRank: { ...(run && run.stampsByRank ? run.stampsByRank : {}) }
+      };
+    }
+
+    function deckSnapshot() {
+      const summary = buildDeckSummary();
+      return {
+        deckId: gameLog ? gameLog.currentDeckId : null,
+        deckSize: summary.deckSize,
+        modCount: summary.modCount,
+        fusedCount: summary.fusedCount,
+        sleevedCount: summary.sleevedCount,
+        stampsByRank: summary.stampsByRank,
+        bySuit: summary.bySuit,
+        byRank: summary.byRank
+      };
+    }
+
+    function recordDeckSnapshot(reason, extraData = {}) {
+      if (!gameLog || !run) return null;
+      const nextId = safeNumber(gameLog.currentDeckId, 0) + 1;
+      gameLog.currentDeckId = nextId;
+      const entry = {
+        deckId: nextId,
+        ts: new Date().toISOString(),
+        reason,
+        ctx: getEventCtx(),
+        deck: serializeDeck(),
+        summary: buildDeckSummary(),
+        ...extraData
+      };
+      gameLog.deckHistory.push(entry);
+      if (gameLog.stats) gameLog.stats.deckSnapshots = safeNumber(gameLog.stats.deckSnapshots, 0) + 1;
+      persistLogSoon();
+      return nextId;
     }
 
     function resetLog() {
       const snap = deckSnapshot();
       const chipsNow = run ? safeNumber(run.chips, 0) : 0;
+      const sessionId = generateSessionId();
+      const rulesContext = {
+        collector: {
+          itemCost: COLLECTOR_ITEM_COST,
+          rarityRates: { common: 0.70, uncommon: 0.25, rare: 0.05 }
+        },
+        modify: {
+          services: Object.values(MODIFY_SERVICES).map(s => ({ id: s.id, tier: s.tier, kind: s.kind })),
+          pricing: { coreBase: 100, coreInc: 25, premiumBase: 200, premiumInc: 50 }
+        },
+        stamps: Object.values(STAMP_DEFS).map(s => ({ id: s.id, rarity: s.rarity })),
+        sleeves: Object.values(SLEEVE_DEFS).map(s => ({ id: s.id, rarity: s.rarity }))
+      };
 
       gameLog = {
-        logVersion: "B",
-        app: "Project63 Slot Blackjack Prototype",
-        sessionId: generateSessionId(),
+        logVersion: "C",
+        sessionId,
+        runId: sessionId,
         startedAt: new Date().toISOString(),
+        endedAt: null,
+        exportedAt: null,
+        app: {
+          name: "Project 63",
+          build: "0.16",
+          variant: "p63_0.16.html",
+          userAgent: navigator.userAgent
+        },
+        settingsAtStart: getSettingsSnapshot(),
+        settingsLatest: getSettingsSnapshot(),
+        rulesContext,
+        initialState: null,
+        finalState: null,
+        runOutcome: null,
+        feedback: { comments: '', bugs: '', updatedAt: null },
+        deckHistory: [],
+        currentDeckId: null,
         events: [],
         stats: {
           floorsReached: 1,
@@ -1285,6 +1556,12 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
           tokensGained: 0,
           tokensSpent: 0,
           actionsUsed: 0,
+          collectorOffersShown: 0,
+          collectorPurchases: 0,
+          modifyCandidateSetsShown: 0,
+          modifyApplies: 0,
+          deckSnapshots: 0,
+          feedbackUpdates: 0,
 
           chipsPeak: chipsNow,
           chipsLow: chipsNow,
@@ -1294,7 +1571,9 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
           modCountMin: snap.modCount,
           modCountMax: snap.modCount,
 
-          matchDurationMsTotal: 0
+          matchDurationMsTotal: 0,
+          rakePaidTotal: 0,
+          bossClears: 0
         }
       };
       persistLogSoon();
@@ -1340,7 +1619,11 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
           s.payoutReceived += safeNumber(evt.data.payout, 0);
           s.transferNet += safeNumber(evt.data.transferNet, 0);
           s.bonusChips += safeNumber(evt.data.bonusChips, 0);
+          s.rakePaidTotal += safeNumber(evt.data.rake, 0);
           s.matchDurationMsTotal += safeNumber(evt.data.durationMs, 0);
+          break;
+        case 'BOSS_CLEARED':
+          s.bossClears += 1;
           break;
         case 'TOKEN_GAIN':
           s.tokensGained += safeNumber(evt.data.amount, 0);
@@ -1369,7 +1652,50 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
         case 'LOAN_REPAID':
           s.loansRepaid += 1;
           break;
+        case 'COLLECTOR_SHOP_GENERATED':
+          s.collectorOffersShown += 1;
+          break;
+        case 'COLLECTOR_BUY':
+          s.collectorPurchases += 1;
+          break;
+        case 'MODIFY_CANDIDATES_SHOWN':
+          s.modifyCandidateSetsShown += 1;
+          break;
+        case 'MODIFY_APPLY':
+          s.modifyApplies += 1;
+          break;
+        case 'FEEDBACK_UPDATED':
+          s.feedbackUpdates += 1;
+          break;
+        case 'DECK_SNAPSHOT':
+          s.deckSnapshots += 1;
+          break;
       }
+    }
+
+    function getEventCtx() {
+      const currentTile = run && run.board && run.board.tiles && run.board.currentTileId !== null
+        ? run.board.tiles[run.board.currentTileId]
+        : null;
+      return {
+        floor: run ? run.floor : null,
+        chips: run ? safeNumber(run.chips, null) : null,
+        karma: run ? safeNumber(run.karma, null) : null,
+        callingCard: run && run.callingCard ? { ...run.callingCard } : null,
+        callingRankValue: run && run.callingCard ? rankToValue(run.callingCard.rank) : null,
+        tileId: run && run.board ? run.board.currentTileId : null,
+        tileType: currentTile ? currentTile.type : null,
+        encounterSeq: run && run.activeEncounter ? run.activeEncounter.seq : null,
+        encounterType: run && run.activeEncounter ? run.activeEncounter.type : null,
+        matchSeq: blackjackMatch ? blackjackMatch.matchSeq : null,
+        matchType: blackjackMatch ? blackjackMatch.type : null,
+        matchPhase: blackjackMatch ? blackjackMatch.phase : null,
+        turn: blackjackMatch ? blackjackMatch.turn : null,
+        visibility: {
+          revealOnClose: (uiSettings && uiSettings.revealTotalsOnClose) !== false,
+          difficulty: getOpponentDifficulty()
+        }
+      };
     }
 
     function logEvent(type, data = {}) {
@@ -1380,6 +1706,7 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
         type,
         floor: run ? run.floor : null,
         chips: run ? safeNumber(run.chips, null) : null,
+        ctx: getEventCtx(),
         data
       };
       gameLog.events.push(evt);
@@ -1387,6 +1714,38 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
       persistLogSoon();
 
       if (logPanelOpen) renderLogPanel();
+    }
+
+    function finalizeRunLog(outcomeObj = {}) {
+      if (!gameLog || !run) return;
+      if (!gameLog.endedAt) gameLog.endedAt = new Date().toISOString();
+
+      const currentTile = run.board && run.board.tiles && run.board.currentTileId !== null
+        ? run.board.tiles[run.board.currentTileId]
+        : null;
+      const baseOutcome = {
+        outcome: outcomeObj.outcome || null,
+        floor: run.floor,
+        tileId: run.board ? run.board.currentTileId : null,
+        tileType: currentTile ? currentTile.type : null,
+        matchSeq: blackjackMatch ? blackjackMatch.matchSeq : null,
+        chips: safeNumber(run.chips, 0),
+        message: outcomeObj.message || null
+      };
+
+      gameLog.runOutcome = { ...baseOutcome };
+      gameLog.finalState = {
+        chips: safeNumber(run.chips, 0),
+        karma: safeNumber(run.karma, 0),
+        floor: run.floor,
+        tileId: run.board ? run.board.currentTileId : null,
+        tileType: currentTile ? currentTile.type : null,
+        callingCard: run.callingCard ? { ...run.callingCard } : null,
+        deckSnapshot: deckSnapshot(),
+        deckSummary: buildDeckSummary()
+      };
+      if (run.feedback) gameLog.feedback = { ...run.feedback };
+      persistLogSoon();
     }
 
     function formatTime(tsIso) {
@@ -1410,10 +1769,25 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
       if (t === 'LOAN_TAKEN') return `Loan taken +${d.amount}, owe ${d.repay}`;
       if (t === 'LOAN_REPAID') return `Loan repaid -${d.amount}`;
       if (t === 'MERCHANT_ENTER') return `Merchant opened`;
+      if (t === 'MODIFY_ENTER') return `Modify opened`;
+      if (t === 'MODIFY_SERVICE_SELECT') return `Modify service: ${d.serviceId} (-${d.cost})`;
+      if (t === 'MODIFY_CANDIDATES_SHOWN') return `Modify candidates shown (${d.countShown || 0})`;
+      if (t === 'MODIFY_SELECTION') return `Modify selection: ${d.serviceId}`;
+      if (t === 'MODIFY_APPLY') return `Modify applied: ${d.serviceId} (${d.count || 0} cards)`;
+      if (t === 'MODIFY_LEAVE') return `Modify closed`;
+      if (t === 'COLLECTOR_SHOP_GENERATED') return `Collector shop generated`;
+      if (t === 'COLLECTOR_ENTER') return `Collector opened`;
+      if (t === 'COLLECTOR_BUY') return `Collector buy: ${d.name} (-${d.cost})`;
+      if (t === 'STAMP_OPTIONS_SHOWN') return `Stamp options shown (${d.options ? d.options.join(',') : ''})`;
+      if (t === 'SLEEVE_CANDIDATES_SHOWN') return `Sleeve candidates shown`;
+      if (t === 'STAMP_APPLY') return `Stamp applied: ${d.stampId} on ${d.rank}`;
+      if (t === 'SLEEVE_APPLY') return `Sleeve applied: ${d.sleeveId} on ${d.card}`;
+      if (t === 'COLLECTOR_LEAVE') return `Collector closed`;
       if (t === 'MERCHANT_BUY') return `Bought ${d.card} (-${d.cost})`;
       if (t === 'MERCHANT_REMOVE_START') return `Removal started (-${d.cost})`;
       if (t === 'MERCHANT_REMOVE_CONFIRM') return `Removed ${d.card}`;
       if (t === 'MERCHANT_REROLL') return `Merchant reroll (${d.which}) (-${d.cost})`;
+      if (t === 'MODIFIER_SOLD_OUT') return `Modifier sold out: ${d.card} (limit ${d.limit})`;
       if (t === 'MATCH_START') return `Match start: ${d.type}, buy-in ${d.buyIn}, tokens ${d.tokensTotal}`;
       if (t === 'PLAYER_DRAW') return `Player drew ${d.card}`;
       if (t === 'PLAYER_DRAW_BENCH') return `Player drew modifier ${d.card} (benched)`;
@@ -1427,15 +1801,30 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
       if (t === 'ACTION_USED') return `Action used: ${d.actionName}`;
       if (t === 'BONUS_21') return `Bonus: lane #${d.lane} hit 21 (+${d.amount})`;
       if (t === 'BONUS_ALL_FIVE') return `Bonus: all five hit 21 (+${d.amount})`;
+      if (t === 'SETTINGS_CHANGED') return `Settings updated`;
+      if (t === 'CALLING_CARD_SET') return `Calling card set: ${d.callingCard ? cardToString(d.callingCard) : '—'}`;
+      if (t === 'CALLING_PROC_DIAMOND') return `Calling (♦): +${d.amount} chips`;
+      if (t === 'CALLING_PROC_CLUBS') return `Calling (♣): dealer lane #${d.laneIdx} ${d.delta}`;
+      if (t === 'CALLING_PROC_SPADES') return `Calling (♠): revealed dealer lane #${d.laneIdx}`;
+      if (t === 'CALLING_PROC_HEARTS_TRIAGE') return `Calling (♥): triage lane #${d.laneIdx}`;
+      if (t === 'CALLING_CARD_LEVEL_UP') return `Calling card leveled: ${d.fromRank} → ${d.toRank}`;
+      if (t === 'NPC_ASSIGNED') return `NPC: ${d.npcName} (${d.tileType})`;
+      if (t === 'CRYSTAL_SLEEVE_SAVE') return `Crystal sleeve saved lane #${d.laneIdx}`;
+      if (t === 'GOLD_SLEEVE_BONUS') return `Gold sleeve bonus +${d.amount} (lane #${d.laneIdx})`;
+      if (t === 'BURN_AFTER_READING') return `Burned ${d.count} stamped card(s)`;
+      if (t === 'MERCHANT_ENTER') return `Merchant: ${d.npcName} (prices x${d.priceMult})`;
       if (t === 'WINNER_REWARD_FUSE') return `Fused ${d.cards ? d.cards.join(' + ') : 'cards'}`;
       if (t === 'DECK_EXHAUSTION') return `Deck exhaustion: ${d.side} (${d.reason})`;
       if (t === 'MATCH_END') return `Match end: ${d.outcome} (payout ${d.payout}, transfer ${d.transferNet >= 0 ? '+' : ''}${d.transferNet})`;
+      if (t === 'BOSS_CLEARED') return `Boss cleared on floor ${d.floor}`;
       if (t === 'KARMA_GAIN') return `Karma +${d.amount} (total ${d.total})`;
+      if (t === 'FEEDBACK_UPDATED') return `Feedback updated`;
+      if (t === 'DECK_SNAPSHOT') return `Deck snapshot saved`;
       if (t === 'GAME_END') return `Run ended: ${d.result}`;
       return t;
     }
 
-    function openLogPanel(tab = 'events') {
+    function openLogPanel(tab = 'stats') {
       logPanelTab = tab;
       logPanelOpen = true;
       const el = document.getElementById('logPanel');
@@ -1456,6 +1845,11 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
 
     function exportLog() {
       if (!gameLog) return;
+      if (!gameLog.exportedAt) gameLog.exportedAt = new Date().toISOString();
+      if (!gameLog.endedAt && run && (run.ui.mode === 'GAMEOVER' || run.ui.mode === 'VICTORY')) {
+        const outcome = run.ui.mode === 'VICTORY' ? 'win' : 'loss';
+        finalizeRunLog({ outcome, message: run.ui.message || null });
+      }
       const payload = JSON.stringify(gameLog, null, 2);
       const blob = new Blob([payload], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -1495,9 +1889,143 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
       }).join('');
     }
 
+    function formatRate(numerator, denominator) {
+      if (!denominator) return '—';
+      return `${Math.round((numerator / denominator) * 100)}%`;
+    }
+
+    function initPerfBucket() {
+      return {
+        matches: 0,
+        lanesPlayed: 0,
+        playerTotalSum: 0,
+        playerNonBustSum: 0,
+        playerNonBustCount: 0,
+        playerBustLanes: 0,
+        dealerBustLanes: 0,
+        player21Lanes: 0,
+        dealer21Lanes: 0,
+        laneW: 0,
+        laneL: 0,
+        laneT: 0,
+        matchW: 0,
+        matchL: 0,
+        matchT: 0
+      };
+    }
+
+    function computeDerivedPerf(events) {
+      const perf = {
+        overall: initPerfBucket(),
+        byFloor: {},
+        byType: {},
+        recentMatches: []
+      };
+
+      (events || []).forEach(evt => {
+        if (!evt || evt.type !== 'MATCH_END') return;
+        const lanes = evt.data && evt.data.lanes;
+        if (!lanes) return;
+
+        const playerTotals = lanes.playerTotals || [];
+        const dealerTotals = lanes.dealerTotals || [];
+        const playerBusts = lanes.playerBusts || [];
+        const dealerBusts = lanes.dealerBusts || [];
+        const laneWinners = lanes.laneWinners || [];
+
+        const bucket = perf.overall;
+        const floorKey = String(evt.floor || '—');
+        const typeKey = evt.data.type || 'UNKNOWN';
+
+        if (!perf.byFloor[floorKey]) perf.byFloor[floorKey] = initPerfBucket();
+        if (!perf.byType[typeKey]) perf.byType[typeKey] = initPerfBucket();
+
+        const floorBucket = perf.byFloor[floorKey];
+        const typeBucket = perf.byType[typeKey];
+        const buckets = [bucket, floorBucket, typeBucket];
+
+        buckets.forEach(b => { b.matches += 1; });
+        if (evt.data.outcome === 'WIN') buckets.forEach(b => { b.matchW += 1; });
+        else if (evt.data.outcome === 'LOSS') buckets.forEach(b => { b.matchL += 1; });
+        else buckets.forEach(b => { b.matchT += 1; });
+
+        let matchPlayerTotalSum = 0;
+        let matchPlayerNonBustSum = 0;
+        let matchPlayerNonBustCount = 0;
+        let matchPlayerBusts = 0;
+        let matchPlayer21s = 0;
+        let matchLaneW = 0;
+        let matchLaneL = 0;
+        let matchLaneT = 0;
+
+        for (let i = 0; i < 5; i++) {
+          const pTotal = safeNumber(playerTotals[i], 0);
+          const dTotal = safeNumber(dealerTotals[i], 0);
+          const pBust = !!playerBusts[i];
+          const dBust = !!dealerBusts[i];
+          const winner = laneWinners[i];
+
+          matchPlayerTotalSum += pTotal;
+          if (!pBust) {
+            matchPlayerNonBustSum += pTotal;
+            matchPlayerNonBustCount += 1;
+          } else {
+            matchPlayerBusts += 1;
+          }
+          if (pTotal === 21 && !pBust) matchPlayer21s += 1;
+
+          buckets.forEach(b => {
+            b.lanesPlayed += 1;
+            b.playerTotalSum += pTotal;
+            if (!pBust) {
+              b.playerNonBustSum += pTotal;
+              b.playerNonBustCount += 1;
+            }
+            if (pBust) b.playerBustLanes += 1;
+            if (dBust) b.dealerBustLanes += 1;
+            if (pTotal === 21 && !pBust) b.player21Lanes += 1;
+            if (dTotal === 21 && !dBust) b.dealer21Lanes += 1;
+          });
+
+          if (winner === 'player') {
+            buckets.forEach(b => { b.laneW += 1; });
+            matchLaneW += 1;
+          } else if (winner === 'dealer') {
+            buckets.forEach(b => { b.laneL += 1; });
+            matchLaneL += 1;
+          } else {
+            buckets.forEach(b => { b.laneT += 1; });
+            matchLaneT += 1;
+          }
+        }
+
+        const matchAvgIncl = matchPlayerTotalSum / 5;
+        const matchAvgExcl = matchPlayerNonBustCount ? (matchPlayerNonBustSum / matchPlayerNonBustCount) : null;
+        perf.recentMatches.push({
+          floor: evt.floor,
+          type: evt.data.type,
+          outcome: evt.data.outcome,
+          avgIncl: matchAvgIncl,
+          avgExcl: matchAvgExcl,
+          playerBusts: matchPlayerBusts,
+          player21s: matchPlayer21s,
+          laneW: matchLaneW,
+          laneL: matchLaneL,
+          laneT: matchLaneT
+        });
+      });
+
+      return perf;
+    }
+
     function renderLogStats() {
       const s = (gameLog && gameLog.stats) ? gameLog.stats : null;
       if (!s) return `<div class="log-card"><div class="log-card-body">No stats yet.</div></div>`;
+
+      const derived = computeDerivedPerf(gameLog.events || []);
+      const overall = derived.overall;
+      const avgLaneIncl = overall.lanesPlayed ? (overall.playerTotalSum / overall.lanesPlayed) : 0;
+      const avgLaneExcl = overall.playerNonBustCount ? (overall.playerNonBustSum / overall.playerNonBustCount) : null;
 
       const net = safeNumber(run ? run.chips : 0) - STARTING_CHIPS;
 
@@ -1508,7 +2036,59 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
 
       const avgMatchMs = s.matches ? Math.round(s.matchDurationMsTotal / s.matches) : 0;
 
+      const recentMatches = derived.recentMatches.slice(-10).reverse();
+
+      const floorRows = Object.entries(derived.byFloor).map(([floor, data]) => {
+        const avgIncl = data.lanesPlayed ? (data.playerTotalSum / data.lanesPlayed) : 0;
+        const avgExcl = data.playerNonBustCount ? (data.playerNonBustSum / data.playerNonBustCount) : null;
+        return `
+          <tr>
+            <td>Floor ${floor}</td>
+            <td>${data.matches}</td>
+            <td>${data.matchW}/${data.matchL}/${data.matchT}</td>
+            <td>${formatRate(data.matchW, data.matches)}</td>
+            <td>${avgIncl.toFixed(1)}</td>
+            <td>${avgExcl === null ? '—' : avgExcl.toFixed(1)}</td>
+            <td>${formatRate(data.playerBustLanes, data.lanesPlayed)}</td>
+            <td>${formatRate(data.player21Lanes, data.lanesPlayed)}</td>
+            <td>${data.laneW}/${data.laneL}/${data.laneT}</td>
+          </tr>
+        `;
+      }).join('') || `<tr><td colspan="9">No matches yet.</td></tr>`;
+
+      const typeRows = Object.entries(derived.byType).map(([type, data]) => {
+        const avgIncl = data.lanesPlayed ? (data.playerTotalSum / data.lanesPlayed) : 0;
+        const avgExcl = data.playerNonBustCount ? (data.playerNonBustSum / data.playerNonBustCount) : null;
+        return `
+          <tr>
+            <td>${type}</td>
+            <td>${data.matches}</td>
+            <td>${data.matchW}/${data.matchL}/${data.matchT}</td>
+            <td>${formatRate(data.matchW, data.matches)}</td>
+            <td>${avgIncl.toFixed(1)}</td>
+            <td>${avgExcl === null ? '—' : avgExcl.toFixed(1)}</td>
+            <td>${formatRate(data.playerBustLanes, data.lanesPlayed)}</td>
+            <td>${formatRate(data.player21Lanes, data.lanesPlayed)}</td>
+            <td>${data.laneW}/${data.laneL}/${data.laneT}</td>
+          </tr>
+        `;
+      }).join('') || `<tr><td colspan="9">No matches yet.</td></tr>`;
+
+      const recentRows = recentMatches.map(m => `
+        <tr>
+          <td>F${m.floor}</td>
+          <td>${m.type}</td>
+          <td>${m.outcome}</td>
+          <td>${m.avgIncl.toFixed(1)}</td>
+          <td>${m.avgExcl === null ? '—' : m.avgExcl.toFixed(1)}</td>
+          <td>${m.playerBusts}</td>
+          <td>${m.player21s}</td>
+          <td>${m.laneW}/${m.laneL}/${m.laneT}</td>
+        </tr>
+      `).join('') || `<tr><td colspan="8">No recent matches.</td></tr>`;
+
       return `
+        <div class="log-section-title">Run Overview</div>
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">Session</div>
@@ -1563,6 +2143,10 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
             <div class="stat-label">Bonus Chips</div>
             <div class="stat-value gold">${s.bonusChips}</div>
           </div>
+          <div class="stat-box">
+            <div class="stat-label">Rake Paid</div>
+            <div class="stat-value bad">${s.rakePaidTotal}</div>
+          </div>
 
           <div class="stat-box">
             <div class="stat-label">Tokens Gained / Spent</div>
@@ -1590,6 +2174,10 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
             <div class="stat-label">Removals</div>
             <div class="stat-value">${s.merchantRemoves}</div>
           </div>
+          <div class="stat-box">
+            <div class="stat-label">Boss Clears</div>
+            <div class="stat-value">${s.bossClears}</div>
+          </div>
 
           <div class="stat-box" style="grid-column: 1 / -1;">
             <div class="stat-label">Tiles Entered</div>
@@ -1597,6 +2185,101 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
             <div class="log-kv" style="margin-top:10px;">${tileLines || '(none yet)'}</div>
           </div>
         </div>
+
+        <div class="log-section-title">Performance</div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-label">Match W/L/T</div>
+            <div class="stat-value">${overall.matchW} / ${overall.matchL} / ${overall.matchT}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Match Win Rate</div>
+            <div class="stat-value">${formatRate(overall.matchW, overall.matches)}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Lane W/L/T</div>
+            <div class="stat-value">${overall.laneW} / ${overall.laneL} / ${overall.laneT}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Lane Win Rate</div>
+            <div class="stat-value">${formatRate(overall.laneW, overall.lanesPlayed)}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Player Bust Rate</div>
+            <div class="stat-value">${formatRate(overall.playerBustLanes, overall.lanesPlayed)}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Player 21 Rate</div>
+            <div class="stat-value">${formatRate(overall.player21Lanes, overall.lanesPlayed)}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Avg Lane (Incl Bust)</div>
+            <div class="stat-value">${avgLaneIncl.toFixed(1)}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Avg Lane (Excl Bust)</div>
+            <div class="stat-value">${avgLaneExcl === null ? '—' : avgLaneExcl.toFixed(1)}</div>
+          </div>
+        </div>
+
+        <div class="log-section-title">Breakdown by Floor</div>
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>Floor</th>
+              <th>Matches</th>
+              <th>W/L/T</th>
+              <th>Win %</th>
+              <th>Avg Incl</th>
+              <th>Avg Excl</th>
+              <th>Bust %</th>
+              <th>21 %</th>
+              <th>Lane W/L/T</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${floorRows}
+          </tbody>
+        </table>
+
+        <div class="log-section-title">Breakdown by Match Type</div>
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Matches</th>
+              <th>W/L/T</th>
+              <th>Win %</th>
+              <th>Avg Incl</th>
+              <th>Avg Excl</th>
+              <th>Bust %</th>
+              <th>21 %</th>
+              <th>Lane W/L/T</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${typeRows}
+          </tbody>
+        </table>
+
+        <div class="log-section-title">Recent Matches</div>
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>Floor</th>
+              <th>Type</th>
+              <th>Outcome</th>
+              <th>Avg Incl</th>
+              <th>Avg Excl</th>
+              <th>Bust Lanes</th>
+              <th>21 Lanes</th>
+              <th>Lane W/L/T</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${recentRows}
+          </tbody>
+        </table>
       `;
     }
 
@@ -1708,6 +2391,7 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
           text: 'Save',
           primary: true,
           action: () => {
+            const prevSettings = getSettingsSnapshot();
             const cbLog = document.getElementById('setting_autoOpenLog');
             const cbReveal = document.getElementById('setting_revealTotalsOnClose');
             const selOpp = document.getElementById('setting_opponentDifficulty');
@@ -1721,6 +2405,10 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
             uiSettings.rakeMode = (selRake && selRake.value) ? selRake.value : 'hard';
 
             uiSettings.benchHardCap = safeNumber(selCap && selCap.value, 3);
+
+            const nextSettings = getSettingsSnapshot();
+            logEvent('SETTINGS_CHANGED', { prev: prevSettings, next: nextSettings });
+            if (gameLog) gameLog.settingsLatest = nextSettings;
 
             closeModal();
             renderAll();
@@ -1754,7 +2442,7 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
         <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; margin-bottom:14px;">
           <div style="font-family:'Cinzel',serif; color:var(--accent-gold); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Actions</div>
           <ul style="color:var(--text-secondary); line-height:1.6; padding-left:18px;">
-            <li>Each match starts with <strong>${ACTION_TOKEN_BASE_PER_MATCH}</strong> token + up to <strong>${ACTION_TOKEN_MAX_PER_MATCH - ACTION_TOKEN_BASE_PER_MATCH}</strong> from your bank (max <strong>${ACTION_TOKEN_MAX_PER_MATCH}</strong>).</li>
+            <li>Each match starts with <strong>base tokens equal to the current floor</strong> + up to <strong>${ACTION_TOKEN_MAX_BANKED}</strong> from your bank.</li>
             <li>Spend a token to use a cocktail action (each action usable once per match).</li>
             <li>Buy new cocktails at the Bartender for <strong>${COCKTAIL_COST}</strong> chips.</li>
           </ul>
@@ -1765,12 +2453,100 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
           <ul style="color:var(--text-secondary); line-height:1.6; padding-left:18px;">
             <li><strong>Rest</strong>: choose free removal or +${REST_REWARD} chips, and always gain <strong>+1 banked token</strong>.</li>
             <li><strong>Minigame</strong>: +${MINIGAME_REWARD} chips and <strong>+1 banked token</strong>.</li>
-            <li><strong>Merchant</strong>: buy cards (${MERCHANT_BUY_COST}), remove one card (${MERCHANT_REMOVE_COST}), rerolls cost ${MERCHANT_INVENTORY_REROLL_COST}/${REMOVAL_REROLL_COST}.</li>
+            <li><strong>Merchant</strong>: buy cards (Standard ${MERCHANT_BUY_BASE_STANDARD}+ / Mod ${MERCHANT_BUY_BASE_MOD}+ / +${MERCHANT_BUY_INCREMENT} per buy), remove one card (${MERCHANT_REMOVE_COST}), rerolls cost ${MERCHANT_INVENTORY_REROLL_COST}/${REMOVAL_REROLL_COST}.</li>
             <li><strong>Loan Shark</strong>: borrow ${LOAN_AMOUNT}, repay ${LOAN_REPAY} before final boss.</li>
           </ul>
         </div>
       `;
       showModal('Rules', body, [
+        { text: 'Close', primary: true, action: () => closeModal() }
+      ]);
+    }
+
+    function openFeedbackModal() {
+      const comments = run && run.feedback ? run.feedback.comments : '';
+      const bugs = run && run.feedback ? run.feedback.bugs : '';
+      const body = `
+        <p class="modal-text">Share any feedback or bugs you noticed during the run.</p>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div>
+            <div style="font-weight:800; margin-bottom:6px;">Comments</div>
+            <textarea id="feedback_comments" rows="4" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">${comments}</textarea>
+          </div>
+          <div>
+            <div style="font-weight:800; margin-bottom:6px;">Bugs</div>
+            <textarea id="feedback_bugs" rows="4" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">${bugs}</textarea>
+          </div>
+        </div>
+      `;
+      showModal('Feedback', body, [
+        {
+          text: 'Save',
+          primary: true,
+          action: () => {
+            const commentsEl = document.getElementById('feedback_comments');
+            const bugsEl = document.getElementById('feedback_bugs');
+            const next = {
+              comments: commentsEl ? commentsEl.value : '',
+              bugs: bugsEl ? bugsEl.value : '',
+              updatedAt: new Date().toISOString()
+            };
+            if (run) run.feedback = next;
+            if (gameLog) gameLog.feedback = { ...next };
+            logEvent('FEEDBACK_UPDATED', { commentsLen: next.comments.length, bugsLen: next.bugs.length });
+            closeModal();
+            showToast('Feedback saved');
+          }
+        },
+        { text: 'Close', action: () => closeModal() }
+      ]);
+    }
+
+    function openDeckViewer() {
+      if (!run) return;
+      const summary = buildDeckSummary();
+      const stamps = summary.stampsByRank || {};
+      const stampLines = Object.keys(stamps).length
+        ? Object.entries(stamps).map(([rank, stampId]) => `${rank}: ${getStampDef(stampId)?.name || stampId}`).join(', ')
+        : 'None';
+
+      const bySuitLine = Object.entries(summary.bySuit)
+        .map(([suit, count]) => `${suit} ${count}`)
+        .join(' · ');
+
+      const byRankLine = RANKS.map(rank => `${rank}:${summary.byRank[rank] || 0}`).join(' ');
+
+      const standards = [];
+      const modifiers = [];
+      const fused = [];
+      run.playerDeck.forEach(card => {
+        if (isModifier(card)) modifiers.push(card);
+        else if (isFused(card)) fused.push(card);
+        else standards.push(card);
+      });
+      const rankIndex = Object.fromEntries(RANKS.map((r, i) => [r, i]));
+      standards.sort((a, b) => {
+        const suitDiff = SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit);
+        if (suitDiff !== 0) return suitDiff;
+        return (rankIndex[a.rank] || 0) - (rankIndex[b.rank] || 0);
+      });
+
+      const list = [...standards, ...fused, ...modifiers];
+      const listHtml = list.map(card => renderCard(card, false)).join('');
+
+      const body = `
+        <div class="log-kv" style="margin-bottom:10px;">
+          <div><strong>Deck size:</strong> ${summary.deckSize}</div>
+          <div><strong>Standard:</strong> ${summary.deckSize - summary.modCount - summary.fusedCount} · <strong>Mods:</strong> ${summary.modCount} · <strong>Fused:</strong> ${summary.fusedCount}</div>
+          <div><strong>Sleeved:</strong> ${summary.sleevedCount}</div>
+          <div><strong>Stamps:</strong> ${stampLines}</div>
+        </div>
+        <div style="margin-bottom:10px;"><strong>By suit:</strong> ${bySuitLine}</div>
+        <div style="margin-bottom:10px;"><strong>By rank:</strong> ${byRankLine}</div>
+        <div class="merchant-cards">${listHtml}</div>
+      `;
+
+      showModal('Deck Viewer', body, [
         { text: 'Close', primary: true, action: () => closeModal() }
       ]);
     }
@@ -1872,7 +2648,7 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
     function makeStandardDeck52() {
       const deck = [];
       for (const s of SUITS) {
-        for (const r of RANKS) deck.push({ rank: r, suit: s });
+        for (const r of RANKS) deck.push({ uid: null, rank: r, suit: s, sleeveId: null, laminationId: null });
       }
       return deck;
     }
@@ -1889,6 +2665,94 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
       return c && !c.type && c.rank && c.suit;
     }
 
+    const STAMP_DEFS = {
+      PLUS_FIVE: { id: 'PLUS_FIVE', name: 'Plus Five', rarity: 'uncommon', desc: '+5 karma per stamped card in a winning lane.', icon: '+5' },
+      PLUS_TEN: { id: 'PLUS_TEN', name: 'Plus Ten', rarity: 'rare', desc: '+10 karma per stamped card in a winning lane.', icon: '+10' },
+      DOUBLE_DIP: { id: 'DOUBLE_DIP', name: 'Double Dip', rarity: 'uncommon', desc: 'x2 karma contribution per stamped card in a winning lane.', icon: 'x2' },
+      TRIPLE_PLAY: { id: 'TRIPLE_PLAY', name: 'Triple Play', rarity: 'rare', desc: 'x3 karma contribution per stamped card in a winning lane.', icon: 'x3' },
+      LANE_COUNT_MULT: { id: 'LANE_COUNT_MULT', name: 'Lane Count Mult', rarity: 'rare', desc: 'Multiply stamped-card karma by lane card count.', icon: 'N×' },
+      PROXY_SUIT: { id: 'PROXY_SUIT', name: 'Proxy Suit', rarity: 'common', desc: 'Counts as calling suit for proc checks.', icon: 'PS' },
+      DEJA_VU: { id: 'DEJA_VU', name: 'Deja Vu', rarity: 'rare', desc: 'Doubles card actions and karma contribution.', icon: 'DV' },
+      BURN_AFTER_READING: { id: 'BURN_AFTER_READING', name: 'Burn After Reading', rarity: 'uncommon', desc: 'Remove stamped cards from deck after match.', icon: 'BR' }
+    };
+
+    const SLEEVE_DEFS = {
+      CRYSTAL: { id: 'CRYSTAL', name: 'Crystal Sleeve', rarity: 'rare', desc: 'Prevent bust once by burning this card.', className: 'sleeve-crystal' },
+      STEEL: { id: 'STEEL', name: 'Steel Sleeve', rarity: 'uncommon', desc: 'Lane cannot be targeted by opponent effects.', className: 'sleeve-steel' },
+      GOLD: { id: 'GOLD', name: 'Gold Sleeve', rarity: 'rare', desc: 'Gain chips equal to lane total at close.', className: 'sleeve-gold' },
+      BLUE: { id: 'BLUE', name: 'Blue Sleeve', rarity: 'common', desc: 'Drawn card goes to bench instead of forced play.', className: 'sleeve-blue' }
+    };
+
+    function getStampDef(id) {
+      return id ? STAMP_DEFS[id] : null;
+    }
+
+    function getSleeveDef(id) {
+      return id ? SLEEVE_DEFS[id] : null;
+    }
+
+    function getCardStampId(card) {
+      if (!run || !run.stampsByRank) return null;
+      if (!isStandardCard(card)) return null;
+      return run.stampsByRank[card.rank] || null;
+    }
+
+    function assignUid(card) {
+      if (!card) return null;
+      if (card.uid) return card.uid;
+      if (!run) return null;
+      run.nextCardUid = safeNumber(run.nextCardUid, 1);
+      card.uid = run.nextCardUid;
+      run.nextCardUid += 1;
+      return card.uid;
+    }
+
+    function cloneCardWithNewUid(card) {
+      if (!card) return null;
+      if (isModifier(card)) return { uid: null, type: 'MOD', delta: card.delta };
+      if (isFused(card)) return { uid: null, type: 'FUSE', a: card.a, b: card.b };
+      return {
+        uid: null,
+        rank: card.rank,
+        suit: card.suit,
+        sleeveId: card.sleeveId || null,
+        laminationId: card.laminationId ?? null
+      };
+    }
+
+    function cardRef(card) {
+      if (!card) return null;
+      if (isModifier(card)) return { uid: card.uid || null, kind: 'MOD', delta: card.delta };
+      if (isFused(card)) return { uid: card.uid || null, kind: 'FUSE', aUid: card.a?.uid || null, bUid: card.b?.uid || null };
+      return {
+        uid: card.uid || null,
+        kind: 'STD',
+        rank: card.rank,
+        suit: card.suit,
+        sleeveId: card.sleeveId || null,
+        laminationId: card.laminationId ?? null
+      };
+    }
+
+    function getStampKarmaContribution(stampId, baseValue, laneSize) {
+      switch (stampId) {
+        case 'PLUS_FIVE':
+          return 5;
+        case 'PLUS_TEN':
+          return 10;
+        case 'DOUBLE_DIP':
+          return baseValue;
+        case 'TRIPLE_PLAY':
+          return baseValue * 2;
+        case 'LANE_COUNT_MULT':
+          return baseValue * laneSize;
+        case 'DEJA_VU':
+          return baseValue;
+        default:
+          return 0;
+      }
+    }
+
     function cardToString(c) {
       if (!c) return '';
       if (isModifier(c)) return c.delta > 0 ? `+${c.delta}` : `${c.delta}`;
@@ -1903,7 +2767,65 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
     function cardCssClass(card) {
       if (isModifier(card)) return 'mod';
       if (isFused(card)) return 'fused';
-      return isRedSuit(card.suit) ? 'red' : 'black';
+      const classes = [isRedSuit(card.suit) ? 'red' : 'black'];
+      if (card && card.sleeveId) {
+        const sleeve = getSleeveDef(card.sleeveId);
+        if (sleeve && sleeve.className) classes.push(sleeve.className);
+      }
+      return classes.join(' ');
+    }
+
+    function rankToValue(rank) {
+      if (rank === 'A') return 14;
+      if (rank === 'K') return 13;
+      if (rank === 'Q') return 12;
+      if (rank === 'J') return 11;
+      const n = Number(rank);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function valueToRank(value) {
+      if (value === 14) return 'A';
+      if (value === 13) return 'K';
+      if (value === 12) return 'Q';
+      if (value === 11) return 'J';
+      return String(value);
+    }
+
+    function suitColor(suit) {
+      return (suit === '♥' || suit === '♦') ? 'red' : 'black';
+    }
+
+    function getAffinity(playerSuit, npcSuit) {
+      if (!playerSuit || !npcSuit) return 'neutral';
+      if (playerSuit === npcSuit) return 'resonant';
+      if (suitColor(playerSuit) === suitColor(npcSuit)) return 'dissonant';
+      return 'neutral';
+    }
+
+    function affinityIcon(affinity) {
+      if (affinity === 'resonant') return '+';
+      if (affinity === 'dissonant') return '-';
+      return '•';
+    }
+
+    function maybeLevelUpCallingCardFromKarma() {
+      if (!run || !run.callingCard) return;
+      const currentRank = run.callingCard.rank || '2';
+      const currentIndex = CALLING_RANK_THRESHOLDS.findIndex(t => t.rank === currentRank);
+      const nextIndex = currentIndex + 1;
+      if (nextIndex <= 0 || nextIndex >= CALLING_RANK_THRESHOLDS.length) return;
+      const next = CALLING_RANK_THRESHOLDS[nextIndex];
+      if (safeNumber(run.karma, 0) < next.karma) return;
+      run.callingCard.rank = next.rank;
+      logEvent('CALLING_CARD_LEVEL_UP', {
+        fromRank: currentRank,
+        toRank: next.rank,
+        totalKarma: run.karma,
+        thresholdMet: next.karma
+      });
+      showToast(`Calling Card leveled up: ${currentRank} → ${next.rank}`);
+      renderHUD();
     }
 
     function getCardValueOptions(card) {
@@ -1967,11 +2889,14 @@ const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (
     function randomCard() {
       if (Math.random() < MOD_OFFER_CHANCE) {
         const delta = MODIFIER_DELTAS[Math.floor(Math.random() * MODIFIER_DELTAS.length)];
-        return { type: 'MOD', delta };
+        return { uid: null, type: 'MOD', delta };
       }
       return {
+        uid: null,
         rank: RANKS[Math.floor(Math.random() * RANKS.length)],
-        suit: SUITS[Math.floor(Math.random() * SUITS.length)]
+        suit: SUITS[Math.floor(Math.random() * SUITS.length)],
+        sleeveId: null,
+        laminationId: null
       };
     }
 
@@ -2001,11 +2926,38 @@ function getOpponentDifficulty() {
   return (d === 'easy' || d === 'medium' || d === 'hard') ? d : 'hard';
 }
 
-
+function getMerchantPriceMult() {
+  const ctx = run && run.ui && run.ui.merchantContext;
+  const mult = ctx && typeof ctx.priceMult === 'number' ? ctx.priceMult : 1;
+  return Math.max(0.75, Math.min(1.25, mult));
+}
 
 function getMerchantRemovalCost() {
   const n = safeNumber(run && run.paidRemovalCount, 0);
-  return MERCHANT_REMOVE_COST + (n * MERCHANT_REMOVE_INCREMENT);
+  const base = MERCHANT_REMOVE_COST + (n * MERCHANT_REMOVE_INCREMENT);
+  return Math.ceil(base * getMerchantPriceMult());
+}
+
+function getMerchantCost(base) {
+  return Math.ceil(base * getMerchantPriceMult());
+}
+
+function getMerchantBuyCost(card) {
+  const isMod = isModifier(card);
+  const base = isMod ? MERCHANT_BUY_BASE_MOD : MERCHANT_BUY_BASE_STANDARD;
+  const count = isMod
+    ? safeNumber(run && run.merchantModifierBuys, 0)
+    : safeNumber(run && run.merchantStandardBuys, 0);
+  const scaled = base + (MERCHANT_BUY_INCREMENT * count);
+  return Math.ceil(scaled * getMerchantPriceMult());
+}
+
+function getModifyServiceCost(serviceId, floor) {
+  const baseFloor = Math.max(1, safeNumber(floor, 1));
+  const isPremium = serviceId === 'CALLING_SUIT_SWEEP' || serviceId === 'UNIFORM_RANK_PRESS';
+  const base = isPremium ? 200 : 100;
+  const step = isPremium ? 50 : 25;
+  return base + ((baseFloor - 1) * step);
 }
 
 function getModKey(delta) { return String(delta); }
@@ -2063,17 +3015,95 @@ function benchPush(card, source = '') {
     // =============================================
     // BOARD GENERATION
     // =============================================
+    const NPC_NAMES = ['Rowan', 'Maris', 'Calder', 'June', 'Sable', 'Nico', 'Arden', 'Vale', 'Tamsin', 'Quinn', 'Otto', 'Liora'];
+
+    function randomChoice(list) {
+      return list[Math.floor(Math.random() * list.length)];
+    }
+
+    function randInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function rollNpcRankValue(floor, type) {
+      const roll = Math.random();
+      if (type === 'STANDARD') {
+        if (floor === 1) {
+          if (roll < 0.02) return randInt(12, 14);
+          if (roll < 0.12) return randInt(9, 11);
+          return randInt(2, 8);
+        }
+        if (floor === 2) {
+          if (roll < 0.02) return 14;
+          if (roll < 0.12) return randInt(11, 13);
+          return randInt(4, 10);
+        }
+        if (roll < 0.10) return randInt(13, 14);
+        return randInt(6, 12);
+      }
+      if (type === 'HIGH_STAKES') {
+        if (floor === 1) {
+          if (roll < 0.10) return randInt(12, 14);
+          return randInt(6, 11);
+        }
+        if (floor === 2) {
+          if (roll < 0.10) return 14;
+          return randInt(8, 13);
+        }
+        return randInt(10, 14);
+      }
+      if (type === 'BOSS') {
+        if (floor === 1) {
+          if (roll < 0.20) return 14;
+          return randInt(10, 13);
+        }
+        if (floor === 2) return randInt(12, 14);
+        return 14;
+      }
+      return randInt(4, 12);
+    }
+
+    function makeNpcName(type) {
+      const base = randomChoice(NPC_NAMES);
+      if (type === 'HIGH_STAKES') return `High Roller ${base}`;
+      if (type === 'BOSS') return `Floor Boss: ${base}`;
+      return base;
+    }
+
+    function createNpcForTile(floor, type) {
+      const tableTypes = ['STANDARD', 'HIGH_STAKES', 'BOSS'];
+      const roleSuits = {
+        BARTENDER: '♥',
+        MERCHANT: '♦',
+        LOAN_SHARK: '♣'
+      };
+
+      if (!tableTypes.includes(type) && !roleSuits[type]) return null;
+
+      const suit = roleSuits[type] || randomChoice(['♥', '♠', '♦', '♣']);
+      const rankValue = rollNpcRankValue(floor, type);
+      const rank = valueToRank(rankValue);
+      const name = makeNpcName(type);
+      return { name, callingCard: { rank, suit } };
+    }
+
     function buildTilePoolForFloor(floor) {
       const pool = [];
       const counts = FLOOR_COUNTS[floor];
 
-      for (let i = 0; i < counts.standard; i++) pool.push('STANDARD');
-      for (let i = 0; i < counts.high; i++) pool.push('HIGH_STAKES');
+      let standardCount = counts.standard;
+      let highCount = counts.high;
+      if (standardCount > 0) standardCount -= 1;
+      else if (highCount > 0) highCount -= 1;
+
+      for (let i = 0; i < standardCount; i++) pool.push('STANDARD');
+      for (let i = 0; i < highCount; i++) pool.push('HIGH_STAKES');
+      pool.push('COLLECTOR');
 
       pool.push('BARTENDER');
       pool.push('MINIGAME');
       pool.push('REST_STOP', 'REST_STOP');
-      pool.push('MERCHANT', 'MERCHANT');
+      pool.push('MERCHANT', 'MODIFY');
       pool.push('LOAN_SHARK');
 
       return pool;
@@ -2107,15 +3137,18 @@ function benchPush(card, source = '') {
       const tiles = [];
 
       for (const [id, x, y, connections] of NODES) {
+        const tileType = tileTypes[id];
+        const npc = createNpcForTile(floor, tileType);
         tiles.push({
           id,
-          type: tileTypes[id],
-          label: TILE_LABELS[tileTypes[id]],
-          color: TILE_COLORS[tileTypes[id]],
+          type: tileType,
+          label: TILE_LABELS[tileType],
+          color: TILE_COLORS[tileType],
           center: [x, y],
           svgPath: hexPath(x, y),
           connections,
-          isStartRow: id >= 18
+          isStartRow: id >= 18,
+          npc
         });
       }
 
@@ -2132,11 +3165,22 @@ function benchPush(card, source = '') {
         floor: 1,
         chips: STARTING_CHIPS,
         karma: 0,
+        callingCard: null,
+        callingCardChosenSuit: null,
         playerDeck: makeStandardDeck52(),
+        stampsByRank: {},
+        collectorShop: null,
         ownedActions: [],
+        nextCardUid: 1,
+        matchSeq: 0,
+        encounterSeq: 0,
+        activeEncounter: null,
+        feedback: { comments: '', bugs: '', updatedAt: null },
         bankedTokens: 0,
         bossWins: 0,
         paidRemovalCount: 0,
+        merchantStandardBuys: 0,
+        merchantModifierBuys: 0,
         modPurchaseCounts: Object.fromEntries(MODIFIER_DELTAS.map(d => [String(d), 0])),
         loan: { active: false, repaid: false },
         board: {
@@ -2152,9 +3196,45 @@ function benchPush(card, source = '') {
       };
 
       resetLog();
-      logEvent('GAME_START', { startingChips: STARTING_CHIPS, deckSize: run.playerDeck.length, deckSnapshot: deckSnapshot() });
+      run.playerDeck.forEach(card => assignUid(card));
+      const chooseSuit = (suit) => {
+        run.callingCard = { rank: '2', suit };
+        run.callingCardChosenSuit = suit;
+        logEvent('CALLING_CARD_SET', { callingCard: run.callingCard });
+        logEvent('GAME_START', {
+          startingChips: STARTING_CHIPS,
+          deckSize: run.playerDeck.length,
+          deckSnapshot: deckSnapshot(),
+          settings: getSettingsSnapshot()
+        });
+        if (gameLog) {
+          gameLog.initialState = {
+            chips: run.chips,
+            karma: run.karma,
+            floor: run.floor,
+            callingCard: { ...run.callingCard },
+            deckSnapshot: deckSnapshot()
+          };
+        }
+        recordDeckSnapshot('GAME_START');
+        closeModal();
+        initFloor(1);
+      };
 
-      initFloor(1);
+      showModal('Choose Calling Suit', `
+        <p class="modal-text">Choose your Calling Suit for this run.</p>
+        <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
+          <button class="modal-btn" onclick="setCallingSuit('♥')">♥ Hearts</button>
+          <button class="modal-btn" onclick="setCallingSuit('♠')">♠ Spades</button>
+          <button class="modal-btn" onclick="setCallingSuit('♦')">♦ Diamonds</button>
+          <button class="modal-btn" onclick="setCallingSuit('♣')">♣ Clubs</button>
+        </div>
+      `, []);
+
+      window.setCallingSuit = function(suit) {
+        chooseSuit(suit);
+        delete window.setCallingSuit;
+      };
     }
 
     function initFloor(floor) {
@@ -2168,6 +3248,17 @@ function benchPush(card, source = '') {
       run.ui.mode = 'BOARD';
 
       logEvent('FLOOR_START', { floor });
+      run.board.tiles.forEach(tile => {
+        if (tile.npc) {
+          logEvent('NPC_ASSIGNED', {
+            floor,
+            tileId: tile.id,
+            tileType: tile.type,
+            npcName: tile.npc.name,
+            npcCallingCard: tile.npc.callingCard
+          });
+        }
+      });
 
       renderAll();
     }
@@ -2188,6 +3279,8 @@ function benchPush(card, source = '') {
       run.board.path.push(tileId);
 
       const tileType = run.board.tiles[tileId].type;
+      run.encounterSeq = safeNumber(run.encounterSeq, 0) + 1;
+      run.activeEncounter = { seq: run.encounterSeq, type: tileType, tileId, tileType };
       logEvent('TILE_ENTER', { tileId, tileType });
 
       renderBoard();
@@ -2204,6 +3297,8 @@ function benchPush(card, source = '') {
         case 'MINIGAME': encounterMinigame(); break;
         case 'LOAN_SHARK': encounterLoanShark(); break;
         case 'MERCHANT': encounterMerchant(); break;
+        case 'MODIFY': encounterModify(); break;
+        case 'COLLECTOR': encounterCollector(); break;
         case 'STANDARD': encounterBlackjackStandard(); break;
         case 'HIGH_STAKES': encounterBlackjackHigh(); break;
         case 'BOSS': encounterBoss(); break;
@@ -2266,7 +3361,7 @@ function benchPush(card, source = '') {
                 const sel = selected === idx ? 'selected' : '';
                 return `
                   <div class="removal-card-option ${sel}" onclick="selectFreeRemoval(${idx})">
-                    <div class="playing-card ${cardCssClass(d.card)}">${cardToString(d.card)}</div>
+                    ${renderCard(d.card, false)}
                   </div>
                 `;
               }).join('')}
@@ -2290,7 +3385,8 @@ function benchPush(card, source = '') {
         const d = candidates[selected];
         const idx = run.playerDeck.indexOf(d.card);
         if (idx !== -1) run.playerDeck.splice(idx, 1);
-        logEvent('FREE_REMOVAL', { card: cardToString(d.card), deckSnapshot: deckSnapshot() });
+        logEvent('FREE_REMOVAL', { card: cardToString(d.card), cardUid: d.card.uid || null, cardRef: cardRef(d.card), deckSnapshot: deckSnapshot() });
+        recordDeckSnapshot('FREE_REMOVAL');
         closeModal();
         renderAll();
         showToast(`Removed ${cardToString(d.card)} (free)`);
@@ -2419,10 +3515,618 @@ function benchPush(card, source = '') {
     }
 
     // =============================================
+    // MODIFY
+    // =============================================
+    const MODIFY_SERVICES = {
+      RESUIT: { id: 'RESUIT', name: 'Re-Suit', tier: 'core', kind: 'single' },
+      RERANK: { id: 'RERANK', name: 'Re-Rank', tier: 'core', kind: 'single' },
+      CALLING_SUIT_SWEEP: { id: 'CALLING_SUIT_SWEEP', name: 'Calling Suit Sweep', tier: 'premium', kind: 'bulk' },
+      UNIFORM_RANK_PRESS: { id: 'UNIFORM_RANK_PRESS', name: 'Uniform Rank Press', tier: 'premium', kind: 'bulk' }
+    };
+
+    function getEligibleStandardIndices() {
+      if (!run || !run.playerDeck) return [];
+      const eligible = [];
+      run.playerDeck.forEach((card, idx) => {
+        if (isStandardCard(card)) eligible.push(idx);
+      });
+      return eligible;
+    }
+
+    function buildModifyOffers() {
+      const eligible = getEligibleStandardIndices();
+      if (!eligible.length) return [];
+      const services = [MODIFY_SERVICES.RESUIT.id, MODIFY_SERVICES.RERANK.id];
+      services.push(MODIFY_SERVICES.UNIFORM_RANK_PRESS.id);
+      if (run && run.callingCard) services.push(MODIFY_SERVICES.CALLING_SUIT_SWEEP.id);
+      return shuffle(services).slice(0, Math.min(2, services.length));
+    }
+
+    function encounterModify() {
+      const offers = buildModifyOffers();
+      const eligibleCount = getEligibleStandardIndices().length;
+
+      run.ui.modifyContext = {
+        tileId: run.board.currentTileId,
+        servicesOffered: offers,
+        serviceUsed: false,
+        selectedServiceId: null,
+        previewIndices: [],
+        rankChoices: null
+      };
+
+      logEvent('MODIFY_ENTER', {
+        tileId: run.board.currentTileId,
+        floor: run.floor,
+        chips: safeNumber(run.chips),
+        deckSize: run.playerDeck.length,
+        eligibleCount,
+        servicesOffered: offers
+      });
+
+      renderModifyMenu();
+    }
+
+    function renderModifyMenu() {
+      const ctx = run.ui.modifyContext || {};
+      const eligibleCount = getEligibleStandardIndices().length;
+      const offers = ctx.servicesOffered || [];
+      const inProgress = !!ctx.selectedServiceId && !ctx.serviceUsed;
+      const chipsNow = safeNumber(run.chips);
+
+      let body = `
+        <p class="modal-text">Modify changes cards already in your deck (base cards only). Choose one service.</p>
+        <p class="modal-text">Chips: <strong>${chipsNow}</strong> | Eligible cards: <strong>${eligibleCount}</strong></p>
+      `;
+
+      if (!eligibleCount) {
+        body += `<p class="modal-text" style="color:var(--text-muted);">No eligible cards to modify.</p>`;
+      } else if (inProgress) {
+        const meta = MODIFY_SERVICES[ctx.selectedServiceId];
+        body += `<p class="modal-text" style="color:var(--accent-gold); font-weight:700;">Service in progress: ${meta ? meta.name : ctx.selectedServiceId}</p>`;
+      } else if (ctx.serviceUsed) {
+        body += `<p class="modal-text" style="color:var(--accent-green); font-weight:700;">Service completed.</p>`;
+      }
+
+      const buttons = [];
+      if (eligibleCount && !ctx.serviceUsed && !inProgress) {
+        offers.forEach(serviceId => {
+          const meta = MODIFY_SERVICES[serviceId];
+          const cost = getModifyServiceCost(serviceId, run.floor);
+          buttons.push({
+            text: `${meta ? meta.name : serviceId} (${cost})`,
+            primary: true,
+            disabled: chipsNow < cost,
+            action: () => selectModifyService(serviceId)
+          });
+        });
+      } else if (inProgress) {
+        buttons.push({
+          text: 'Continue',
+          primary: true,
+          action: () => openModifyService(ctx.selectedServiceId)
+        });
+      }
+
+      if (!inProgress) {
+        buttons.push({
+          text: 'Leave',
+          action: () => {
+            logEvent('MODIFY_LEAVE', { tileId: run.board.currentTileId });
+            run.ui.modifyContext = null;
+            closeModal();
+            renderAll();
+          }
+        });
+      }
+
+      showModal('Modify', body, buttons);
+    }
+
+    function selectModifyService(serviceId) {
+      const ctx = run.ui.modifyContext;
+      if (!ctx || ctx.serviceUsed) return;
+      const meta = MODIFY_SERVICES[serviceId];
+      const cost = getModifyServiceCost(serviceId, run.floor);
+      if (run.chips < cost) return;
+
+      const chipsBefore = run.chips;
+      run.chips -= cost;
+      ctx.selectedServiceId = serviceId;
+      logEvent('MODIFY_SERVICE_SELECT', {
+        serviceId,
+        tier: meta ? meta.tier : null,
+        kind: meta ? meta.kind : null,
+        cost,
+        chipsBefore,
+        chipsAfter: run.chips
+      });
+      openModifyService(serviceId);
+    }
+
+    function openModifyService(serviceId) {
+      if (serviceId === MODIFY_SERVICES.RESUIT.id) {
+        openModifyCorePicker('Re-Suit', serviceId);
+        return;
+      }
+      if (serviceId === MODIFY_SERVICES.RERANK.id) {
+        openModifyCorePicker('Re-Rank', serviceId);
+        return;
+      }
+      if (serviceId === MODIFY_SERVICES.CALLING_SUIT_SWEEP.id) {
+        openModifyCallingSuitSweep();
+        return;
+      }
+      if (serviceId === MODIFY_SERVICES.UNIFORM_RANK_PRESS.id) {
+        openModifyUniformRankPress();
+      }
+    }
+
+    function openModifyCorePicker(title, serviceId) {
+      const ctx = run.ui.modifyContext;
+      const eligible = getEligibleStandardIndices();
+      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
+      ctx.previewIndices = sample;
+      const meta = MODIFY_SERVICES[serviceId];
+      logEvent('MODIFY_CANDIDATES_SHOWN', {
+        serviceId,
+        tier: meta ? meta.tier : null,
+        countShown: sample.length,
+        candidates: sample.map(i => cardRef(run.playerDeck[i]))
+      });
+
+      const cardsHtml = sample.map(idx => {
+        const card = run.playerDeck[idx];
+        return `
+          <div class="merchant-card-slot">
+            ${renderCard(card, false)}
+            <button class="modal-btn" onclick="selectModifyCoreCard(${idx})">Select</button>
+          </div>
+        `;
+      }).join('');
+
+      showModal(`Modify - ${title}`, `
+        <p class="modal-text">Choose a card to modify.</p>
+        <div class="merchant-cards">${cardsHtml}</div>
+      `, [
+        { text: 'Back', action: () => renderModifyMenu() }
+      ]);
+
+      window.selectModifyCoreCard = function(deckIdx) {
+        logEvent('MODIFY_SELECTION', {
+          serviceId,
+          selected: cardRef(run.playerDeck[deckIdx])
+        });
+        if (serviceId === MODIFY_SERVICES.RESUIT.id) {
+          openModifySuitPicker(deckIdx);
+        } else {
+          openModifyRankPicker(deckIdx);
+        }
+      };
+    }
+
+    function openModifySuitPicker(deckIdx) {
+      const card = run.playerDeck[deckIdx];
+      if (!card || !isStandardCard(card)) return;
+
+      showModal('Modify - Re-Suit', `
+        <p class="modal-text">Choose a new suit for ${cardToString(card)}.</p>
+        <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
+          ${SUITS.map(suit => `<button class="modal-btn" onclick="applyModifyResuit(${deckIdx}, '${suit}')">${suit}</button>`).join('')}
+        </div>
+      `, [
+        { text: 'Back', action: () => renderModifyMenu() }
+      ]);
+    }
+
+    function openModifyRankPicker(deckIdx) {
+      const card = run.playerDeck[deckIdx];
+      if (!card || !isStandardCard(card)) return;
+
+      const ranksHtml = RANKS.map(rank => `<button class="modal-btn" onclick="applyModifyRerank(${deckIdx}, '${rank}')">${rank}</button>`).join('');
+      showModal('Modify - Re-Rank', `
+        <p class="modal-text">Choose a new rank for ${cardToString(card)}.</p>
+        <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:8px;">${ranksHtml}</div>
+      `, [
+        { text: 'Back', action: () => renderModifyMenu() }
+      ]);
+    }
+
+    window.applyModifyResuit = function(deckIdx, suit) {
+      const card = run.playerDeck[deckIdx];
+      if (!card || !isStandardCard(card)) return;
+      applyModifyService('RESUIT', [deckIdx], () => { card.suit = suit; });
+    };
+
+    window.applyModifyRerank = function(deckIdx, rank) {
+      const card = run.playerDeck[deckIdx];
+      if (!card || !isStandardCard(card)) return;
+      applyModifyService('RERANK', [deckIdx], () => { card.rank = rank; });
+    };
+
+    function openModifyCallingSuitSweep() {
+      const ctx = run.ui.modifyContext;
+      const eligible = getEligibleStandardIndices();
+      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
+      ctx.previewIndices = sample;
+
+      const cardsHtml = sample.map(idx => {
+        const card = run.playerDeck[idx];
+        return renderCard(card, false);
+      }).join('');
+
+      showModal('Modify - Calling Suit Sweep', `
+        <p class="modal-text">Preview the cards that will be re-suited to ${run.callingCard ? run.callingCard.suit : ''}.</p>
+        <div class="merchant-cards">${cardsHtml}</div>
+      `, [
+        {
+          text: 'Confirm',
+          primary: true,
+          action: () => {
+            applyModifyService('CALLING_SUIT_SWEEP', sample, () => {
+              sample.forEach(idx => {
+                const card = run.playerDeck[idx];
+                if (card && isStandardCard(card)) card.suit = run.callingCard.suit;
+              });
+            });
+          }
+        },
+        { text: 'Back', action: () => renderModifyMenu() }
+      ]);
+    }
+
+    function openModifyUniformRankPress() {
+      const ctx = run.ui.modifyContext;
+      const eligible = getEligibleStandardIndices();
+      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
+      ctx.previewIndices = sample;
+      const ranks = shuffle(RANKS.slice()).slice(0, 2);
+      ctx.rankChoices = ranks;
+
+      const cardsHtml = sample.map(idx => {
+        const card = run.playerDeck[idx];
+        return renderCard(card, false);
+      }).join('');
+
+      showModal('Modify - Uniform Rank Press', `
+        <p class="modal-text">Choose a rank to press onto these cards.</p>
+        <div class="merchant-cards">${cardsHtml}</div>
+      `, [
+        ...ranks.map(rank => ({
+          text: `Set to ${rank}`,
+          primary: true,
+          action: () => {
+            applyModifyService('UNIFORM_RANK_PRESS', sample, () => {
+              sample.forEach(idx => {
+                const card = run.playerDeck[idx];
+                if (card && isStandardCard(card)) card.rank = rank;
+              });
+            });
+          }
+        })),
+        { text: 'Back', action: () => renderModifyMenu() }
+      ]);
+    }
+
+    function applyModifyService(serviceId, indices, applyFn) {
+      const ctx = run.ui.modifyContext;
+      const before = indices.map(i => cardToString(run.playerDeck[i]));
+      const affectedUids = indices.map(i => run.playerDeck[i]?.uid || null);
+      applyFn();
+      const after = indices.map(i => cardToString(run.playerDeck[i]));
+
+      logEvent('MODIFY_APPLY', {
+        serviceId,
+        count: indices.length,
+        affectedCardUids: affectedUids,
+        affectedBefore: before,
+        affectedAfter: after,
+        deckSnapshot: deckSnapshot()
+      });
+      recordDeckSnapshot('MODIFY_APPLY');
+
+      if (ctx) {
+        ctx.serviceUsed = true;
+        ctx.selectedServiceId = null;
+        ctx.previewIndices = [];
+        ctx.rankChoices = null;
+      }
+
+      renderModifyMenu();
+      renderAll();
+      showToast('Modify service applied');
+    }
+
+    // =============================================
+    // COLLECTOR
+    // =============================================
+    const COLLECTOR_CATALOG = [
+      ...Object.values(STAMP_DEFS).map(def => ({ ...def, type: 'STAMP' })),
+      ...Object.values(SLEEVE_DEFS).map(def => ({ ...def, type: 'SLEEVE' }))
+    ];
+
+    function rollCollectorRarity() {
+      const roll = Math.random();
+      if (roll < 0.70) return 'common';
+      if (roll < 0.95) return 'uncommon';
+      return 'rare';
+    }
+
+    function randomCollectorItem() {
+      const rarity = rollCollectorRarity();
+      const pool = COLLECTOR_CATALOG.filter(item => item.rarity === rarity);
+      const fallback = COLLECTOR_CATALOG;
+      const source = pool.length ? pool : fallback;
+      const pick = source[Math.floor(Math.random() * source.length)];
+      return { ...pick, purchased: false };
+    }
+
+    function getEligibleStampRanks() {
+      const ranks = new Set();
+      for (const card of run.playerDeck) {
+        if (!isStandardCard(card)) continue;
+        if (run.stampsByRank && run.stampsByRank[card.rank]) continue;
+        ranks.add(card.rank);
+      }
+      return Array.from(ranks);
+    }
+
+    function getEligibleSleeveCardIndices() {
+      const eligible = [];
+      run.playerDeck.forEach((card, idx) => {
+        if (!isStandardCard(card)) return;
+        if (card.sleeveId) return;
+        eligible.push(idx);
+      });
+      return eligible;
+    }
+
+    function encounterCollector() {
+      const tileId = run.board.currentTileId;
+      if (!run.collectorShop || run.collectorShop.tileId !== tileId) {
+        const shopId = `shop-${safeNumber(run.encounterSeq, 0)}-${tileId}`;
+        run.collectorShop = {
+          tileId,
+          shopId,
+          items: Array.from({ length: 3 }, () => randomCollectorItem()),
+          activeItemIdx: null
+        };
+        logEvent('COLLECTOR_SHOP_GENERATED', {
+          shopId,
+          items: run.collectorShop.items.map((item, slot) => ({
+            slot,
+            itemId: item.id,
+            type: item.type,
+            rarity: item.rarity,
+            cost: COLLECTOR_ITEM_COST
+          }))
+        });
+      }
+
+      logEvent('COLLECTOR_ENTER', {
+        tileId,
+        floor: run.floor,
+        chips: safeNumber(run.chips),
+        deckSize: run.playerDeck.length
+      });
+
+      renderCollector();
+    }
+
+    function renderCollector() {
+      const shop = run.collectorShop;
+      if (!shop) return;
+      const chipsNow = safeNumber(run.chips);
+      const activeIdx = shop.activeItemIdx;
+      const inProgress = activeIdx !== null && activeIdx !== undefined;
+
+      let body = `
+        <p class="modal-text">The Collector offers stamps and sleeves to shape your deck.</p>
+        <p class="modal-text">Chips: <strong>${chipsNow}</strong></p>
+      `;
+
+      if (inProgress) {
+        const active = shop.items[activeIdx];
+        body += `<p class="modal-text" style="color:var(--accent-gold); font-weight:700;">Selection in progress: ${active ? active.name : ''}</p>`;
+      }
+
+      const itemsHtml = shop.items.map((item, idx) => {
+        const eligible = item.type === 'STAMP' ? getEligibleStampRanks().length : getEligibleSleeveCardIndices().length;
+        const disabled = item.purchased || chipsNow < COLLECTOR_ITEM_COST || eligible === 0 || inProgress;
+        const status = item.purchased ? 'Purchased' : (eligible === 0 ? 'No eligible cards' : '');
+        const rarityClass = `rarity-${item.rarity}`;
+        return `
+          <div class="merchant-card-slot" style="min-width:180px;">
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+              <span class="rarity-pip ${rarityClass}"></span>
+              <strong>${item.name}</strong>
+            </div>
+            <div style="font-size:12px; color:var(--text-secondary); min-height:32px;">${item.desc}</div>
+            <button class="modal-btn" ${disabled ? 'disabled' : ''} onclick="buyCollectorItem(${idx})">
+              ${item.purchased ? 'Purchased' : `Buy (${COLLECTOR_ITEM_COST})`}
+            </button>
+            ${status ? `<div style="font-size:11px; color:var(--text-muted); margin-top:6px;">${status}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+
+      body += `<div class="merchant-cards">${itemsHtml}</div>`;
+
+      const buttons = [];
+      if (inProgress) {
+        buttons.push({
+          text: 'Continue',
+          primary: true,
+          action: () => openCollectorSelection(activeIdx)
+        });
+      } else {
+        buttons.push({
+          text: 'Leave',
+          action: () => {
+            logEvent('COLLECTOR_LEAVE', { tileId: run.board.currentTileId });
+            run.collectorShop = null;
+            closeModal();
+            renderAll();
+          }
+        });
+      }
+
+      showModal('Collector', body, buttons);
+    }
+
+    window.buyCollectorItem = function(idx) {
+      const shop = run.collectorShop;
+      if (!shop) return;
+      const item = shop.items[idx];
+      if (!item || item.purchased) return;
+      if (run.chips < COLLECTOR_ITEM_COST) return;
+
+      if (item.type === 'STAMP' && getEligibleStampRanks().length === 0) return;
+      if (item.type === 'SLEEVE' && getEligibleSleeveCardIndices().length === 0) return;
+
+      const chipsBefore = run.chips;
+      run.chips -= COLLECTOR_ITEM_COST;
+      shop.activeItemIdx = idx;
+      logEvent('COLLECTOR_BUY', {
+        itemId: item.id,
+        name: item.name,
+        type: item.type,
+        cost: COLLECTOR_ITEM_COST,
+        shopId: shop.shopId,
+        slot: idx,
+        chipsBefore,
+        chipsAfter: run.chips
+      });
+      openCollectorSelection(idx);
+    };
+
+    function openCollectorSelection(idx) {
+      const shop = run.collectorShop;
+      if (!shop) return;
+      const item = shop.items[idx];
+      if (!item) return;
+      if (item.type === 'STAMP') openStampSelection(item);
+      else openSleeveSelection(item);
+    }
+
+    function openStampSelection(item) {
+      const ranks = getEligibleStampRanks();
+      if (!ranks.length) {
+        renderCollector();
+        return;
+      }
+      const options = shuffle(ranks).slice(0, Math.min(2, ranks.length));
+      logEvent('STAMP_OPTIONS_SHOWN', {
+        stampId: item.id,
+        options,
+        eligibleCount: ranks.length
+      });
+      showModal(`Collector - ${item.name}`, `
+        <p class="modal-text">Choose a rank to stamp.</p>
+      `, options.map(rank => ({
+        text: rank,
+        primary: true,
+        action: () => applyStampToRank(item, rank)
+      })));
+    }
+
+    function applyStampToRank(item, rank) {
+      if (!run.stampsByRank) run.stampsByRank = {};
+      run.stampsByRank[rank] = item.id;
+
+      logEvent('STAMP_APPLY', { stampId: item.id, rank, shopId: run.collectorShop?.shopId, slot: run.collectorShop?.activeItemIdx ?? null });
+      recordDeckSnapshot('STAMP_APPLY');
+      finalizeCollectorItem();
+      showToast(`${item.name} applied to ${rank}`);
+    }
+
+    function openSleeveSelection(item) {
+      const eligible = getEligibleSleeveCardIndices();
+      if (!eligible.length) {
+        renderCollector();
+        return;
+      }
+      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
+      logEvent('SLEEVE_CANDIDATES_SHOWN', {
+        sleeveId: item.id,
+        candidates: sample.map(idx => cardRef(run.playerDeck[idx]))
+      });
+      const cardsHtml = sample.map(idx => {
+        const card = run.playerDeck[idx];
+        return `
+          <div class="merchant-card-slot">
+            ${renderCard(card, false)}
+            <button class="modal-btn" onclick="applySleeveToCard('${item.id}', ${idx})">Select</button>
+          </div>
+        `;
+      }).join('');
+
+      showModal(`Collector - ${item.name}`, `
+        <p class="modal-text">Choose a card to sleeve.</p>
+        <div class="merchant-cards">${cardsHtml}</div>
+      `, [
+        { text: 'Back', action: () => renderCollector() }
+      ]);
+    }
+
+    window.applySleeveToCard = function(sleeveId, deckIdx) {
+      const card = run.playerDeck[deckIdx];
+      if (!card || !isStandardCard(card) || card.sleeveId) return;
+      card.sleeveId = sleeveId;
+      if (card.laminationId === undefined) card.laminationId = null;
+      logEvent('SLEEVE_APPLY', {
+        sleeveId,
+        card: cardToString(card),
+        cardUid: card.uid || null,
+        cardRef: cardRef(card),
+        shopId: run.collectorShop?.shopId,
+        slot: run.collectorShop?.activeItemIdx ?? null
+      });
+      recordDeckSnapshot('SLEEVE_APPLY');
+      finalizeCollectorItem();
+      showToast(`${getSleeveDef(sleeveId).name} applied`);
+    };
+
+    function finalizeCollectorItem() {
+      const shop = run.collectorShop;
+      if (!shop) return;
+      const idx = shop.activeItemIdx;
+      if (idx !== null && idx !== undefined) {
+        const item = shop.items[idx];
+        if (item) item.purchased = true;
+      }
+      shop.activeItemIdx = null;
+      renderCollector();
+      renderAll();
+    }
+
+    // =============================================
     // MERCHANT
     // =============================================
     function encounterMerchant() {
+      const tile = run.board.tiles[run.board.currentTileId];
+      const npc = tile ? tile.npc : null;
+      let affinity = 'neutral';
+      let edgeDelta = 0;
+      let priceMult = 1;
+      if (npc && run.callingCard) {
+        affinity = getAffinity(run.callingCard.suit, npc.callingCard.suit);
+        edgeDelta = rankToValue(run.callingCard.rank) - rankToValue(npc.callingCard.rank);
+        const affinityMod = affinity === 'resonant' ? -0.10 : (affinity === 'dissonant' ? 0.10 : 0);
+        const edgeMod = Math.max(-0.10, Math.min(0.10, (rankToValue(npc.callingCard.rank) - rankToValue(run.callingCard.rank)) * 0.01));
+        priceMult = Math.max(0.75, Math.min(1.25, 1 + affinityMod + edgeMod));
+      }
+
+      run.ui.merchantContext = {
+        tileId: run.board.currentTileId,
+        npc,
+        affinity,
+        edgeDelta,
+        priceMult
+      };
+
       merchantOffers = [randomCard(), randomCard(), randomCard()];
+      merchantOffers.forEach(card => assignUid(card));
       removalMode = false;
       removalCandidates = [];
       selectedRemovalIdx = null;
@@ -2431,7 +4135,12 @@ function benchPush(card, source = '') {
       removalPaidCost = 0;
 
       logEvent('MERCHANT_ENTER', {
-        offers: merchantOffers.map(c => cardToString(c)),
+        npcName: npc ? npc.name : null,
+        npcCallingCard: npc ? npc.callingCard : null,
+        affinity,
+        edgeDelta,
+        priceMult: Number(priceMult.toFixed(2)),
+        offers: merchantOffers.map(cardRef),
         chips: safeNumber(run.chips),
         deckSize: run.playerDeck.length
       });
@@ -2441,17 +4150,27 @@ function benchPush(card, source = '') {
 
     function renderMerchant() {
       const chipsNow = safeNumber(run.chips);
+      const ctx = run.ui.merchantContext || {};
+      const npc = ctx.npc;
+      const affinity = ctx.affinity || 'neutral';
+      const priceMult = getMerchantPriceMult();
+      const npcLine = npc
+        ? `${npc.name} · ${cardToString(npc.callingCard)} · ${affinityIcon(affinity)} · Prices x${priceMult.toFixed(2)}`
+        : `Prices x${priceMult.toFixed(2)}`;
+      const rerollInvCost = getMerchantCost(MERCHANT_INVENTORY_REROLL_COST);
       let body = `
-        <p class="modal-text">The merchant displays their wares. Chips: <strong>${chipsNow}</strong> | Deck: <strong>${run.playerDeck.length}</strong></p>
+        <p class="modal-text">The merchant displays their wares.</p>
+        <div class="log-kv" style="margin-bottom:10px;">${npcLine}</div>
+        <p class="modal-text">Chips: <strong>${chipsNow}</strong> | Deck: <strong>${run.playerDeck.length}</strong></p>
       `;
 
       // Buy cards + inventory reroll (always visible)
-      const canRerollInv = chipsNow >= MERCHANT_INVENTORY_REROLL_COST;
+      const canRerollInv = chipsNow >= rerollInvCost;
       body += `
         <div class="merchant-section">
-          <div class="merchant-section-title">Buy Cards (${MERCHANT_BUY_COST} each)</div>
+          <div class="merchant-section-title">Buy Cards (Standard ${MERCHANT_BUY_BASE_STANDARD}+ · Mod ${MERCHANT_BUY_BASE_MOD}+ · +${MERCHANT_BUY_INCREMENT} per buy)</div>
           <div style="display:flex; justify-content:center; margin-bottom:12px;">
-            <button class="modal-btn" ${canRerollInv ? '' : 'disabled'} onclick="rerollMerchantInventory()">Re-roll Inventory (${MERCHANT_INVENTORY_REROLL_COST})</button>
+            <button class="modal-btn" ${canRerollInv ? '' : 'disabled'} onclick="rerollMerchantInventory()">Re-roll Inventory (${rerollInvCost})</button>
           </div>
           <div class="merchant-cards">
       `;
@@ -2460,17 +4179,17 @@ function benchPush(card, source = '') {
   const isMod = isModifier(card);
   const remaining = isMod ? getModifierRemaining(card.delta) : null;
   const soldOut = isMod && remaining <= 0;
-
-  const canBuy = (chipsNow >= MERCHANT_BUY_COST) && !soldOut;
+  const slotCost = getMerchantBuyCost(card);
+  const canBuy = (chipsNow >= slotCost) && !soldOut;
   const stockLine = isMod
     ? `<div style="margin-top:6px; font-size:12px; color:var(--text-muted);">${soldOut ? 'Sold out' : `Stock: ${remaining}/${MOD_PURCHASE_LIMIT_PER_DELTA}`}</div>`
     : '';
 
   body += `
     <div class="merchant-card-slot">
-      <div class="playing-card ${cardCssClass(card)}">${cardToString(card)}</div>
+      ${renderCard(card, false)}
       ${stockLine}
-      <button class="modal-btn" ${canBuy ? '' : 'disabled'} onclick="buyMerchantCard(${idx})">${soldOut ? 'Sold Out' : 'Buy'}</button>
+      <button class="modal-btn" ${canBuy ? '' : 'disabled'} onclick="buyMerchantCard(${idx})">${soldOut ? 'Sold Out' : `Buy (${slotCost})`}</button>
     </div>
   `;
 });
@@ -2497,7 +4216,8 @@ body += `
       `;
 
       if (removalMode) {
-        const canReroll = safeNumber(run.chips) >= REMOVAL_REROLL_COST && run.playerDeck.length >= 1;
+        const removalRerollCost = getMerchantCost(REMOVAL_REROLL_COST);
+        const canReroll = safeNumber(run.chips) >= removalRerollCost && run.playerDeck.length >= 1;
 
         body += `
           <div class="removal-picker">
@@ -2510,7 +4230,7 @@ body += `
           const selected = selectedRemovalIdx === idx;
           body += `
             <div class="removal-card-option ${selected ? 'selected' : ''}" onclick="selectRemovalCard(${idx})">
-              <div class="playing-card ${cardCssClass(card)}">${cardToString(card)}</div>
+              ${renderCard(card, false)}
             </div>
           `;
         });
@@ -2518,7 +4238,7 @@ body += `
         body += `
             </div>
             <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
-              <button class="modal-btn" ${canReroll ? '' : 'disabled'} onclick="rerollRemoval()">Re-roll (${REMOVAL_REROLL_COST})</button>
+              <button class="modal-btn" ${canReroll ? '' : 'disabled'} onclick="rerollRemoval()">Re-roll (${removalRerollCost})</button>
             </div>
           </div>
         `;
@@ -2542,41 +4262,65 @@ body += `
     }
 
     window.rerollMerchantInventory = function() {
-      if (run.chips < MERCHANT_INVENTORY_REROLL_COST) return;
-      run.chips -= MERCHANT_INVENTORY_REROLL_COST;
+      const cost = getMerchantCost(MERCHANT_INVENTORY_REROLL_COST);
+      if (run.chips < cost) return;
+      run.chips -= cost;
       merchantOffers = [randomCard(), randomCard(), randomCard()];
-      logEvent('MERCHANT_REROLL', { which: 'inventory', cost: MERCHANT_INVENTORY_REROLL_COST, offers: merchantOffers.map(c => cardToString(c)) });
+      merchantOffers.forEach(card => assignUid(card));
+      logEvent('MERCHANT_REROLL', { which: 'inventory', cost, offers: merchantOffers.map(cardRef) });
       renderMerchant();
-      showToast(`Re-rolled inventory (-${MERCHANT_INVENTORY_REROLL_COST})`);
+      showToast(`Re-rolled inventory (-${cost})`);
     };
 
     window.buyMerchantCard = function(idx) {
-  if (run.chips < MERCHANT_BUY_COST) return;
-
   const card = merchantOffers[idx];
+  assignUid(card);
+  const chipsBefore = run.chips;
+  const cost = getMerchantBuyCost(card);
+  if (run.chips < cost) return;
 
   // Per-run purchase limit on modifiers (-4..+4)
-  if (isModifier(card) && getModifierRemaining(card.delta) <= 0) {
-    showToast(`Sold out: ${cardToString(card)}`);
+    if (isModifier(card) && getModifierRemaining(card.delta) <= 0) {
+      showToast(`Sold out: ${cardToString(card)}`);
+      logEvent('MODIFIER_SOLD_OUT', {
+        floor: run.floor,
+        card: cardToString(card),
+        cardUid: card.uid || null,
+        cardRef: cardRef(card),
+        delta: card.delta,
+        limit: MOD_PURCHASE_LIMIT_PER_DELTA,
+        purchased: run.modPurchaseCounts[String(card.delta)]
+      });
     renderMerchant();
     return;
   }
 
-  run.chips -= MERCHANT_BUY_COST;
+  run.chips -= cost;
   run.playerDeck.push(card);
 
-  if (isModifier(card)) recordModifierPurchase(card.delta);
+  if (isModifier(card)) {
+    recordModifierPurchase(card.delta);
+    run.merchantModifierBuys = safeNumber(run.merchantModifierBuys, 0) + 1;
+  } else {
+    run.merchantStandardBuys = safeNumber(run.merchantStandardBuys, 0) + 1;
+  }
 
   logEvent('MERCHANT_BUY', {
     card: cardToString(card),
-    cost: MERCHANT_BUY_COST,
+    cardUid: card.uid || null,
+    cardRef: cardRef(card),
+    cost,
+    chipsBefore,
+    chipsAfter: run.chips,
     isModifier: isModifier(card),
     modifierRemaining: isModifier(card) ? getModifierRemaining(card.delta) : null,
     deckSnapshot: deckSnapshot()
   });
+  recordDeckSnapshot('MERCHANT_BUY');
 
   // Refresh that inventory slot
   merchantOffers[idx] = randomCard();
+  assignUid(merchantOffers[idx]);
 
   renderMerchant();
   showToast(`Bought ${cardToString(card)}`);
@@ -2599,7 +4343,7 @@ body += `
   logEvent('MERCHANT_REMOVE_START', {
     cost,
     removalCount: run.paidRemovalCount,
-    candidates: removalCandidates.map(x => cardToString(x.card))
+    candidates: removalCandidates.map(x => cardRef(x.card))
   });
 
   renderMerchant();
@@ -2608,17 +4352,18 @@ body += `
 
     window.rerollRemoval = function() {
       if (!removalMode) return;
-      if (run.chips < REMOVAL_REROLL_COST) return;
-      run.chips -= REMOVAL_REROLL_COST;
+      const cost = getMerchantCost(REMOVAL_REROLL_COST);
+      if (run.chips < cost) return;
+      run.chips -= cost;
 
       const indices = distinctRandomIndices(3, run.playerDeck.length);
       removalCandidates = indices.map(i => ({ card: run.playerDeck[i] }));
       selectedRemovalIdx = null;
 
-      logEvent('MERCHANT_REROLL', { which: 'removal', cost: REMOVAL_REROLL_COST, candidates: removalCandidates.map(x => cardToString(x.card)) });
+      logEvent('MERCHANT_REROLL', { which: 'removal', cost, candidates: removalCandidates.map(x => cardRef(x.card)) });
 
       renderMerchant();
-      showToast(`Re-rolled removal (-${REMOVAL_REROLL_COST})`);
+      showToast(`Re-rolled removal (-${cost})`);
     };
 
     window.selectRemovalCard = function(idx) {
@@ -2633,10 +4378,11 @@ body += `
       const idx = run.playerDeck.indexOf(data.card);
       if (idx !== -1) {
         run.playerDeck.splice(idx, 1);
-        logEvent('MERCHANT_REMOVE_CONFIRM', { card: cardToString(data.card), deckSnapshot: deckSnapshot() });
+        logEvent('MERCHANT_REMOVE_CONFIRM', { card: cardToString(data.card), cardUid: data.card.uid || null, cardRef: cardRef(data.card), deckSnapshot: deckSnapshot() });
+        recordDeckSnapshot('MERCHANT_REMOVE_CONFIRM');
         showToast(`Removed ${cardToString(data.card)} from deck`);
       } else {
-        logEvent('MERCHANT_REMOVE_CONFIRM', { card: cardToString(data.card), result: 'not_found' });
+        logEvent('MERCHANT_REMOVE_CONFIRM', { card: cardToString(data.card), cardUid: data.card.uid || null, cardRef: cardRef(data.card), result: 'not_found' });
         showToast(`Card no longer available to remove`);
       }
 
@@ -2680,7 +4426,7 @@ body += `
     // =============================================
     function getTransferMultiplierLimits(type) {
       if (type === 'BOSS') return { min: 2, max: 5 };
-      if (type === 'HIGH_STAKES') return { min: 1, max: 5 };
+      if (type === 'HIGH_STAKES') return { min: 1, max: 4 };
       return { min: 1, max: 3 };
     }
 
@@ -2688,6 +4434,7 @@ body += `
       clearDealerTimers();
 
       run.chips -= buyIn;
+      run.matchSeq = safeNumber(run.matchSeq, 0) + 1;
 
       const playerDrawPile = shuffle(run.playerDeck.slice());
 
@@ -2700,15 +4447,18 @@ body += `
       }
       const dealerDrawPile = shuffle(dealerBaseDeck.slice());
 
-      // load tokens: base + from bank up to max
+      // load tokens: base by floor + from bank
+      const baseTokens = Math.max(1, safeNumber(run.floor, 1));
       const banked = run.bankedTokens || 0;
-      const addFromBank = Math.min(banked, ACTION_TOKEN_MAX_PER_MATCH - ACTION_TOKEN_BASE_PER_MATCH);
-      const tokensTotal = Math.min(ACTION_TOKEN_MAX_PER_MATCH, ACTION_TOKEN_BASE_PER_MATCH + addFromBank);
+      const addFromBank = Math.min(banked, ACTION_TOKEN_MAX_BANKED);
+      const tokensTotal = baseTokens + addFromBank;
       run.bankedTokens = Math.max(0, banked - addFromBank);
 
       blackjackMatch = {
         type,
         buyIn,
+        matchSeq: run.matchSeq,
+        npc: null,
         playerPositions: [],
         dealerPositions: [],
         playerDrawPile,
@@ -2736,6 +4486,13 @@ body += `
         transferMultiplierMax: null,
         transferMultiplierStage: 'player',
         transferRaiseOffer: null,
+        callingProcChance: CALLING_PROC_CHANCE,
+        spadePeekLanes: new Set(),
+        lastCallingSuitPlay: null,
+        traps: {
+          player: Array(5).fill(0),
+          dealer: Array(5).fill(0)
+        },
 
         // Action tokens + action usage
         tokensTotal,
@@ -2751,6 +4508,7 @@ body += `
         rewardPending: false,
         winnerReward: null,
         exhaustion: null,
+        burnedSleeveCards: [],
 
         metrics: {
           startedAtMs: performance.now(),
@@ -2786,15 +4544,39 @@ body += `
       blackjackMatch.transferMultiplierMin = limits.min;
       blackjackMatch.transferMultiplierMax = limits.max;
 
+      const currentTile = run.board.tiles[run.board.currentTileId];
+      const npc = currentTile ? currentTile.npc : null;
+      blackjackMatch.npc = npc;
+      let affinity = 'neutral';
+      let edgeDelta = 0;
+      let procChance = CALLING_PROC_CHANCE;
+      if (npc && run.callingCard) {
+        affinity = getAffinity(run.callingCard.suit, npc.callingCard.suit);
+        edgeDelta = rankToValue(run.callingCard.rank) - rankToValue(npc.callingCard.rank);
+        const affinityMod = affinity === 'resonant' ? 0.10 : (affinity === 'dissonant' ? -0.10 : 0);
+        const edgeMod = Math.max(-0.12, Math.min(0.12, edgeDelta * 0.01));
+        procChance = Math.max(0.10, Math.min(0.90, CALLING_PROC_CHANCE + affinityMod + edgeMod));
+      }
+      blackjackMatch.callingProcChance = procChance;
+      blackjackMatch.affinity = affinity;
+      blackjackMatch.edgeDelta = edgeDelta;
+
       logEvent('MATCH_START', {
         type,
         buyIn,
+        matchSeq: blackjackMatch.matchSeq,
+        baseTokens,
         tokensTotal,
         bankedTokensUsed: addFromBank,
         bankedTokensRemaining: run.bankedTokens,
         dealerExtraMods: extraMods,
         transferMultiplierMin: limits.min,
         transferMultiplierMax: limits.max,
+        npcName: npc ? npc.name : null,
+        npcCallingCard: npc ? npc.callingCard : null,
+        affinity,
+        edgeDelta,
+        callingProcChance: procChance,
         deckSnapshot: deckSnapshot()
       });
 
@@ -2805,6 +4587,7 @@ body += `
         blackjackMatch.playerPositions.push({
           cards: [],
           mods: [],
+          lastPlay: null,
           isOpen: i < 3,
           isComplete: false,
           isBust: false,
@@ -2813,6 +4596,7 @@ body += `
         blackjackMatch.dealerPositions.push({
           cards: [],
           mods: [],
+          lastPlay: null,
           isOpen: i < 3,
           isComplete: false,
           isBust: false
@@ -2933,6 +4717,7 @@ body += `
       if (!a || !b) return false;
       pos.cards.push(a);
       pos.cards.push(b);
+      pos.lastPlay = { kind: 'card', rank: b.rank, value: getStrikeValueFromCard(b) };
       recordLaneCard(side, laneIdx, 1);
       recordLaneCard(side, laneIdx, 1);
       return true;
@@ -2942,6 +4727,79 @@ body += `
       const modSum = (pos.mods || []).reduce((a, b) => a + b, 0);
       const base = calcBestTotal(pos.cards, modSum);
       return safeNumber(base, 0);
+    }
+
+    function getStrikeValueFromCard(card) {
+      if (!card || isModifier(card)) return 0;
+      if (isFused(card)) {
+        const options = getCardValueOptions(card);
+        if (options.includes(11)) return 11;
+        return options.length ? Math.min(10, Math.max(...options)) : 0;
+      }
+      if (card.rank === 'A') return 11;
+      if (['J', 'Q', 'K'].includes(card.rank)) return 10;
+      const n = Number(card.rank);
+      return Number.isFinite(n) ? Math.min(10, n) : 0;
+    }
+
+    function computeStrikeDeltaFromLastPlay(lastPlay) {
+      if (!lastPlay) return 0;
+      if (lastPlay.kind === 'mod') return -lastPlay.delta;
+      if (lastPlay.kind === 'card') return -safeNumber(lastPlay.value, 0);
+      return 0;
+    }
+
+    function applyLaneMod(side, laneIdx, delta) {
+      const positions = side === 'dealer' ? blackjackMatch.dealerPositions : blackjackMatch.playerPositions;
+      const pos = positions[laneIdx];
+      if (!pos) return 'invalid';
+      if (pos.isComplete) return 'closed';
+      if (!pos.isOpen) {
+        blackjackMatch.traps[side][laneIdx] += delta;
+        return 'unopened';
+      }
+      pos.mods = pos.mods || [];
+      pos.mods.push(delta);
+      return 'open';
+    }
+
+    function tryTempoStrike(attackerSide, laneIdx, reason) {
+      if (!blackjackMatch) return;
+      const attackerPositions = attackerSide === 'dealer' ? blackjackMatch.dealerPositions : blackjackMatch.playerPositions;
+      const targetSide = attackerSide === 'dealer' ? 'player' : 'dealer';
+      const targetPositions = targetSide === 'dealer' ? blackjackMatch.dealerPositions : blackjackMatch.playerPositions;
+      const attackerPos = attackerPositions[laneIdx];
+      const targetPos = targetPositions[laneIdx];
+      if (!attackerPos || !targetPos) return;
+      if (!attackerPos.isComplete || attackerPos.isBust) return;
+
+      const delta = computeStrikeDeltaFromLastPlay(attackerPos.lastPlay);
+      if (!delta) return;
+
+      if (targetPos.isComplete) {
+        logEvent('TEMPO_STRIKE_BLOCKED', {
+          attacker: attackerSide,
+          lane: laneIdx + 1,
+          delta,
+          lastPlay: attackerPos.lastPlay,
+          targetState: 'closed',
+          trapTotalAfter: blackjackMatch.traps[targetSide][laneIdx],
+          reason
+        });
+        return;
+      }
+
+      const targetState = applyLaneMod(targetSide, laneIdx, delta);
+      const eventType = (targetState === 'unopened') ? 'TEMPO_STRIKE_TRAP_SET' : 'TEMPO_STRIKE_APPLIED';
+      logEvent(eventType, {
+        attacker: attackerSide,
+        lane: laneIdx + 1,
+        delta,
+        lastPlay: attackerPos.lastPlay,
+        targetState,
+        trapTotalAfter: blackjackMatch.traps[targetSide][laneIdx],
+        reason
+      });
     }
 
     function recordLaneCard(side, laneIdx, count = 1, afterInitial = null) {
@@ -2959,14 +4817,35 @@ body += `
     }
 
     // bust is finalized only at end-of-turn (or when explicitly closes a lane)
-    function finalizeBusts(positions) {
-      for (const pos of positions) {
+    function finalizeBusts(positions, side) {
+      for (let i = 0; i < positions.length; i++) {
+        const pos = positions[i];
         if (!pos.isOpen) continue;
         if (pos.isComplete) continue;
         const total = getPositionTotal(pos);
         if (total > 21) {
-          pos.isBust = true;
-          pos.isComplete = true;
+          let crystalSaved = false;
+          if (side === 'player') {
+            const crystalIdx = (pos.cards || []).findIndex(c => c && c.sleeveId === 'CRYSTAL');
+            if (crystalIdx >= 0) {
+              const burned = pos.cards.splice(crystalIdx, 1)[0];
+              blackjackMatch.burnedSleeveCards = blackjackMatch.burnedSleeveCards || [];
+              blackjackMatch.burnedSleeveCards.push(burned);
+              logEvent('CRYSTAL_SLEEVE_SAVE', { laneIdx: i + 1, card: cardToString(burned) });
+              showToast(`Crystal Sleeve saved lane #${i + 1}`);
+              crystalSaved = true;
+              pos.isBust = false;
+              pos.isComplete = false;
+            }
+          }
+
+          if (!crystalSaved) {
+            pos.isBust = true;
+            pos.isComplete = true;
+          } else if (getPositionTotal(pos) > 21) {
+            pos.isBust = true;
+            pos.isComplete = true;
+          }
         }
       }
     }
@@ -2987,6 +4866,22 @@ body += `
           if (!ok) {
             triggerDeckExhaustion(side, 'open-lane');
             return -1;
+          }
+
+          const trapDelta = blackjackMatch && blackjackMatch.traps ? blackjackMatch.traps[side][i] : 0;
+          if (trapDelta) {
+            positions[i].mods = positions[i].mods || [];
+            positions[i].mods.push(trapDelta);
+            blackjackMatch.traps[side][i] = 0;
+            const attacker = side === 'dealer' ? 'player' : 'dealer';
+            logEvent('TEMPO_STRIKE_TRAP_TRIGGERED', {
+              attacker,
+              lane: i + 1,
+              delta: trapDelta,
+              lastPlay: null,
+              targetState: 'open',
+              trapTotalAfter: blackjackMatch.traps[side][i]
+            });
           }
 
           if (blackjackMatch && side === 'player') maybeAward21BonusForPlayerPos(i);
@@ -3064,6 +4959,9 @@ body += `
     window.applyBenchTo = function(side, posIdx) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
       if (blackjackMatch.turn !== 'player') return;
+      if (blackjackMatch.drawnCard) return;
+      if (blackjackMatch.actionUsedThisTurn) return;
+      if (tokensRemaining() <= 0) return;
 
       const bi = blackjackMatch.armedBenchIdx;
       if (bi === null || bi === undefined) return;
@@ -3075,8 +4973,13 @@ body += `
       const pos = positions[posIdx];
       if (!pos || !pos.isOpen || pos.isComplete) return;
 
+      blackjackMatch.tokensSpent += 1;
+      blackjackMatch.actionUsedThisTurn = true;
+      logEvent('TOKEN_SPENT', { amount: 1, source: 'BENCH_USE' });
+
       pos.mods = pos.mods || [];
       pos.mods.push(mod.delta);
+      pos.lastPlay = { kind: 'mod', delta: mod.delta };
 
       blackjackMatch.bench.splice(bi, 1);
       blackjackMatch.armedBenchIdx = null;
@@ -3084,7 +4987,7 @@ body += `
       if (side === 'player') blackjackMatch.metrics.benchModsToPlayer += 1;
       else blackjackMatch.metrics.benchModsToDealer += 1;
 
-      logEvent('BENCH_APPLY', { card: cardToString(mod), side, lane: posIdx + 1, delta: mod.delta });
+      logEvent('BENCH_APPLY', { card: cardToString(mod), cardUid: mod.uid || null, cardRef: cardRef(mod), side, lane: posIdx + 1, delta: mod.delta });
 
       if (side === 'player') maybeAward21BonusForPlayerPos(posIdx);
 
@@ -3092,10 +4995,115 @@ body += `
       showToast(`Played ${cardToString(mod)} to ${side} #${posIdx + 1}`);
     };
 
+    function handleCallingSuitOnPlayerCardPlaced(placedCard, laneIdx, onComplete) {
+      if (!blackjackMatch || blackjackMatch.phase !== 'playing') return false;
+      if (!run || !run.callingCard) return false;
+      if (!isStandardCard(placedCard)) return false;
+
+      const stampId = getCardStampId(placedCard);
+      const proxySuit = stampId === 'PROXY_SUIT';
+      const matchesCalling = placedCard.suit === run.callingCard.suit || proxySuit;
+      const procMult = stampId === 'DEJA_VU' ? 2 : 1;
+      const effectiveSuit = proxySuit ? run.callingCard.suit : placedCard.suit;
+
+      if (!matchesCalling) {
+        blackjackMatch.lastCallingSuitPlay = null;
+        return false;
+      }
+
+      const procced = Math.random() < blackjackMatch.callingProcChance;
+      blackjackMatch.lastCallingSuitPlay = {
+        laneIdx,
+        suit: effectiveSuit,
+        procced,
+        card: placedCard,
+        procMult
+      };
+
+      if (!procced) return false;
+
+      if (effectiveSuit === '♦') {
+        const bonus = DIAMOND_BONUS_CHIPS * procMult;
+        run.chips += bonus;
+        blackjackMatch.bonusChipsEarned += bonus;
+        logEvent('CALLING_PROC_DIAMOND', {
+          laneIdx: laneIdx + 1,
+          amount: bonus,
+          callingCard: run.callingCard,
+          playedCard: placedCard,
+          multiplier: procMult
+        });
+        renderHUD();
+        showToast(`+${bonus} chips (Wealth)`);
+        return false;
+      }
+
+      if (effectiveSuit === '♠') {
+        blackjackMatch.spadePeekLanes.add(laneIdx);
+        logEvent('CALLING_PROC_SPADES', {
+          laneIdx: laneIdx + 1,
+          callingCard: run.callingCard,
+          playedCard: placedCard,
+          multiplier: procMult
+        });
+        showToast(`Intel: Revealed Dealer lane #${laneIdx + 1}`);
+        renderBlackjack();
+        return false;
+      }
+
+      if (effectiveSuit === '♣') {
+        const dPos = blackjackMatch.dealerPositions[laneIdx];
+        if (!dPos || !dPos.isOpen || dPos.isComplete) {
+          logEvent('CALLING_PROC_CLUBS', {
+            laneIdx: laneIdx + 1,
+            delta: null,
+            blocked: true,
+            callingCard: run.callingCard,
+            playedCard: placedCard,
+            multiplier: procMult
+          });
+          return false;
+        }
+
+        showModal('Power Proc', `
+          <p class="modal-text">Choose effect on Dealer lane #${laneIdx + 1}.</p>
+          <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
+            <button class="modal-btn" onclick="applyCallingClubs(${laneIdx}, 1)">+1</button>
+            <button class="modal-btn danger" onclick="applyCallingClubs(${laneIdx}, -1)">-1</button>
+          </div>
+        `, []);
+
+        window.applyCallingClubs = function(targetIdx, delta) {
+          const target = blackjackMatch.dealerPositions[targetIdx];
+          if (target && target.isOpen && !target.isComplete) {
+            target.mods = target.mods || [];
+            for (let i = 0; i < procMult; i++) target.mods.push(delta);
+            logEvent('CALLING_PROC_CLUBS', {
+              laneIdx: targetIdx + 1,
+              delta,
+              callingCard: run.callingCard,
+              playedCard: placedCard,
+              multiplier: procMult
+            });
+            showToast(`Power: Dealer lane #${targetIdx + 1} ${delta > 0 ? '+1' : '-1'}`);
+          }
+          closeModal();
+          delete window.applyCallingClubs;
+          renderAll();
+          onComplete();
+        };
+        return true;
+      }
+
+      return false;
+    }
+
     window.playerPlaceBenchCard = function(posIdx) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
       if (blackjackMatch.turn !== 'player') return;
       if (blackjackMatch.drawnCard) return;
+      if (blackjackMatch.actionUsedThisTurn) return;
+      if (tokensRemaining() <= 0) return;
 
       const bi = blackjackMatch.armedBenchIdx;
       if (bi === null || bi === undefined) return;
@@ -3105,18 +5113,23 @@ body += `
       const pos = blackjackMatch.playerPositions[posIdx];
       if (!pos || !pos.isOpen || pos.isComplete) return;
 
+      blackjackMatch.tokensSpent += 1;
+      blackjackMatch.actionUsedThisTurn = true;
+      logEvent('TOKEN_SPENT', { amount: 1, source: 'BENCH_USE' });
+
       pos.cards.push(c);
+      pos.lastPlay = { kind: 'card', rank: c.rank, value: getStrikeValueFromCard(c) };
       recordLaneCard('player', posIdx);
       blackjackMatch.bench.splice(bi, 1);
       blackjackMatch.armedBenchIdx = null;
 
       blackjackMatch.metrics.benchCardsPlaced += 1;
-      logEvent('BENCH_PLACE', { card: cardToString(c), lane: posIdx + 1 });
+      logEvent('BENCH_PLACE', { card: cardToString(c), cardUid: c.uid || null, cardRef: cardRef(c), lane: posIdx + 1 });
 
       maybeAward21BonusForPlayerPos(posIdx);
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
-
-      endPlayerTurn();
+      const deferred = handleCallingSuitOnPlayerCardPlaced(c, posIdx, endPlayerTurn);
+      if (!deferred) endPlayerTurn();
     };
 
     // =============================================
@@ -3137,14 +5150,22 @@ body += `
         if (isModifier(c)) {
           benchPush(c, 'player-draw');
           blackjackMatch.metrics.modifiersBenched += 1;
-          logEvent('PLAYER_DRAW_BENCH', { card: cardToString(c) });
+          logEvent('PLAYER_DRAW_BENCH', { card: cardToString(c), cardUid: c.uid || null, cardRef: cardRef(c) });
           renderBlackjack();
           showToast(`Benched ${cardToString(c)}`);
           continue;
         }
+        if (c && c.sleeveId === 'BLUE') {
+          benchPush(c, 'blue-sleeve');
+          blackjackMatch.metrics.modifiersBenched += 1;
+          logEvent('PLAYER_DRAW_BENCH', { card: cardToString(c), cardUid: c.uid || null, cardRef: cardRef(c), source: 'blue-sleeve' });
+          renderBlackjack();
+          showToast(`Benched ${cardToString(c)} (Blue Sleeve)`);
+          continue;
+        }
         blackjackMatch.drawnCard = c;
         blackjackMatch.metrics.playerDraws += 1;
-        logEvent('PLAYER_DRAW', { card: cardToString(c) });
+        logEvent('PLAYER_DRAW', { card: cardToString(c), cardUid: c.uid || null, cardRef: cardRef(c) });
         renderBlackjack();
         return;
       }
@@ -3161,10 +5182,11 @@ body += `
 
       const placed = blackjackMatch.drawnCard;
       pos.cards.push(placed);
+      pos.lastPlay = { kind: 'card', rank: placed.rank, value: getStrikeValueFromCard(placed) };
       recordLaneCard('player', posIdx);
       blackjackMatch.drawnCard = null;
 
-      logEvent('PLAYER_PLACE', { card: cardToString(placed), lane: posIdx + 1 });
+      logEvent('PLAYER_PLACE', { card: cardToString(placed), cardUid: placed.uid || null, cardRef: cardRef(placed), lane: posIdx + 1 });
 
       maybeAward21BonusForPlayerPos(posIdx);
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
@@ -3176,7 +5198,8 @@ body += `
         dealerPlaceOneCard(gift, true);
       }
 
-      endPlayerTurn();
+      const deferred = handleCallingSuitOnPlayerCardPlaced(placed, posIdx, endPlayerTurn);
+      if (!deferred) endPlayerTurn();
     };
 
     window.playerStand = function(posIdx) {
@@ -3195,6 +5218,10 @@ body += `
       blackjackMatch.metrics.playerStands += 1;
 
       logEvent('PLAYER_STAND', { lane: posIdx + 1, total, bust: pos.isBust });
+
+      if (!pos.isBust) {
+        tryTempoStrike('player', posIdx, 'stand');
+      }
 
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
 
@@ -3220,7 +5247,39 @@ body += `
       blackjackMatch.metrics.turns += 1;
 
       // Finalize busts at end of player's turn (per spec)
-      finalizeBusts(blackjackMatch.playerPositions);
+      const preBust = blackjackMatch.playerPositions.map(p => !!p.isBust);
+      finalizeBusts(blackjackMatch.playerPositions, 'player');
+
+      const lastPlay = blackjackMatch.lastCallingSuitPlay;
+      if (lastPlay && lastPlay.procced && lastPlay.suit === '♥') {
+        const newlyBusted = blackjackMatch.playerPositions
+          .map((p, idx) => ({ p, idx }))
+          .filter(({ p, idx }) => !preBust[idx] && p.isBust);
+
+        const triageCount = Math.max(1, safeNumber(lastPlay.procMult, 1));
+        let remaining = triageCount;
+
+        while (newlyBusted.length && remaining > 0) {
+          let targetIdx = newlyBusted.findIndex(n => n.idx === lastPlay.laneIdx);
+          if (targetIdx === -1) targetIdx = 0;
+          const target = newlyBusted.splice(targetIdx, 1)[0];
+          const pos = target.p;
+          const discarded = pos.cards.pop();
+          pos.isBust = false;
+          pos.isComplete = false;
+          logEvent('CALLING_PROC_HEARTS_TRIAGE', {
+            laneIdx: target.idx + 1,
+            discardedCard: cardToString(discarded),
+            callingCard: run.callingCard,
+            playedCard: lastPlay.card,
+            multiplier: triageCount
+          });
+          showToast(`Health: Triage saved lane #${target.idx + 1}`);
+          remaining -= 1;
+        }
+      }
+      blackjackMatch.lastCallingSuitPlay = null;
+
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
 
       if (checkMatchEnd()) return;
@@ -3338,7 +5397,9 @@ function dealerLaneScore(idx, total, diff) {
 
       if (targetIdx >= 0) {
         blackjackMatch.dealerPositions[targetIdx].cards.push(card);
+        blackjackMatch.dealerPositions[targetIdx].lastPlay = { kind: 'card', rank: card.rank, value: getStrikeValueFromCard(card) };
         recordLaneCard('dealer', targetIdx);
+        if (blackjackMatch.spadePeekLanes) blackjackMatch.spadePeekLanes.delete(targetIdx);
 
         blackjackMatch.metrics.dealerDraws += 1;
 
@@ -3361,7 +5422,7 @@ function dealerDrawPlayableCard() {
       blackjackMatch.dealerBench = blackjackMatch.dealerBench || [];
       blackjackMatch.dealerBench.push(c);
       blackjackMatch.metrics.dealerModifiersBenched = safeNumber(blackjackMatch.metrics.dealerModifiersBenched, 0) + 1;
-      logEvent('DEALER_BENCH_GAIN', { card: cardToString(c), source: 'dealer-turn-draw' });
+      logEvent('DEALER_BENCH_GAIN', { card: cardToString(c), cardUid: c.uid || null, cardRef: cardRef(c), source: 'dealer-turn-draw' });
       continue;
     }
     return c;
@@ -3376,11 +5437,12 @@ function dealerApplyBenchMod(bestMove) {
 
   pos.mods = pos.mods || [];
   pos.mods.push(modCard.delta);
+  pos.lastPlay = { kind: 'mod', delta: modCard.delta };
 
   blackjackMatch.dealerBench.splice(modIdx, 1);
   blackjackMatch.metrics.dealerBenchModsUsed = safeNumber(blackjackMatch.metrics.dealerBenchModsUsed, 0) + 1;
 
-  logEvent('DEALER_BENCH_APPLY', { card: cardToString(modCard), lane: laneIdx + 1, delta: modCard.delta, reason });
+  logEvent('DEALER_BENCH_APPLY', { card: cardToString(modCard), cardUid: modCard.uid || null, cardRef: cardRef(modCard), lane: laneIdx + 1, delta: modCard.delta, reason });
   return true;
 }
 
@@ -3495,6 +5557,10 @@ function dealerStandPhase(diff, maxPasses = 6) {
         blackjackMatch.metrics.dealerStands += 1;
         changed = true;
 
+        if (!pos.isBust) {
+          tryTempoStrike('dealer', i, 'stand');
+        }
+
         // Keep 3 open lanes
         const fb = blackjackMatch.dealerBaseDeck || makeStandardDeck52();
         maintainOpenPositions(blackjackMatch.dealerPositions, blackjackMatch.dealerDrawPile, fb, 'dealer');
@@ -3558,7 +5624,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
     function endDealerTurn() {
       // Finalize busts at end of dealer turn
-      finalizeBusts(blackjackMatch.dealerPositions);
+      finalizeBusts(blackjackMatch.dealerPositions, 'dealer');
 
       const fb = blackjackMatch.dealerBaseDeck || makeStandardDeck52();
       maintainOpenPositions(blackjackMatch.dealerPositions, blackjackMatch.dealerDrawPile, fb, 'dealer');
@@ -3597,8 +5663,8 @@ function dealerStandPhase(diff, maxPasses = 6) {
       clearDealerTimers();
 
       // defensive finalize
-      finalizeBusts(blackjackMatch.playerPositions);
-      finalizeBusts(blackjackMatch.dealerPositions);
+      finalizeBusts(blackjackMatch.playerPositions, 'player');
+      finalizeBusts(blackjackMatch.dealerPositions, 'dealer');
 
       let playerWins = 0;
       let dealerWins = 0;
@@ -3678,9 +5744,33 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
       blackjackMatch.transferChipsNet = transferNet;
 
+      let goldBonusTotal = 0;
+      for (let i = 0; i < 5; i++) {
+        const pPos = blackjackMatch.playerPositions[i];
+        const hasGold = (pPos.cards || []).some(c => c && c.sleeveId === 'GOLD');
+        if (hasGold) {
+          const amount = safeNumber(playerTotals[i], 0);
+          goldBonusTotal += amount;
+          logEvent('GOLD_SLEEVE_BONUS', { laneIdx: i + 1, amount });
+        }
+      }
+      if (goldBonusTotal > 0) {
+        run.chips = safeNumber(run.chips) + goldBonusTotal;
+        blackjackMatch.bonusChipsEarned += goldBonusTotal;
+      }
+
       const karmaLaneGain = positionResults.reduce((sum, result, idx) => {
         if (result !== 'player') return sum;
-        return sum + safeNumber(playerTotals[idx], 0);
+        const base = safeNumber(playerTotals[idx], 0);
+        const laneCards = blackjackMatch.playerPositions[idx].cards || [];
+        const laneSize = laneCards.length || 1;
+        let laneKarma = base;
+        laneCards.forEach(card => {
+          const stampId = getCardStampId(card);
+          if (!stampId) return;
+          laneKarma += getStampKarmaContribution(stampId, base, laneSize);
+        });
+        return sum + laneKarma;
       }, 0);
       let karmaWinBonus = 0;
       if (outcome === 'WIN') {
@@ -3689,6 +5779,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
       }
       const karmaGained = karmaLaneGain + karmaWinBonus;
       run.karma = Math.max(0, safeNumber(run.karma, 0) + karmaGained);
+      maybeLevelUpCallingCardFromKarma();
 
       blackjackMatch.result = {
         outcome,
@@ -3705,6 +5796,27 @@ function dealerStandPhase(diff, maxPasses = 6) {
       blackjackMatch.metrics.playerBustsFinal = blackjackMatch.playerPositions.filter(p => p.isBust).length;
       blackjackMatch.metrics.dealerBustsFinal = blackjackMatch.dealerPositions.filter(p => p.isBust).length;
 
+      const burnCards = [];
+      blackjackMatch.playerPositions.forEach(pos => {
+        (pos.cards || []).forEach(card => {
+          if (getCardStampId(card) === 'BURN_AFTER_READING') burnCards.push(card);
+        });
+      });
+      const burnedSleeves = blackjackMatch.burnedSleeveCards || [];
+      if (burnCards.length || burnedSleeves.length) {
+        const burnSet = new Set([...burnCards, ...burnedSleeves]);
+        run.playerDeck = run.playerDeck.filter(card => !burnSet.has(card));
+        recordDeckSnapshot('BURN_AFTER_READING');
+      }
+      if (burnCards.length) {
+        logEvent('BURN_AFTER_READING', {
+          count: burnCards.length,
+          cards: burnCards.map(cardToString),
+          cardUids: burnCards.map(card => card.uid || null),
+          cardRefs: burnCards.map(cardRef)
+        });
+      }
+
       // House rake applies to positive net results (payout + transfer) only
 const grossWin = payout + transferNet;
 const rakeRate = getHouseRakeRate(run.floor);
@@ -3720,6 +5832,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       logEvent('MATCH_END', {
         type: blackjackMatch.type,
         outcome,
+        matchSeq: blackjackMatch.matchSeq,
         buyIn: blackjackMatch.buyIn,
         payout,
         playerWins,
@@ -3840,12 +5953,17 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         const cardA = run.playerDeck[a.index];
         const cardB = run.playerDeck[b.index];
         sorted.forEach(idx => run.playerDeck.splice(idx, 1));
-        run.playerDeck.push({ type: 'FUSE', a: cardA, b: cardB });
+        const fused = { uid: null, type: 'FUSE', a: cardA, b: cardB };
+        assignUid(fused);
+        run.playerDeck.push(fused);
         logEvent('WINNER_REWARD_FUSE', {
           cards: [cardToString(cardA), cardToString(cardB)],
+          cardUids: [cardA?.uid || null, cardB?.uid || null],
+          cardRefs: [cardRef(cardA), cardRef(cardB)],
           fused: `${cardToString(cardA)}/${cardToString(cardB)}`,
           deckSnapshot: deckSnapshot()
         });
+        recordDeckSnapshot('REWARD_FUSE');
         showToast(`Fused ${cardToString(cardA)} + ${cardToString(cardB)}`);
       } else {
         logEvent('WINNER_REWARD_SKIP', { mode: 'fuse' });
@@ -3903,11 +6021,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           <div class="removal-cards">
             ${candidates.map((d, idx) => {
               const sel = selected === idx ? 'selected' : '';
-              return `
-                <div class="removal-card-option ${sel}" onclick="selectWinnerRewardCard(${idx})">
-                  <div class="playing-card ${cardCssClass(d.card)}">${cardToString(d.card)}</div>
-                </div>
-              `;
+            return `
+              <div class="removal-card-option ${sel}" onclick="selectWinnerRewardCard(${idx})">
+                  ${renderCard(d.card, false)}
+              </div>
+            `;
             }).join('')}
           </div>
         </div>
@@ -3938,12 +6056,18 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         if (mode === 'remove') {
           const removed = run.playerDeck[pickData.index];
           run.playerDeck.splice(pickData.index, 1);
-          logEvent('WINNER_REWARD_APPLY', { mode, card: cardToString(removed), deckSnapshot: deckSnapshot() });
+          logEvent('WINNER_REWARD_APPLY', { mode, card: cardToString(removed), cardUid: removed?.uid || null, cardRef: cardRef(removed), deckSnapshot: deckSnapshot() });
+          recordDeckSnapshot('REWARD_REMOVE');
           showToast(`Removed ${cardToString(removed)}`);
         } else if (mode === 'duplicate') {
           const c = run.playerDeck[pickData.index];
-          if (c) run.playerDeck.push({ ...c });
-          logEvent('WINNER_REWARD_APPLY', { mode, card: cardToString(c), deckSnapshot: deckSnapshot() });
+          if (c) {
+            const clone = cloneCardWithNewUid(c);
+            assignUid(clone);
+            run.playerDeck.push(clone);
+          }
+          logEvent('WINNER_REWARD_APPLY', { mode, card: cardToString(c), cardUid: c?.uid || null, cardRef: cardRef(c), deckSnapshot: deckSnapshot() });
+          recordDeckSnapshot('REWARD_DUPLICATE');
           showToast(`Duplicated ${cardToString(c)}`);
         }
       } else {
@@ -4344,6 +6468,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       if (blackjackMatch.type === 'BOSS') {
         if (result.outcome === 'WIN') {
           run.bossWins = safeNumber(run.bossWins, 0) + 1;
+          logEvent('BOSS_CLEARED', { floor: run.floor, bossWins: run.bossWins, benchCapacity: getBenchCapacity() });
           showToast(`Boss cleared. Bench capacity is now ${getBenchCapacity()}.`);
           if (run.floor < 3) {
             blackjackMatch = null;
@@ -4367,16 +6492,18 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       run.ui.mode = 'GAMEOVER';
       run.ui.message = message;
       logEvent('GAME_END', { result: 'GAMEOVER', message });
+      finalizeRunLog({ outcome: 'loss', message });
       renderAll();
-      if (uiSettings.autoOpenLogOnEnd) openLogPanel('events');
+      if (uiSettings.autoOpenLogOnEnd) openLogPanel('stats');
     }
 
     function victory() {
       clearDealerTimers();
       run.ui.mode = 'VICTORY';
       logEvent('GAME_END', { result: 'VICTORY' });
+      finalizeRunLog({ outcome: 'win', message: null });
       renderAll();
-      if (uiSettings.autoOpenLogOnEnd) openLogPanel('events');
+      if (uiSettings.autoOpenLogOnEnd) openLogPanel('stats');
     }
 
     // =============================================
@@ -4412,6 +6539,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             <span class="hud-stat-value karma">${safeNumber(run.karma, 0)}</span>
           </div>
           <div class="hud-stat">
+            <span class="hud-stat-label">Calling</span>
+            <span class="hud-stat-value">${run.callingCard ? cardToString(run.callingCard) : '—'}</span>
+          </div>
+          <div class="hud-stat">
             <span class="hud-stat-label">Deck</span>
             <span class="hud-stat-value">${run.playerDeck.length}</span>
           </div>
@@ -4434,8 +6565,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         </div>
 
         <div class="hud-center">
-          <button class="hud-icon-btn" title="Run Log" onclick="openLogPanel('events')">📋</button>
+          <button class="hud-icon-btn" title="Run Log" onclick="openLogPanel('stats')">📋</button>
+          <button class="hud-icon-btn" title="Deck Viewer" onclick="openDeckViewer()">🃏</button>
           <button class="hud-icon-btn" title="Settings" onclick="openSettingsPanel()">⚙️</button>
+          <button class="hud-icon-btn" title="Feedback" onclick="openFeedbackModal()">📝</button>
           <button class="hud-icon-btn" title="Rules" onclick="openRulesPanel()">📖</button>
         </div>
 
@@ -4504,11 +6637,19 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         if (isAvailable) tileClass += ' available';
 
         const clickHandler = isAvailable ? `onclick="onTileClick(${tile.id})"` : '';
+        let subLabel = '';
+        if (tile.npc && tile.npc.callingCard) {
+          const calling = `${tile.npc.callingCard.rank}${tile.npc.callingCard.suit}`;
+          const affinity = run.callingCard ? getAffinity(run.callingCard.suit, tile.npc.callingCard.suit) : null;
+          const affIcon = affinity ? ` ${affinityIcon(affinity)}` : '';
+          subLabel = `<text class="hex-sub" x="${tile.center[0]}" y="${tile.center[1] + 12}">${calling}${affIcon}</text>`;
+        }
 
         svg += `
           <g class="${tileClass}" ${clickHandler}>
             <path class="hex-bg" d="${tile.svgPath}" fill="${tile.color}" stroke="#1a2436" stroke-width="2"/>
             <text class="hex-label" x="${tile.center[0]}" y="${tile.center[1]}">${tile.label}</text>
+            ${subLabel}
           </g>
         `;
       }
@@ -4529,7 +6670,97 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     function renderCard(card, faceDown=false, extraClass='') {
       const cls = ['playing-card', extraClass, faceDown ? 'face-down' : cardCssClass(card)].filter(Boolean).join(' ');
       const text = faceDown ? '' : cardToString(card);
-      return `<div class="${cls}">${text}</div>`;
+      const stampId = !faceDown ? getCardStampId(card) : null;
+      const stampDef = stampId ? getStampDef(stampId) : null;
+      const sleeveId = !faceDown && card ? card.sleeveId : null;
+      const dataAttrs = [
+        `data-card-label="${text}"`,
+        `data-card-type="${isModifier(card) ? 'MOD' : (isFused(card) ? 'FUSE' : 'STANDARD')}"`,
+        card && card.rank ? `data-card-rank="${card.rank}"` : '',
+        card && card.suit ? `data-card-suit="${card.suit}"` : '',
+        stampId ? `data-card-stamp="${stampId}"` : '',
+        sleeveId ? `data-card-sleeve="${sleeveId}"` : ''
+      ].filter(Boolean).join(' ');
+      const stampIcon = (stampDef && stampDef.icon) ? `<div class="stamp-icon">${stampDef.icon}</div>` : '';
+      return `<div class="${cls}" ${dataAttrs}>${text}${stampIcon}</div>`;
+    }
+
+    function setupCardTooltip() {
+      const tooltip = document.getElementById('cardTooltip');
+      if (!tooltip) return;
+
+      let activeCard = null;
+      let longPressTimer = null;
+
+      const buildTooltipHtml = (cardEl) => {
+        const ds = cardEl.dataset || {};
+        const label = ds.cardLabel || 'Card';
+        const type = ds.cardType || '';
+        const stamp = ds.cardStamp ? getStampDef(ds.cardStamp) : null;
+        const sleeve = ds.cardSleeve ? getSleeveDef(ds.cardSleeve) : null;
+        const lines = [];
+
+        if (type && type !== 'STANDARD') lines.push(`${type} card`);
+        if (stamp) lines.push(`Stamp: ${stamp.name} — ${stamp.desc}`);
+        if (sleeve) lines.push(`Sleeve: ${sleeve.name} — ${sleeve.desc}`);
+
+        return `
+          <div class="tooltip-title">${label}</div>
+          ${lines.map(line => `<div class="tooltip-line">${line}</div>`).join('')}
+        `;
+      };
+
+      const showTooltip = (cardEl, x, y) => {
+        if (!cardEl || !cardEl.dataset || !cardEl.dataset.cardLabel) return;
+        tooltip.innerHTML = buildTooltipHtml(cardEl);
+        tooltip.classList.remove('hidden');
+        tooltip.style.left = `${x + 12}px`;
+        tooltip.style.top = `${y + 12}px`;
+        activeCard = cardEl;
+      };
+
+      const hideTooltip = () => {
+        tooltip.classList.add('hidden');
+        activeCard = null;
+      };
+
+      document.addEventListener('mouseover', (e) => {
+        const cardEl = e.target.closest('.playing-card');
+        if (!cardEl || cardEl.classList.contains('face-down')) return;
+        showTooltip(cardEl, e.clientX, e.clientY);
+      });
+
+      document.addEventListener('mouseout', (e) => {
+        if (activeCard && !e.relatedTarget?.closest('.playing-card')) {
+          hideTooltip();
+        }
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!activeCard) return;
+        tooltip.style.left = `${e.clientX + 12}px`;
+        tooltip.style.top = `${e.clientY + 12}px`;
+      });
+
+      document.addEventListener('pointerdown', (e) => {
+        const cardEl = e.target.closest('.playing-card');
+        if (!cardEl || cardEl.classList.contains('face-down')) return;
+        longPressTimer = setTimeout(() => showTooltip(cardEl, e.clientX, e.clientY), 450);
+      });
+
+      document.addEventListener('pointerup', () => {
+        if (longPressTimer) clearTimeout(longPressTimer);
+        longPressTimer = null;
+      });
+
+      document.addEventListener('pointercancel', () => {
+        if (longPressTimer) clearTimeout(longPressTimer);
+        longPressTimer = null;
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.playing-card')) hideTooltip();
+      });
     }
 
     function posState(pos) {
@@ -4545,31 +6776,37 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     function renderPosition(pos, idx, side, isResolved, laneWinner) {
   const state = posState(pos);
   const total = getPositionTotal(pos);
-  const totalBustVisual = total > 21 ? 'bust' : '';
 
   // Spy Glass should always override visibility for that lane
   const spy = (side === 'dealer')
     && blackjackMatch
     && blackjackMatch.spyReveals
     && blackjackMatch.spyReveals.has(idx);
+  const spadeReveal = (side === 'dealer')
+    && blackjackMatch
+    && blackjackMatch.spadePeekLanes
+    && blackjackMatch.spadePeekLanes.has(idx);
 
   // NEW: totals + hole-card reveal behavior for dealer
   // - if revealTotalsOnClose: reveal when lane closes (stood/bust)
   // - else: reveal only when match resolves
   const revealTotalsOnClose = (uiSettings && uiSettings.revealTotalsOnClose) !== false;
-  const showDealerTotal = spy || isResolved || (revealTotalsOnClose && pos.isComplete);
+  const showDealerTotal = spy || spadeReveal || isResolved || (revealTotalsOnClose && pos.isComplete);
 
   const showTotal = (side === 'player') ? true : showDealerTotal;
+  const canReveal = (side === 'player') ? true : showDealerTotal;
   const totalText = showTotal ? `${total}` : '??';
+  const totalBustVisual = canReveal && total > 21 ? 'bust' : '';
 
   // Hole card reveals when we reveal totals (or via spy, or on match resolve)
   const revealHole = (side === 'dealer') ? showDealerTotal : true;
 
-  let cls = `bj-position ${state}`;
-  if (state === 'open') cls += ' open';
-  if (state === 'stand') cls += ' stand';
-  if (state === 'bust') cls += ' bust';
-  if (state === 'closed') cls += ' closed';
+  const displayState = (state === 'bust' && !canReveal) ? 'stand' : state;
+  let cls = `bj-position ${displayState}`;
+  if (displayState === 'open') cls += ' open';
+  if (displayState === 'stand') cls += ' stand';
+  if (displayState === 'bust') cls += ' bust';
+  if (displayState === 'closed') cls += ' closed';
 
   if (isResolved) {
     if (laneWinner === side) cls += ' winner';
@@ -4585,17 +6822,19 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
   }).join('');
 
   const mods = (pos.mods || []);
-  const modsText = mods.length ? mods.map(m => (m > 0 ? `+${m}` : `${m}`)).join(' ') : '';
-  const modsLine = mods.length
-    ? `<div class="bj-position-num" style="color: var(--accent-blue); font-weight:800;">mods: ${modsText}</div>`
-    : `<div class="bj-position-num">mods: —</div>`;
+  const trapDelta = (!pos.isOpen && blackjackMatch && blackjackMatch.traps) ? blackjackMatch.traps[side][idx] : 0;
+  const displayMods = mods.length ? mods : (trapDelta ? [trapDelta] : []);
+  const modsText = displayMods.length ? displayMods.map(m => (m > 0 ? `+${m}` : `${m}`)).join(' ') : '';
+  const modsLine = displayMods.length
+    ? `<div class="bj-position-num" style="color: var(--accent-blue); font-weight:800;">MOD: ${modsText}</div>`
+    : `<div class="bj-position-num">MOD: —</div>`;
 
   return `
     <div class="${cls}">
       <div class="bj-position-num">${side.toUpperCase()} #${idx+1}</div>
       <div class="bj-cards">${cardsHtml}</div>
       <div class="bj-total ${totalBustVisual}">${totalText}</div>
-      ${stateBadge(state)}
+      ${stateBadge(displayState)}
       ${modsLine}
       <div id="${side}_lane_actions_${idx}" style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center;"></div>
     </div>
@@ -4620,6 +6859,13 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const isResolved = blackjackMatch.phase === 'resolved';
       const result = blackjackMatch.result;
       const transferMultiplier = blackjackMatch.transferMultiplier || 1;
+      const npc = blackjackMatch.npc;
+      const affinity = blackjackMatch.affinity || 'neutral';
+      const edgeDelta = blackjackMatch.edgeDelta || 0;
+      const procPct = Math.round((blackjackMatch.callingProcChance || CALLING_PROC_CHANCE) * 100);
+      const npcLine = npc
+        ? `${npc.name} · ${cardToString(npc.callingCard)} · ${affinityIcon(affinity)} · Edge ${edgeDelta >= 0 ? '+' : ''}${edgeDelta} · Proc ${procPct}%`
+        : `Dealer · Proc ${procPct}%`;
 
       const typeLabel = blackjackMatch.type === 'BOSS' ? 'BOSS BATTLE' :
                         blackjackMatch.type === 'HIGH_STAKES' ? 'HIGH STAKES' : 'STANDARD TABLE';
@@ -4628,6 +6874,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         <div class="bj-header">
           <div class="bj-title">${typeLabel}</div>
           <div class="bj-status">Buy-in: ${blackjackMatch.buyIn} chips · Transfer x${transferMultiplier}</div>
+          <div class="bj-status">${npcLine}</div>
         </div>
       `;
 
@@ -4637,7 +6884,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       html += `
         <div class="bj-board">
           <div class="bj-side">
-            <div class="bj-side-label">Dealer</div>
+            <div class="bj-side-label">${npc ? `${npc.name} · ${cardToString(npc.callingCard)}` : 'Dealer'}</div>
             <div class="bj-positions">
               ${blackjackMatch.dealerPositions.map((p, i) => renderPosition(p, i, 'dealer', isResolved, laneWinners[i])).join('')}
             </div>
@@ -4771,7 +7018,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
                   const ring = (armedIdx === i) ? 'bench-armed-ring' : '';
                   return `
                     <button class="bench-card-btn ${ring}" onclick="armBench(${i})" ${!isPlayerTurn ? 'disabled' : ''} title="Arm">
-                      <div class="playing-card bench ${cardCssClass(c)}">${cardToString(c)}</div>
+                      ${renderCard(c, false, 'bench')}
                     </button>
                   `;
                 }).join('') : `<div class="action-hint" style="padding: 6px 2px;">Bench is empty.</div>`}
@@ -4779,9 +7026,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
               <div class="action-hint">
                 ${armedCard
                   ? (isModifier(armedCard)
-                    ? 'Armed modifier: apply to any open lane (player or dealer).'
-                    : 'Armed card: place into any open player lane (ends your turn).')
-                  : 'Modifiers drawn are benched automatically.'}
+                    ? 'Armed modifier: apply to any open lane (player or dealer). Costs 1 token.'
+                    : 'Armed card: place into any open player lane (ends your turn). Costs 1 token.')
+                  : 'Modifiers drawn are benched automatically. Using the Bench costs 1 token.'}
               </div>
             </div>
           `;
@@ -4829,6 +7076,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       const isPlayerTurn = blackjackMatch.turn === 'player';
       const drawn = blackjackMatch.drawnCard;
+      const benchTokenBlocked = !isPlayerTurn || blackjackMatch.actionUsedThisTurn || tokensRemaining() <= 0 || !!drawn;
 
       const bench = blackjackMatch.bench || [];
       const bi = blackjackMatch.armedBenchIdx;
@@ -4869,12 +7117,16 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
                 const apply = document.createElement('button');
                 apply.className = 'bj-btn apply-mod';
                 apply.textContent = 'Apply Mod';
+                apply.disabled = benchTokenBlocked;
+                apply.title = benchTokenBlocked ? 'Requires 1 token' : '';
                 apply.onclick = () => applyBenchTo('player', i);
                 pEl.appendChild(apply);
               } else {
                 const placeB = document.createElement('button');
                 placeB.className = 'bj-btn place-bench';
                 placeB.textContent = 'Place Bench';
+                placeB.disabled = benchTokenBlocked;
+                placeB.title = benchTokenBlocked ? 'Requires 1 token' : '';
                 placeB.onclick = () => playerPlaceBenchCard(i);
                 pEl.appendChild(placeB);
               }
@@ -4887,6 +7139,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           const apply = document.createElement('button');
           apply.className = 'bj-btn apply-mod';
           apply.textContent = 'Apply Mod';
+          apply.disabled = benchTokenBlocked;
+          apply.title = benchTokenBlocked ? 'Requires 1 token' : '';
           apply.onclick = () => applyBenchTo('dealer', i);
           dEl.appendChild(apply);
         }
@@ -4937,7 +7191,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           </div>
 
           <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
-            <button class="bj-btn" onclick="openLogPanel('events')">Open Run Log</button>
+            <button class="bj-btn" onclick="openLogPanel('stats')">Open Run Log</button>
+            <button class="bj-btn" onclick="openFeedbackModal()">Feedback</button>
             <button class="bj-btn" onclick="initRun()">New Run</button>
           </div>
         </div>
@@ -4970,6 +7225,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         }
       } catch (e) {}
 
+      setupCardTooltip();
       initRun();
       renderAll();
     })();
