@@ -1160,6 +1160,56 @@
     .stat-value.good{ color: var(--accent-green); }
     .stat-value.bad{ color: var(--accent-red); }
     .stat-value.gold{ color: var(--accent-gold); }
+
+    .intro-panel {
+      max-width: 720px;
+      margin: 24px auto;
+      padding: 24px;
+      border-radius: 18px;
+      background: rgba(18, 26, 42, 0.75);
+      border: 1px solid var(--border-color);
+      text-align: center;
+    }
+
+    .intro-title { font-size: 22px; font-weight: 900; margin-bottom: 8px; }
+    .intro-text { color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px; }
+    .intro-input {
+      width: 100%;
+      max-width: 360px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    .intro-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .intro-suits { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-top: 12px; }
+    .intro-suit-btn { text-align: left; }
+    .intro-large-card { transform: scale(1.4); margin: 18px auto; }
+
+    .score-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 12, 20, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+    }
+    .score-panel {
+      background: rgba(18, 26, 42, 0.95);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 20px 24px;
+      max-width: 520px;
+      text-align: center;
+    }
+    .score-title { font-size: 20px; font-weight: 900; margin-bottom: 6px; }
+    .score-sub { color: var(--text-secondary); margin-bottom: 12px; }
+    .score-total { font-size: 24px; font-weight: 900; color: var(--accent-gold); }
+    .score-flash { box-shadow: 0 0 0 2px rgba(255, 215, 128, 0.7), 0 0 18px rgba(255, 215, 128, 0.5); }
   </style>
 </head>
 
@@ -1373,6 +1423,7 @@ const CALLING_RANK_THRESHOLDS = [
     // UI SETTINGS + LOGGING (Option B)
     // =============================================
     const LOG_STORAGE_KEY = 'p63_runlog_latest';
+    const PLAYER_NAME_KEY = 'p63_player_name';
     let uiSettings = {
       autoOpenLogOnEnd: true,
 
@@ -1392,6 +1443,18 @@ const CALLING_RANK_THRESHOLDS = [
     // Back-compat: if you had older saves/edits that set uiSettings.difficulty
     if (uiSettings.difficulty && !uiSettings.opponentDifficulty) uiSettings.opponentDifficulty = uiSettings.difficulty;
     if (uiSettings.difficulty && !uiSettings.rakeMode) uiSettings.rakeMode = uiSettings.difficulty;
+
+    function loadPlayerName() {
+      try { return localStorage.getItem(PLAYER_NAME_KEY) || ''; } catch (e) { return ''; }
+    }
+
+    function savePlayerName(name) {
+      try { localStorage.setItem(PLAYER_NAME_KEY, name || ''); } catch (e) {}
+    }
+
+    function clearPlayerName() {
+      try { localStorage.removeItem(PLAYER_NAME_KEY); } catch (e) {}
+    }
 
 
     let gameLog = null;
@@ -1558,9 +1621,12 @@ const CALLING_RANK_THRESHOLDS = [
         exportedAt: null,
         app: {
           name: "Project 63",
-          build: "0.16",
-          variant: "p63_0.16.html",
+          build: "0.18",
+          variant: "p63_0.18.html",
           userAgent: navigator.userAgent
+        },
+        player: {
+          name: run && run.playerName ? run.playerName : ''
         },
         settingsAtStart: getSettingsSnapshot(),
         settingsLatest: getSettingsSnapshot(),
@@ -1718,6 +1784,7 @@ const CALLING_RANK_THRESHOLDS = [
         floor: run ? run.floor : null,
         chips: run ? safeNumber(run.chips, null) : null,
         karma: run ? safeNumber(run.karma, null) : null,
+        playerName: run ? (run.playerName || '') : '',
         callingCard: run && run.callingCard ? { ...run.callingCard } : null,
         callingRankValue: run && run.callingCard ? rankToValue(run.callingCard.rank) : null,
         tileId: run && run.board ? run.board.currentTileId : null,
@@ -3213,6 +3280,7 @@ function benchPush(card, source = '') {
         karma: 0,
         callingCard: null,
         callingCardChosenSuit: null,
+        playerName: loadPlayerName() || '',
         playerDeck: makeStandardDeck52(),
         stampsByRank: {},
         collectorShop: null,
@@ -3236,51 +3304,22 @@ function benchPush(card, source = '') {
           path: []
         },
         ui: {
-          mode: 'BOARD',
+          mode: 'INTRO',
           message: ''
+        },
+        intro: {
+          step: null,
+          name: '',
+          suit: null,
+          callingCard: null
         }
       };
 
       resetLog();
       run.playerDeck.forEach(card => assignUid(card));
-      const chooseSuit = (suit) => {
-        run.callingCard = { rank: '2', suit };
-        run.callingCardChosenSuit = suit;
-        logEvent('CALLING_CARD_SET', { callingCard: run.callingCard });
-        logEvent('GAME_START', {
-          startingChips: STARTING_CHIPS,
-          deckSize: run.playerDeck.length,
-          deckSnapshot: deckSnapshot(),
-          settings: getSettingsSnapshot()
-        });
-        if (gameLog) {
-          gameLog.initialState = {
-            chips: run.chips,
-            karma: run.karma,
-            floor: run.floor,
-            callingCard: { ...run.callingCard },
-            deckSnapshot: deckSnapshot()
-          };
-        }
-        recordDeckSnapshot('GAME_START');
-        closeModal();
-        initFloor(1);
-      };
-
-      showModal('Choose Calling Suit', `
-        <p class="modal-text">Choose your Calling Suit for this run.</p>
-        <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
-          <button class="modal-btn" onclick="setCallingSuit('♥')">♥ Hearts</button>
-          <button class="modal-btn" onclick="setCallingSuit('♠')">♠ Spades</button>
-          <button class="modal-btn" onclick="setCallingSuit('♦')">♦ Diamonds</button>
-          <button class="modal-btn" onclick="setCallingSuit('♣')">♣ Clubs</button>
-        </div>
-      `, []);
-
-      window.setCallingSuit = function(suit) {
-        chooseSuit(suit);
-        delete window.setCallingSuit;
-      };
+      run.intro.name = run.playerName || '';
+      run.intro.step = run.playerName ? 'suit' : 'name';
+      renderAll();
     }
 
     function initFloor(floor) {
@@ -4535,6 +4574,7 @@ body += `
         callingProcChance: CALLING_PROC_CHANCE,
         spadePeekLanes: new Set(),
         lastCallingSuitPlay: null,
+        scoreSeq: null,
         traps: {
           player: Array(5).fill(0),
           dealer: Array(5).fill(0)
@@ -4991,6 +5031,111 @@ body += `
         }
       }
     }
+
+    function buildKarmaBreakdown(positionResults, playerTotals) {
+      const lanes = positionResults.map((result, idx) => {
+        const base = result === 'player' ? safeNumber(playerTotals[idx], 0) : 0;
+        const laneCards = blackjackMatch.playerPositions[idx].cards || [];
+        const laneSize = laneCards.length || 1;
+        const stamps = [];
+        let stampTotal = 0;
+        laneCards.forEach(card => {
+          const stampId = getCardStampId(card);
+          if (!stampId) return;
+          const def = getStampDef(stampId);
+          const delta = getStampKarmaContribution(stampId, base, laneSize);
+          stampTotal += delta;
+          stamps.push({
+            stampId,
+            name: def ? def.name : stampId,
+            icon: def ? def.icon : '',
+            delta
+          });
+        });
+        const mods = blackjackMatch.playerPositions[idx].mods || [];
+        const modsText = mods.length ? mods.map(m => (m > 0 ? `+${m}` : `${m}`)).join(' ') : '';
+        return {
+          idx,
+          outcome: result,
+          base,
+          stamps,
+          stampTotal,
+          modsText,
+          laneTotal: base + stampTotal
+        };
+      });
+      return { lanes };
+    }
+
+    function startScoreSequence(breakdown, winBonus, total) {
+      if (!blackjackMatch) return;
+      const steps = [];
+      breakdown.lanes.forEach(lane => {
+        steps.push({ type: 'lane', lane });
+        lane.stamps.forEach(stamp => {
+          steps.push({ type: 'stamp', lane, stamp });
+        });
+      });
+      if (winBonus > 0) steps.push({ type: 'winBonus', amount: winBonus });
+
+      blackjackMatch.scoreSeq = {
+        active: true,
+        steps,
+        stepIndex: 0,
+        accrued: 0,
+        total,
+        winBonus,
+        focusLane: null,
+        focusSide: null,
+        message: 'Scoring…'
+      };
+      advanceScoreSequence();
+    }
+
+    function finishScoreSequence() {
+      if (!blackjackMatch || !blackjackMatch.scoreSeq) return;
+      blackjackMatch.scoreSeq.active = false;
+      blackjackMatch.scoreSeq.focusLane = null;
+      blackjackMatch.scoreSeq.focusSide = null;
+      renderAll();
+      if (blackjackMatch.pendingRewardStart) {
+        blackjackMatch.pendingRewardStart = false;
+        startWinnerRewardFlow();
+      }
+    }
+
+    function advanceScoreSequence() {
+      if (!blackjackMatch || !blackjackMatch.scoreSeq || !blackjackMatch.scoreSeq.active) return;
+      const seq = blackjackMatch.scoreSeq;
+      if (seq.stepIndex >= seq.steps.length) {
+        finishScoreSequence();
+        return;
+      }
+      const step = seq.steps[seq.stepIndex];
+      if (step.type === 'lane') {
+        seq.focusLane = step.lane.idx;
+        seq.focusSide = 'player';
+        seq.accrued += step.lane.base;
+        seq.message = `Lane ${step.lane.idx + 1}: ${step.lane.outcome.toUpperCase()} ${step.lane.base ? `+${step.lane.base}` : ''}`.trim();
+      } else if (step.type === 'stamp') {
+        seq.focusLane = step.lane.idx;
+        seq.focusSide = 'player';
+        seq.accrued += step.stamp.delta;
+        seq.message = `${step.stamp.name}: +${step.stamp.delta}`;
+      } else if (step.type === 'winBonus') {
+        seq.focusLane = null;
+        seq.focusSide = null;
+        seq.accrued += step.amount;
+        seq.message = `Win bonus +${step.amount}`;
+      }
+      seq.stepIndex += 1;
+      renderAll();
+      setTimeout(advanceScoreSequence, 650);
+    }
+
+    window.skipScoreSequence = function() {
+      finishScoreSequence();
+    };
 
     // =============================================
     // BENCH
@@ -5805,19 +5950,8 @@ function dealerStandPhase(diff, maxPasses = 6) {
         blackjackMatch.bonusChipsEarned += goldBonusTotal;
       }
 
-      const karmaLaneGain = positionResults.reduce((sum, result, idx) => {
-        if (result !== 'player') return sum;
-        const base = safeNumber(playerTotals[idx], 0);
-        const laneCards = blackjackMatch.playerPositions[idx].cards || [];
-        const laneSize = laneCards.length || 1;
-        let laneKarma = base;
-        laneCards.forEach(card => {
-          const stampId = getCardStampId(card);
-          if (!stampId) return;
-          laneKarma += getStampKarmaContribution(stampId, base, laneSize);
-        });
-        return sum + laneKarma;
-      }, 0);
+      const karmaBreakdown = buildKarmaBreakdown(positionResults, playerTotals);
+      const karmaLaneGain = karmaBreakdown.lanes.reduce((sum, lane) => sum + lane.laneTotal, 0);
       let karmaWinBonus = 0;
       if (outcome === 'WIN') {
         const baseBonus = blackjackMatch.type === 'STANDARD' ? 50 : 100;
@@ -5835,7 +5969,8 @@ function dealerStandPhase(diff, maxPasses = 6) {
         positionResults,
         transferMultiplier,
         exhaustion: options.exhaustion || null,
-        karmaGained
+        karmaGained,
+        karmaBreakdown: { ...karmaBreakdown, winBonus: karmaWinBonus, total: karmaGained }
       };
 
       // finalize bust counts for match metrics
@@ -5905,6 +6040,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         logEvent('KARMA_GAIN', { amount: karmaGained, total: run.karma, laneKarma: karmaLaneGain, winBonus: karmaWinBonus });
       }
 
+      startScoreSequence(karmaBreakdown, karmaWinBonus, karmaGained);
+
       renderAll();
 
       if (transferNet !== 0) showToast(`Hand transfers: ${transferNet > 0 ? '+' : ''}${transferNet} chips`);
@@ -5912,7 +6049,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       // Winner reward flow (only if WIN)
       if (blackjackMatch.result.outcome === 'WIN') {
         blackjackMatch.rewardPending = true;
-        startWinnerRewardFlow();
+        blackjackMatch.pendingRewardStart = true;
+        if (!blackjackMatch.scoreSeq || !blackjackMatch.scoreSeq.active) {
+          blackjackMatch.pendingRewardStart = false;
+          startWinnerRewardFlow();
+        }
       }
     }
 
@@ -6607,6 +6748,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             <span class="hud-stat-value">${run.floor}/3</span>
           </div>
           <div class="hud-stat">
+            <span class="hud-stat-label">Player</span>
+            <span class="hud-stat-value">${escapeHtml(run.playerName || '—')}</span>
+          </div>
+          <div class="hud-stat">
             <span class="hud-stat-label">Chips</span>
             <span class="hud-stat-value chips">${chips}</span>
           </div>
@@ -6669,6 +6814,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
     window.confirmReset = function() {
       showConfirmDialog('Are you sure you want to reset your run?', () => {
+        clearPlayerName();
         initRun();
         showToast('New run started!');
       });
@@ -6679,7 +6825,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const blackjackView = document.getElementById('blackjackView');
       const endScreen = document.getElementById('endScreen');
 
-      if (run.ui.mode !== 'BOARD') {
+      if (run.ui.mode !== 'BOARD' && run.ui.mode !== 'INTRO') {
         boardView.classList.add('hidden');
         return;
       }
@@ -6687,6 +6833,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       boardView.classList.remove('hidden');
       blackjackView.classList.add('hidden');
       endScreen.classList.add('hidden');
+
+      if (run.ui.mode === 'INTRO') {
+        renderIntro();
+        return;
+      }
 
       const available = getAvailableMoves();
       const isStarting = run.board.currentTileId === null;
@@ -6737,6 +6888,120 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         ${svg}
       `;
     }
+
+    function renderIntro() {
+      const boardView = document.getElementById('boardView');
+      const step = run.intro?.step || 'name';
+      const name = run.intro?.name || '';
+
+      const suitDescriptions = {
+        '♥': 'Hearts — Triage: When a Calling Proc triggers, any newly busted lane can discard its last card.',
+        '♠': 'Spades — Spyglass: Calling Proc reveals one dealer lane’s hidden total for the match.',
+        '♦': 'Diamonds — Dividend: Calling Proc grants +26 chips (scaled by proc multiplier).',
+        '♣': 'Clubs — Pressure: Calling Proc lets you apply +1 or -1 to a dealer lane total.'
+      };
+
+      let body = '';
+      if (step === 'name') {
+        body = `
+          <div class="intro-panel">
+            <div class="intro-title">Project 63: The Tower</div>
+            <div class="intro-text">
+              A casino with no address. A ledger that records more than debt. Each floor is a story — each table a test.
+            </div>
+            <div class="intro-text">Declare your name, choose your Calling Card, and step inside.</div>
+            <input class="intro-input" id="introNameInput" placeholder="Enter your name" value="${escapeHtml(name)}"/>
+            <div class="intro-actions">
+              <button class="modal-btn" onclick="introRandomName()">Random Name</button>
+              <button class="modal-btn success" onclick="introSetName()">Continue</button>
+            </div>
+          </div>
+        `;
+      } else if (step === 'suit') {
+        body = `
+          <div class="intro-panel">
+            <div class="intro-title">Choose Your Calling Suit</div>
+            <div class="intro-text">Each suit shapes your Calling Proc.</div>
+            <div class="intro-suits">
+              ${['♥','♠','♦','♣'].map(suit => `
+                <button class="modal-btn intro-suit-btn" onclick="introChooseSuit('${suit}')">
+                  <div style="font-weight:800; font-size:16px;">${suit}</div>
+                  <div style="color:var(--text-secondary); font-size:12px; margin-top:4px;">${suitDescriptions[suit]}</div>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      } else {
+        const card = run.callingCard || run.intro?.callingCard;
+        body = `
+          <div class="intro-panel">
+            <div class="intro-title">Your Calling Card</div>
+            <div class="intro-text">Entering the Tower as ${escapeHtml(run.playerName || 'Unknown')}.</div>
+            <div class="intro-large-card">${card ? renderCard(card, false, 'intro-large-card') : ''}</div>
+            <div class="intro-actions">
+              <button class="modal-btn success" onclick="introEnterTower()">Enter the Tower</button>
+            </div>
+          </div>
+        `;
+      }
+
+      boardView.innerHTML = body;
+    }
+
+    window.introSetName = function() {
+      const input = document.getElementById('introNameInput');
+      const raw = input ? input.value : '';
+      const cleaned = raw.trim();
+      const name = cleaned || `Player ${Math.floor(Math.random() * 900 + 100)}`;
+      run.playerName = name;
+      run.intro.name = name;
+      run.intro.step = 'suit';
+      savePlayerName(name);
+      if (gameLog && gameLog.player) gameLog.player.name = name;
+      renderAll();
+    };
+
+    window.introRandomName = function() {
+      const names = ['Nova', 'Jinx', 'Rook', 'Mara', 'Vega', 'Ash', 'Cy', 'Quinn', 'Sable', 'Riven'];
+      const pick = names[Math.floor(Math.random() * names.length)];
+      const input = document.getElementById('introNameInput');
+      if (input) input.value = pick;
+    };
+
+    window.introChooseSuit = function(suit) {
+      run.callingCard = { rank: '2', suit };
+      run.callingCardChosenSuit = suit;
+      run.intro.suit = suit;
+      run.intro.callingCard = { ...run.callingCard };
+      run.intro.step = 'reveal';
+      renderAll();
+    };
+
+    window.introEnterTower = function() {
+      logEvent('CALLING_CARD_SET', { callingCard: run.callingCard });
+      logEvent('GAME_START', {
+        startingChips: STARTING_CHIPS,
+        deckSize: run.playerDeck.length,
+        deckSnapshot: deckSnapshot(),
+        settings: getSettingsSnapshot(),
+        playerName: run.playerName || ''
+      });
+      if (gameLog) {
+        gameLog.initialState = {
+          chips: run.chips,
+          karma: run.karma,
+          floor: run.floor,
+          callingCard: { ...run.callingCard },
+          deckSnapshot: deckSnapshot()
+        };
+        if (gameLog.player) gameLog.player.name = run.playerName || '';
+      }
+      recordDeckSnapshot('GAME_START');
+      run.ui.mode = 'BOARD';
+      run.intro = null;
+      initFloor(1);
+    };
 
     window.onTileClick = function(tileId) {
       const available = getAvailableMoves();
@@ -6950,6 +7215,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
   const displayState = (state === 'bust' && !canReveal) ? 'stand' : state;
   let cls = `bj-position ${displayState}`;
+  if (blackjackMatch && blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active
+    && blackjackMatch.scoreSeq.focusLane === idx
+    && blackjackMatch.scoreSeq.focusSide === side) {
+    cls += ' score-flash';
+  }
   if (displayState === 'open') cls += ' open';
   if (displayState === 'stand') cls += ' stand';
   if (displayState === 'bust') cls += ' bust';
@@ -6977,7 +7247,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     : `<div class="bj-position-num">MOD: —</div>`;
 
   return `
-    <div class="${cls}">
+    <div class="${cls}" id="${side}_lane_${idx}">
       <div class="bj-position-num">${side.toUpperCase()} #${idx+1}</div>
       <div class="bj-cards">${cardsHtml}</div>
       <div class="bj-total ${totalBustVisual}">${totalText}</div>
@@ -7070,6 +7340,18 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           ? `<div class="bj-result-score" style="color:var(--accent-red); font-weight:800;">Deck exhaustion (${result.exhaustion.side})</div>`
           : '';
 
+        const scoreSeq = blackjackMatch.scoreSeq;
+        const scoreOverlay = scoreSeq && scoreSeq.active ? `
+          <div class="score-overlay" onclick="skipScoreSequence()">
+            <div class="score-panel">
+              <div class="score-title">Karma Tally</div>
+              <div class="score-sub">${escapeHtml(scoreSeq.message || '')}</div>
+              <div class="score-total">+${Math.max(0, scoreSeq.accrued)}</div>
+              <div class="score-sub">Tap to skip</div>
+            </div>
+          </div>
+        ` : '';
+
         html += `
           <div class="bj-result">
             <div class="bj-result-title ${titleCls}">${outcome}</div>
@@ -7082,8 +7364,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             </div>
             ${rewardNote}
             ${exhaustionNote}
-            <button class="bj-btn" onclick="blackjackContinue()" ${blackjackMatch.rewardPending ? 'disabled' : ''}>Continue</button>
+            <button class="bj-btn" onclick="blackjackContinue()" ${blackjackMatch.rewardPending || (scoreSeq && scoreSeq.active) ? 'disabled' : ''}>Continue</button>
           </div>
+          ${scoreOverlay}
         `;
       } else {
         if (blackjackMatch.phase === 'betting') {
