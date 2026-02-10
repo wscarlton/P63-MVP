@@ -114,6 +114,47 @@
     .bar-fill { width: 22px; background: var(--accent-blue); border-radius: 6px 6px 0 0; }
     .bar-label { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
 
+    .start-screen{
+      position: fixed; inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-primary);
+    }
+    .start-plasma{ position:absolute; inset:0; width:100%; height:100%; }
+    .start-shell{
+      position: relative;
+      width: min(560px, calc(100vw - 28px));
+      padding: 18px;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      background: rgba(15,15,15,0.74);
+      backdrop-filter: blur(10px) saturate(120%);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.55);
+    }
+    .start-shell::before{
+      content:"";
+      position:absolute; left:0; right:0; top:0; height:3px;
+      border-top-left-radius:16px; border-top-right-radius:16px;
+      background: linear-gradient(90deg, var(--accent-gold), var(--accent-blue));
+      opacity:.9;
+    }
+    .start-h1{ font-family: var(--font-display); letter-spacing: 1.2px; font-size: 44px; line-height: 1; }
+    .start-h2{ font-family: var(--font-display); letter-spacing: 1px; font-size: 18px; color: var(--text-secondary); margin-top: 4px; }
+    .start-lore{ font-family: var(--font-body); color: var(--text-secondary); margin-top: 10px; font-size: 14px; }
+    .start-card{ margin-top:14px; padding:14px; border:1px solid var(--border-color); border-radius:14px; background: rgba(26,26,26,0.85); }
+    .start-card-top{ font-family: var(--font-display); letter-spacing: 1px; color: var(--text-muted); }
+    .start-card-row{ margin-top:8px; font-family: var(--font-mono); color: var(--text-secondary); font-size:12px; min-height: 16px; }
+    .start-actions{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+    .start-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+    @media (max-width: 420px){ .start-grid{ grid-template-columns:1fr; } .start-actions{ grid-template-columns:1fr; } }
+
+    .rules-wrap{ display:flex; flex-direction:column; gap:12px; }
+    .rules-h{ font-family: var(--font-display); letter-spacing: 1px; margin: 0; }
+    .rules-ul{ margin: 0; padding-left: 18px; color: var(--text-secondary); }
+    .rules-ul li{ margin: 6px 0; }
+
     /* HUD Styles */
     #hud {
       position: fixed;
@@ -1475,6 +1516,35 @@
 </head>
 
 <body>
+  <div id="startScreen" class="start-screen">
+    <canvas id="startPlasma" class="start-plasma" aria-hidden="true"></canvas>
+
+    <div class="start-shell">
+      <div class="start-title">
+        <div class="start-h1">Project 63</div>
+        <div class="start-h2">The Tower</div>
+        <div class="start-lore">A casino with no address. An indecipherable ledger. Will you test fate?</div>
+      </div>
+
+      <div class="start-card" id="startRunCard">
+        <div class="start-card-top">Run</div>
+        <div class="start-card-row" id="startRunSummary"></div>
+
+        <div class="start-actions">
+          <button class="hud-btn primary" id="btnContinue">Continue</button>
+          <button class="hud-btn" id="btnNewRun">New Run</button>
+        </div>
+      </div>
+
+      <div class="start-grid">
+        <button class="hud-btn" id="btnRules">Rules</button>
+        <button class="hud-btn" id="btnStats">Run Stats</button>
+        <button class="hud-btn" id="btnSettings">Settings</button>
+        <button class="hud-btn" id="btnFeedback">Feedback</button>
+      </div>
+    </div>
+  </div>
+
   <header id="hud"></header>
 
   <main id="app">
@@ -1658,6 +1728,66 @@ const CALLING_RANK_THRESHOLDS = [
         activate: () => activateCloser()
       }
     };
+
+    // =============================================
+    // STARTER SCREEN
+    // =============================================
+    const START_PLASMA_CONFIG = {
+      speed: 0.85, intensity: 1.25, scale: 1.6,
+      colors: [
+        [0.0431, 0.0549, 0.0471],
+        [0.1176, 0.1647, 0.1333],
+        [0.3686, 0.5490, 0.3804]
+      ]
+    };
+
+    class StartPlasma2D {
+      constructor(canvas, cfg){
+        this.canvas = canvas;
+        this.ctx = canvas ? canvas.getContext('2d', { alpha: false }) : null;
+        this.cfg = cfg; this.t = 0; this.running = false;
+        this.off = document.createElement('canvas');
+        this.offCtx = this.off.getContext('2d');
+        this.onResize = this.onResize.bind(this);
+        window.addEventListener('resize', this.onResize);
+        this.onResize();
+      }
+      onResize(){
+        if (!this.canvas || !this.ctx) return;
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const w = Math.floor(window.innerWidth * dpr);
+        const h = Math.floor(window.innerHeight * dpr);
+        this.canvas.width = w; this.canvas.height = h;
+        const scale = 0.33;
+        this.off.width = Math.max(240, Math.floor(w * scale));
+        this.off.height = Math.max(180, Math.floor(h * scale));
+      }
+      start(){ if (this.running) return; if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; this.running = true; requestAnimationFrame(()=>this.frame()); }
+      stop(){ this.running = false; }
+      field(x,y,t){ const s=this.cfg.scale,nx=x/this.off.width,ny=y/this.off.height; return (Math.sin((nx*3.2*s)+t)+Math.sin((ny*3.0*s)+t*0.9)+Math.sin(((nx+ny)*2.2*s)+t*0.7)+Math.sin((Math.hypot(nx-0.5, ny-0.5)*7.0*s)-t*1.1))*0.25+0.5; }
+      lerp(a,b,t){ return a+(b-a)*t; }
+      sampleGradient(v){ const [c0,c1,c2]=this.cfg.colors; if(v<0.5){ const t=v/0.5; return [this.lerp(c0[0],c1[0],t),this.lerp(c0[1],c1[1],t),this.lerp(c0[2],c1[2],t)]; } const t=(v-0.5)/0.5; return [this.lerp(c1[0],c2[0],t),this.lerp(c1[1],c2[1],t),this.lerp(c1[2],c2[2],t)]; }
+      frame(){ if (!this.running || !this.ctx) return; const w=this.off.width,h=this.off.height,img=this.offCtx.createImageData(w,h),d=img.data; this.t += 0.016*this.cfg.speed; const inten=this.cfg.intensity; for(let y=0;y<h;y++){ for(let x=0;x<w;x++){ let v=this.field(x,y,this.t); v=Math.min(1,Math.max(0,0.5+(v-0.5)*inten)); const [r,g,b]=this.sampleGradient(v); const i=(y*w+x)*4; d[i]=(r*255)|0; d[i+1]=(g*255)|0; d[i+2]=(b*255)|0; d[i+3]=255; } } this.offCtx.putImageData(img,0,0); this.ctx.imageSmoothingEnabled=true; this.ctx.drawImage(this.off,0,0,this.canvas.width,this.canvas.height); requestAnimationFrame(()=>this.frame()); }
+    }
+
+    let startPlasma = null;
+    let uiView = 'start';
+    function initStartPlasma(){ const c=document.getElementById('startPlasma'); if (!c) return; startPlasma = new StartPlasma2D(c, START_PLASMA_CONFIG); }
+    function showStartScreen(){ uiView = 'start'; const el=document.getElementById('startScreen'); if (el) el.style.display='flex'; if (startPlasma) startPlasma.start(); }
+    function hideStartScreen(){ uiView = 'game'; const el=document.getElementById('startScreen'); if (el) el.style.display='none'; if (startPlasma) startPlasma.stop(); }
+    function updateStartRunCard(){
+      const sum = document.getElementById('startRunSummary');
+      const btnContinue = document.getElementById('btnContinue');
+      if (!sum || !btnContinue) return;
+      const hasRun = !!run;
+      if (hasRun) {
+        sum.textContent = `Floor ${run.floor} · Chips ${safeNumber(run.chips)} · Debt ${run.loan && run.loan.active && !run.loan.repaid ? "Owed" : "None"}`;
+        btnContinue.disabled = false;
+      } else {
+        sum.textContent = 'No saved run yet';
+        btnContinue.disabled = true;
+      }
+    }
 
     // =============================================
     // GAME STATE
@@ -2150,12 +2280,12 @@ const CALLING_RANK_THRESHOLDS = [
       if (t === 'LOAN_TAKEN') return `Loan taken +${d.amount}, owe ${d.repay}`;
       if (t === 'LOAN_REPAID') return `Loan repaid -${d.amount}`;
       if (t === 'MERCHANT_ENTER') return `Shop Keeper opened`;
-      if (t === 'MODIFY_ENTER') return `Modify opened`;
-      if (t === 'MODIFY_SERVICE_SELECT') return `Modify service: ${d.serviceId} (-${d.cost})`;
-      if (t === 'MODIFY_CANDIDATES_SHOWN') return `Modify candidates shown (${d.countShown || 0})`;
-      if (t === 'MODIFY_SELECTION') return `Modify selection: ${d.serviceId}`;
-      if (t === 'MODIFY_APPLY') return `Modify applied: ${d.serviceId} (${d.count || 0} cards)`;
-      if (t === 'MODIFY_LEAVE') return `Modify closed`;
+      if (t === 'MODIFY_ENTER') return `Card Press opened`;
+      if (t === 'MODIFY_SERVICE_SELECT') return `Card Press service: ${d.serviceId} (-${d.cost})`;
+      if (t === 'MODIFY_CANDIDATES_SHOWN') return `Card Press candidates shown (${d.countShown || 0})`;
+      if (t === 'MODIFY_SELECTION') return `Card Press selection: ${d.serviceId}`;
+      if (t === 'MODIFY_APPLY') return `Card Press applied: ${d.serviceId} (${d.count || 0} cards)`;
+      if (t === 'MODIFY_LEAVE') return `Card Press closed`;
       if (t === 'COLLECTOR_SHOP_GENERATED') return `Collector shop generated`;
       if (t === 'COLLECTOR_ENTER') return `Collector opened`;
       if (t === 'COLLECTOR_BUY') return `Collector buy: ${d.name} (-${d.cost})`;
@@ -2803,45 +2933,65 @@ const CALLING_RANK_THRESHOLDS = [
 
 
     function openRulesPanel() {
-      const body = `
-        <p class="modal-text">
-          You move tile-to-tile on a 3-floor board. Most tiles trigger a <strong>Slot Blackjack</strong> match: you and the Dealer play
-          <strong>5 lanes at once</strong>, with <strong>3 lanes open</strong> at a time.
-        </p>
+      const html = `
+      <div class="rules-wrap">
+        <h3 class="rules-h">Goal of the Run</h3>
+        <ul class="rules-ul">
+          <li>Climb the Tower floor by floor.</li>
+          <li>Win tables to earn chips, improve your deck, and advance.</li>
+          <li>Clear the <b>Floor Boss</b> to move on.</li>
+        </ul>
 
-        <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; margin-bottom:14px;">
-          <div style="font-family:'Cinzel',serif; color:var(--accent-gold); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Blackjack Core</div>
-          <ul style="color:var(--text-secondary); line-height:1.6; padding-left:18px;">
-            <li><strong>Draw</strong> a card, then <strong>Place</strong> it into any open player lane.</li>
-            <li><strong>Stand</strong> closes a lane immediately (total reveals; can bust if over 21).</li>
-            <li><strong>Busts finalize at end of turn</strong> (unless you close the lane).</li>
-            <li><strong>Modifiers</strong> (±1..±4) never enter lane hands; they go to your <strong>Bench</strong> and can be applied to any open lane.</li>
-            <li><strong>21 Bonus</strong>: any player lane that hits 21 grants <strong>+${BLACKJACK_21_REWARD}</strong>. All five lanes hitting 21 grants <strong>+${ALL_FIVE_21_BONUS}</strong>.</li>
-          </ul>
-        </div>
+        <h3 class="rules-h">Board & Tiles</h3>
+        <ul class="rules-ul">
+          <li>Move tile-to-tile on each floor.</li>
+          <li><b>Tables</b> start a match. <b>Services</b> improve your deck and economy.</li>
+          <li>Routing is a risk choice: buy-ins vs upgrades vs recovery.</li>
+        </ul>
 
-        <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; margin-bottom:14px;">
-          <div style="font-family:'Cinzel',serif; color:var(--accent-gold); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Actions</div>
-          <ul style="color:var(--text-secondary); line-height:1.6; padding-left:18px;">
-            <li>Each match starts with <strong>base tokens equal to the current floor</strong> + up to <strong>${ACTION_TOKEN_MAX_BANKED}</strong> from your bank.</li>
-            <li>Spend a token to use a cocktail action (each action usable once per match).</li>
-            <li>Buy new cocktails at the Bartender for <strong>${COCKTAIL_COST}</strong> chips.</li>
-          </ul>
-        </div>
+        <h3 class="rules-h">Five-Hand Blackjack</h3>
+        <ul class="rules-ul">
+          <li>Each match plays across <b>five lanes</b>. Each lane is its own hand.</li>
+          <li>On your turn: <b>Draw</b> → <b>Place</b> into an open lane, or use an effect, then end turn.</li>
+          <li><b>Stand</b> closes a lane so no more cards can be placed there.</li>
+          <li>At resolution, each lane compares totals vs the dealer’s matching lane.</li>
+          <li><b>Attack rule:</b> The first player to close a lane deals an <b>Attack</b> to the opponent equal to the <b>last card played</b> to that lane before it closed.</li>
+          <li><b>Tokens</b> are a consumable resource used to power certain plays and effects (including Bench plays).</li>
+          <li><b>Bench</b> holds cards you set aside to play later. Bench capacity is limited.</li>
+        </ul>
 
-        <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
-          <div style="font-family:'Cinzel',serif; color:var(--accent-gold); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Board Tiles</div>
-          <ul style="color:var(--text-secondary); line-height:1.6; padding-left:18px;">
-            <li><strong>Lounge</strong>: choose free removal or +${REST_REWARD} chips, and always gain <strong>+1 banked token</strong>.</li>
-            <li><strong>Minigame</strong>: +${MINIGAME_REWARD} chips and <strong>+1 banked token</strong>.</li>
-            <li><strong>Shop Keeper</strong>: buy cards (Standard ${MERCHANT_BUY_BASE_STANDARD}+ / Mod ${MERCHANT_BUY_BASE_MOD}+ / +${MERCHANT_BUY_INCREMENT} per buy), remove one card (${MERCHANT_REMOVE_COST}), rerolls cost ${MERCHANT_INVENTORY_REROLL_COST}/${REMOVAL_REROLL_COST}.</li>
-            <li><strong>Loan Shark</strong>: borrow ${LOAN_AMOUNT}, repay ${LOAN_REPAY} before final boss.</li>
-          </ul>
-        </div>
+        <h3 class="rules-h">Side Bets</h3>
+        <ul class="rules-ul">
+          <li>Some matches offer a <b>Side Bet</b>.</li>
+          <li>Accepting increases risk for higher payoff based on the odds shown.</li>
+        </ul>
+
+        <h3 class="rules-h">Calling Card, Karma, Rank Ups</h3>
+        <ul class="rules-ul">
+          <li>Choose a Calling Suit. Your Calling Card starts at <b>Rank 2</b>.</li>
+          <li>Karma is earned from match performance and effects.</li>
+          <li><b>Higher rank improves the rate at which your calling card’s unique suit trait triggers during gameplay.</b></li>
+        </ul>
+
+        <h3 class="rules-h">Services & Shops</h3>
+        <ul class="rules-ul">
+          <li><b>Shopkeeper</b>: buy cards and modifiers.</li>
+          <li><b>Card Press</b>: re-suit / re-rank cards (premium services affect multiple cards).</li>
+          <li><b>Collector</b>: stamps/sleeves and other upgrades.</li>
+          <li><b>Loan Shark</b>: trade safety for immediate power (debt).</li>
+          <li><b>Bartender</b>: purchase <b>cocktails</b>. Each cocktail can be used <b>once per match</b>.</li>
+        </ul>
+
+        <h3 class="rules-h">Floor Boss</h3>
+        <ul class="rules-ul">
+          <li>The Floor Boss has a <b>health pool</b> that must be depleted.</li>
+          <li><b>Boss HP must be depleted before time runs out.</b></li>
+          <li>Boss phases may add targeting and countermeasures.</li>
+          <li>Bench persists across boss rounds.</li>
+        </ul>
+      </div>
       `;
-      showModal('Rulebook', body, [
-        { text: 'Close', primary: true, action: () => closeModal() }
-      ]);
+      showModal("Rules", html, [{ text: 'Close', primary: true, action: () => closeModal() }]);
     }
 
     function openFeedbackModal() {
@@ -4931,6 +5081,7 @@ body += `
         floor: run.floor,
         round: 1,
         maxRounds: 3,
+        roundsRemaining: 3,
         maxHp: 100,
         hp: 100,
         phase: 1,
@@ -4942,6 +5093,7 @@ body += `
         floor: run.floor,
         round: 1,
         maxRounds: 3,
+        roundsRemaining: 3,
         hp: run.bossFight.hp,
         maxHp: run.bossFight.maxHp
       });
@@ -5148,7 +5300,11 @@ body += `
           isOpen: i < 3,
           isComplete: false,
           isBust: false,
-          bonus21Awarded: false
+          bonus21Awarded: false,
+          lastPlayedCard: null,
+          lastPlayedAttackValue: 0,
+          attackFired: false,
+          attackMod: 0
         });
         blackjackMatch.dealerPositions.push({
           cards: [],
@@ -5156,7 +5312,11 @@ body += `
           lastPlay: null,
           isOpen: i < 3,
           isComplete: false,
-          isBust: false
+          isBust: false,
+          lastPlayedCard: null,
+          lastPlayedAttackValue: 0,
+          attackFired: false,
+          attackMod: 0
         });
       }
 
@@ -5275,13 +5435,14 @@ body += `
       pos.cards.push(a);
       pos.cards.push(b);
       pos.lastPlay = { kind: 'card', rank: b.rank, value: getStrikeValueFromCard(b) };
+      onCardPlacedForAttack(pos, b);
       recordLaneCard(side, laneIdx, 1);
       recordLaneCard(side, laneIdx, 1);
       return true;
     }
 
     function getPositionTotal(pos) {
-      const modSum = (pos.mods || []).reduce((a, b) => a + b, 0);
+      const modSum = (pos.mods || []).reduce((a, b) => a + b, 0) + safeNumber(pos.attackMod, 0);
       const base = calcBestTotal(pos.cards, modSum);
       return safeNumber(base, 0);
     }
@@ -5297,6 +5458,38 @@ body += `
       if (['J', 'Q', 'K'].includes(card.rank)) return 10;
       const n = Number(card.rank);
       return Number.isFinite(n) ? Math.min(10, n) : 0;
+    }
+
+    function getAttackValueFromCard(card) {
+      if (!card) return 0;
+      if (isModifier(card)) return Math.abs(safeNumber(card.delta, 0));
+      return Math.min(11, Math.max(0, getStrikeValueFromCard(card)));
+    }
+
+    function onCardPlacedForAttack(pos, card) {
+      if (!pos || !card) return;
+      pos.lastPlayedCard = card;
+      pos.lastPlayedAttackValue = getAttackValueFromCard(card);
+    }
+
+    function tryFireCloseAttack(attackerSide, laneIdx) {
+      if (!blackjackMatch) return;
+      const a = attackerSide === 'player' ? blackjackMatch.playerPositions[laneIdx] : blackjackMatch.dealerPositions[laneIdx];
+      const d = attackerSide === 'player' ? blackjackMatch.dealerPositions[laneIdx] : blackjackMatch.playerPositions[laneIdx];
+      if (!a || !d) return;
+      if (a.attackFired) return;
+      if (d.isComplete) return;
+      const dmg = safeNumber(a.lastPlayedAttackValue, 0);
+      if (!dmg) return;
+      d.attackMod = safeNumber(d.attackMod, 0) - dmg;
+      d.mods = d.mods || [];
+      d.mods.push(-dmg);
+      a.attackFired = true;
+      if (!blackjackMatch.metrics) blackjackMatch.metrics = {};
+      if (attackerSide === 'player') blackjackMatch.metrics.playerAttackDealt = safeNumber(blackjackMatch.metrics.playerAttackDealt, 0) + dmg;
+      else blackjackMatch.metrics.dealerAttackDealt = safeNumber(blackjackMatch.metrics.dealerAttackDealt, 0) + dmg;
+      logEvent('LANE_CLOSE_ATTACK', { attacker: attackerSide, lane: laneIdx + 1, damage: dmg, card: a.lastPlayedCard ? cardToString(a.lastPlayedCard) : null });
+      showToast(`${attackerSide === 'player' ? 'Attack dealt' : 'Attack taken'}: lane #${laneIdx + 1} ${dmg}`);
     }
 
     function computeStrikeDeltaFromLastPlay(lastPlay) {
@@ -5852,6 +6045,7 @@ body += `
       pos.mods = pos.mods || [];
       pos.mods.push(mod.delta);
       pos.lastPlay = { kind: 'mod', delta: mod.delta };
+      onCardPlacedForAttack(pos, mod);
 
       blackjackMatch.bench.splice(bi, 1);
       blackjackMatch.armedBenchIdx = null;
@@ -6058,6 +6252,7 @@ body += `
       const placed = blackjackMatch.drawnCard;
       pos.cards.push(placed);
       pos.lastPlay = { kind: 'card', rank: placed.rank, value: getStrikeValueFromCard(placed) };
+      onCardPlacedForAttack(pos, placed);
       recordLaneCard('player', posIdx);
       blackjackMatch.drawnCard = null;
 
@@ -6085,6 +6280,7 @@ body += `
       const pos = blackjackMatch.playerPositions[posIdx];
       if (!pos.isOpen || pos.isComplete) return;
 
+      tryFireCloseAttack('player', posIdx);
       pos.isComplete = true;
 
       // If they close while >21, it is a bust now (closure reveals score)
@@ -6438,6 +6634,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
       if (!pos.isOpen || pos.isComplete) continue;
 
       if (dealerShouldStandLane(i, diff)) {
+        tryFireCloseAttack('dealer', i);
         pos.isComplete = true;
         pos.isBust = (getPositionTotal(pos) > 21);
         blackjackMatch.metrics.dealerStands += 1;
@@ -7568,6 +7765,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         }
 
         bf.benchCarry = (blackjackMatch.bench || []).slice();
+        bf.roundsRemaining = Math.max(0, safeNumber(bf.roundsRemaining, bf.maxRounds) - 1);
+        if (bf.roundsRemaining <= 0 && bf.hp > 0) {
+          gameOver("Time expired before boss HP was depleted.");
+          return;
+        }
         if (bf.round < bf.maxRounds) {
           startBossRound(bf.round + 1);
           renderAll();
@@ -7689,6 +7891,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         </div>
 
         <div class="hud-center">
+          <button class="hud-icon-btn" title="Home" onclick="showStartScreen()">🏠</button>
           <button class="hud-icon-btn" title="Run Log" onclick="openLogPanel('stats')">📋</button>
           <button class="hud-icon-btn" title="Deck Viewer" onclick="openDeckViewer()">🃏</button>
           <button class="hud-icon-btn" title="Settings" onclick="openSettingsPanel()">⚙️</button>
@@ -8217,7 +8420,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const bossPhaseClass = isBossFight && bossFight.phase === 2 ? 'boss-phase2' : '';
       const bossMeta = isBossFight ? `
         <div class="bj-status ${bossPhaseClass}">
-          Round ${bossFight.round} / ${bossFight.maxRounds} · HP ${bossFight.hp} / ${bossFight.maxHp}
+          Round ${bossFight.round} / ${bossFight.maxRounds} · Time ${bossFight.roundsRemaining || 0} · HP ${bossFight.hp} / ${bossFight.maxHp}
           <div class="boss-hp ${bossPhaseClass}">
             <div class="boss-hp-fill" style="width:${bossHpPct}%"></div>
           </div>
@@ -8661,7 +8864,16 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       setupCardTooltip();
       setupActionTooltip();
+      initStartPlasma();
       initRun();
+      const c=document.getElementById('btnContinue'); if (c) c.onclick = () => { hideStartScreen(); renderAll(); };
+      const n=document.getElementById('btnNewRun'); if (n) n.onclick = () => { initRun(); hideStartScreen(); };
+      const r=document.getElementById('btnRules'); if (r) r.onclick = () => openRulesPanel();
+      const st=document.getElementById('btnStats'); if (st) st.onclick = () => openLogPanel('stats');
+      const se=document.getElementById('btnSettings'); if (se) se.onclick = () => openSettingsPanel();
+      const fb=document.getElementById('btnFeedback'); if (fb) fb.onclick = () => openFeedbackModal();
+      updateStartRunCard();
+      showStartScreen();
       renderAll();
     })();
   </script>
