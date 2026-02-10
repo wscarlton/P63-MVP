@@ -87,6 +87,33 @@
       mix-blend-mode: overlay;
     }
 
+        .hud-bank {
+      min-width: 220px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--bg-card);
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .hud-bank-main { font-family: var(--font-mono); font-size: 18px; color: var(--accent-green); font-weight: 800; }
+    .hud-bank-sub { font-size: 11px; color: var(--text-secondary); }
+
+    .proc-banner { margin: 8px auto 12px; max-width: 680px; padding: 10px 12px; border: 1px solid var(--accent-blue); border-radius: 12px; background: rgba(95,125,149,0.16); font-family: var(--font-mono); }
+    .proc-banner-title { font-weight: 800; color: var(--accent-gold); }
+    .proc-banner-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+    .end-chart-wrap { width: min(980px, 96vw); display:grid; grid-template-columns: 1fr; gap: 14px; margin: 18px 0 24px; }
+    .end-chart-card { background: var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:12px; }
+    .end-chart-title { font-family: var(--font-display); letter-spacing: 1px; color: var(--accent-gold); margin-bottom: 8px; }
+    .sparkline { width: 100%; height: 120px; }
+    .bar-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap:8px; }
+    .bar-item { text-align:center; }
+    .bar-col { height: 88px; display:flex; align-items:flex-end; justify-content:center; }
+    .bar-fill { width: 22px; background: var(--accent-blue); border-radius: 6px 6px 0 0; }
+    .bar-label { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+
     /* HUD Styles */
     #hud {
       position: fixed;
@@ -347,7 +374,7 @@
       .log-mini-btn:hover:not(:disabled),
       .hud-icon-btn:hover:not(:disabled),
       .action-chip.ready:hover,
-      .token-icon:hover:not(.spent):not(.disabled){
+      .token-icon:hover:not(.spent):not(.disabled):not(.locked){
         transform: translateY(-1px);
       }
     }
@@ -359,7 +386,7 @@
     .log-mini-btn:active:not(:disabled),
     .hud-icon-btn:active:not(:disabled),
     .action-chip:active:not(.locked):not(.used),
-    .token-icon:active:not(.spent):not(.disabled){
+    .token-icon:active:not(.spent):not(.disabled):not(.locked){
       transform: translateY(0px) scale(0.99);
       filter: brightness(1.08);
     }
@@ -827,9 +854,10 @@
       font-weight: 800;
     }
 
-    .token-icon:hover { border-color: var(--accent-gold); transform: translateY(-1px); }
+    .token-icon:hover:not(.spent):not(.disabled):not(.locked) { border-color: var(--accent-gold); transform: translateY(-1px); }
     .token-icon.spent { opacity: 0.25; cursor: not-allowed; transform: none; }
     .token-icon.disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+    .token-icon.locked { opacity: 0.55; border-style: dashed; cursor: not-allowed; transform: none; }
 
     .action-hint {
       color: var(--text-secondary);
@@ -1373,8 +1401,9 @@
 
     .karma-float {
       position: absolute;
-      top: 8px;
-      right: 10px;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
       font-family: 'Fira Code', monospace;
       font-size: 12px;
       font-weight: 900;
@@ -1384,9 +1413,9 @@
       pointer-events: none;
     }
     @keyframes karmaFloatUp {
-      0% { opacity: 0; transform: translateY(8px); }
-      20% { opacity: 1; transform: translateY(0); }
-      100% { opacity: 0; transform: translateY(-16px); }
+      0% { opacity: 0; transform: translate(-50%, -40%); }
+      20% { opacity: 1; transform: translate(-50%, -52%); }
+      100% { opacity: 0; transform: translate(-50%, -78%); }
     }
 
     .scoring-mode .bj-position { opacity: 0.55; }
@@ -2114,13 +2143,13 @@ const CALLING_RANK_THRESHOLDS = [
       if (t === 'GAME_START') return `Run started. Chips=${d.startingChips}, Deck=${d.deckSize}`;
       if (t === 'FLOOR_START') return `Entered Floor ${d.floor}`;
       if (t === 'TILE_ENTER') return `Entered tile #${d.tileId} (${d.tileType})`;
-      if (t === 'REST_CHOICE') return `Rest: ${d.choice}${d.freeRemoval ? ' (free removal)' : ''}`;
+      if (t === 'REST_CHOICE') return `Lounge: ${d.choice}${d.freeRemoval ? ' (free removal)' : ''}`;
       if (t === 'MINIGAME') return `Minigame reward +${d.chips} chips, +${d.tokens} token`;
       if (t === 'BARTENDER_TAKE') return `Bartender: took +${d.chips} chips`;
       if (t === 'COCKTAIL_BOUGHT') return `Bought cocktail: ${d.actionName} (-${d.cost})`;
       if (t === 'LOAN_TAKEN') return `Loan taken +${d.amount}, owe ${d.repay}`;
       if (t === 'LOAN_REPAID') return `Loan repaid -${d.amount}`;
-      if (t === 'MERCHANT_ENTER') return `Merchant opened`;
+      if (t === 'MERCHANT_ENTER') return `Shop Keeper opened`;
       if (t === 'MODIFY_ENTER') return `Modify opened`;
       if (t === 'MODIFY_SERVICE_SELECT') return `Modify service: ${d.serviceId} (-${d.cost})`;
       if (t === 'MODIFY_CANDIDATES_SHOWN') return `Modify candidates shown (${d.countShown || 0})`;
@@ -2148,8 +2177,8 @@ const CALLING_RANK_THRESHOLDS = [
       if (t === 'BENCH_APPLY') return `Bench applied ${d.card} to ${d.side} lane #${d.lane}`;
       if (t === 'BENCH_PLACE') return `Bench placed ${d.card} to player lane #${d.lane}`;
       if (t === 'BENCH_OVERFLOW') return `Bench overflow: discarded ${d.removed}`;
-      if (t === 'TRANSFER_BET') return `Transfer bet: player x${d.playerMultiplier} (${d.dealerAction}${d.offer ? ` to x${d.offer}` : ''})`;
-      if (t === 'TRANSFER_BET_RESPONSE') return `Transfer bet response: ${d.response} (x${d.finalMultiplier})`;
+      if (t === 'TRANSFER_BET') return `Side Bet: player x${d.playerMultiplier} (${d.dealerAction}${d.offer ? ` to x${d.offer}` : ''})`;
+      if (t === 'TRANSFER_BET_RESPONSE') return `Side Bet response: ${d.response} (x${d.finalMultiplier})`;
       if (t === 'ACTION_USED') return `Action used: ${d.actionName}`;
       if (t === 'BONUS_21') return `Bonus: lane #${d.lane} hit 21 (+${d.amount})`;
       if (t === 'BONUS_ALL_FIVE') return `Bonus: all five hit 21 (+${d.amount})`;
@@ -2803,14 +2832,14 @@ const CALLING_RANK_THRESHOLDS = [
         <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
           <div style="font-family:'Cinzel',serif; color:var(--accent-gold); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">Board Tiles</div>
           <ul style="color:var(--text-secondary); line-height:1.6; padding-left:18px;">
-            <li><strong>Rest</strong>: choose free removal or +${REST_REWARD} chips, and always gain <strong>+1 banked token</strong>.</li>
+            <li><strong>Lounge</strong>: choose free removal or +${REST_REWARD} chips, and always gain <strong>+1 banked token</strong>.</li>
             <li><strong>Minigame</strong>: +${MINIGAME_REWARD} chips and <strong>+1 banked token</strong>.</li>
-            <li><strong>Merchant</strong>: buy cards (Standard ${MERCHANT_BUY_BASE_STANDARD}+ / Mod ${MERCHANT_BUY_BASE_MOD}+ / +${MERCHANT_BUY_INCREMENT} per buy), remove one card (${MERCHANT_REMOVE_COST}), rerolls cost ${MERCHANT_INVENTORY_REROLL_COST}/${REMOVAL_REROLL_COST}.</li>
+            <li><strong>Shop Keeper</strong>: buy cards (Standard ${MERCHANT_BUY_BASE_STANDARD}+ / Mod ${MERCHANT_BUY_BASE_MOD}+ / +${MERCHANT_BUY_INCREMENT} per buy), remove one card (${MERCHANT_REMOVE_COST}), rerolls cost ${MERCHANT_INVENTORY_REROLL_COST}/${REMOVAL_REROLL_COST}.</li>
             <li><strong>Loan Shark</strong>: borrow ${LOAN_AMOUNT}, repay ${LOAN_REPAY} before final boss.</li>
           </ul>
         </div>
       `;
-      showModal('Rules', body, [
+      showModal('Rulebook', body, [
         { text: 'Close', primary: true, action: () => closeModal() }
       ]);
     }
@@ -2955,6 +2984,13 @@ const CALLING_RANK_THRESHOLDS = [
     }
 
     let toastTimer = null;
+    function showProcBanner(data = {}) {
+      if (!blackjackMatch) return;
+      blackjackMatch.procBanner = { suit: data.suit || '', title: data.title || 'Calling Proc', desc: data.desc || '' };
+      renderBlackjack();
+      setTimeout(() => { if (blackjackMatch) blackjackMatch.procBanner = null; renderBlackjack(); }, 1500);
+    }
+
     function showToast(text, ms = 1600) {
       const el = document.getElementById('toast');
       el.textContent = text;
@@ -5006,6 +5042,8 @@ body += `
         spadePeekLanes: new Set(),
         lastCallingSuitPlay: null,
         scoreSeq: null,
+        earningsSeq: null,
+        procBanner: null,
         specialReward: options.specialReward || null,
         watcherTargetLaneIdx: null,
         traps: {
@@ -5664,6 +5702,39 @@ body += `
       return { lanes };
     }
 
+    function isResolutionAnimationActive() {
+      return !!(blackjackMatch && ((blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active) || (blackjackMatch.earningsSeq && blackjackMatch.earningsSeq.active)));
+    }
+
+    function startEarningsSequence(parts, onDone) {
+      if (!blackjackMatch) return;
+      const steps = [];
+      const push = (name, delta) => { if (safeNumber(delta, 0) !== 0) steps.push({ name, delta: safeNumber(delta, 0) }); };
+      push('Payout', parts.payout || 0);
+      push('Side Bet', parts.sideBet || 0);
+      push('Rake', -(parts.rake || 0));
+      push('Bonus', parts.bonus || 0);
+      blackjackMatch.earningsSeq = { active: true, steps, idx: 0, accrued: 0, message: 'Earnings tally…', onDone };
+      advanceEarningsSequence();
+    }
+
+    function advanceEarningsSequence() {
+      if (!blackjackMatch || !blackjackMatch.earningsSeq || !blackjackMatch.earningsSeq.active) return;
+      const es = blackjackMatch.earningsSeq;
+      if (es.idx >= es.steps.length) {
+        es.active = false;
+        const cb = es.onDone;
+        if (typeof cb === 'function') cb();
+        renderAll();
+        return;
+      }
+      const step = es.steps[es.idx++];
+      es.accrued += step.delta;
+      es.message = `${step.name}: ${step.delta >= 0 ? '+' : ''}${step.delta}`;
+      renderAll();
+      setTimeout(advanceEarningsSequence, 650);
+    }
+
     function startScoreSequence(breakdown, extras, total, levelUpSummary = null) {
       if (!blackjackMatch) return;
       const steps = [];
@@ -5836,6 +5907,7 @@ body += `
         });
         renderHUD();
         showToast(`+${bonus} chips (Wealth)`);
+        showProcBanner({ suit: '♦', title: 'Calling Proc · Wealth', desc: `+${bonus} chips awarded` });
         return false;
       }
 
@@ -5848,6 +5920,7 @@ body += `
           multiplier: procMult
         });
         showToast(`Intel: Revealed Dealer lane #${laneIdx + 1}`);
+        showProcBanner({ suit: '♠', title: 'Calling Proc · Intel', desc: `Dealer lane #${laneIdx + 1} revealed` });
         renderBlackjack();
         return false;
       }
@@ -6080,6 +6153,7 @@ body += `
             multiplier: triageCount
           });
           showToast(`Health: Triage saved lane #${target.idx + 1}`);
+          showProcBanner({ suit: '♥', title: 'Calling Proc · Triage', desc: `Recovered lane #${target.idx + 1}` });
           remaining -= 1;
         }
       }
@@ -6754,11 +6828,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         logEvent('KARMA_GAIN', { amount: karmaGained, total: run.karma, laneKarma: karmaLaneGain, stampKarma: karmaStampTotal, patternKarma: karmaPatternTotal, extraKarma: karmaExtraTotal });
       }
 
-      startScoreSequence(karmaBreakdown, karmaExtras, karmaGained, levelUpSummary);
+      startEarningsSequence({ payout, sideBet: transferNet, rake, bonus }, () => startScoreSequence(karmaBreakdown, karmaExtras, karmaGained, levelUpSummary));
 
       renderAll();
 
-      if (transferNet !== 0) showToast(`Hand transfers: ${transferNet > 0 ? '+' : ''}${transferNet} chips`);
+      if (transferNet !== 0) showToast(`Side bet result: ${transferNet > 0 ? '+' : ''}${transferNet} chips`);
 
       // Winner reward flow (only if WIN)
       if (blackjackMatch.result.outcome === 'WIN') {
@@ -6766,7 +6840,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           if (bossDefeatedNow) {
             blackjackMatch.rewardPending = true;
             blackjackMatch.pendingRewardStart = true;
-            if (!blackjackMatch.scoreSeq || !blackjackMatch.scoreSeq.active) {
+            if (!isResolutionAnimationActive()) {
               blackjackMatch.pendingRewardStart = false;
               startWinnerRewardFlow();
             }
@@ -6774,7 +6848,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         } else {
           blackjackMatch.rewardPending = true;
           blackjackMatch.pendingRewardStart = true;
-          if (!blackjackMatch.scoreSeq || !blackjackMatch.scoreSeq.active) {
+          if (!isResolutionAnimationActive()) {
             blackjackMatch.pendingRewardStart = false;
             startWinnerRewardFlow();
           }
@@ -7583,9 +7657,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             <span class="hud-stat-label">Player</span>
             <span class="hud-stat-value">${escapeHtml(run.playerName || '—')}</span>
           </div>
-          <div class="hud-stat">
-            <span class="hud-stat-label">Chips</span>
-            <span class="hud-stat-value chips">${chips}</span>
+          <div class="hud-bank">
+            <div class="hud-stat-label">Bank</div>
+            <div class="hud-bank-main">Chips ${chips}</div>
+            <div class="hud-bank-sub">Rake ${Math.round(getHouseRakeRate(run.floor) * 100)}% · Debt ${escapeHtml(loanStatus)}</div>
           </div>
           <div class="hud-calling ${pulseClass}">
             <div class="hud-calling-row">
@@ -7605,19 +7680,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           </div>
           <div class="hud-stat">
             <span class="hud-stat-label">Tokens</span>
-            <span class="hud-stat-value tokens">${run.bankedTokens || 0}</span>
+            <span class="hud-stat-value tokens">${safeNumber(run.karma)}</span>
           </div>
           <div class="hud-stat">
             <span class="hud-stat-label">Bench</span>
             <span class="hud-stat-value">${getBenchCapacity()}</span>
-          </div>
-          <div class="hud-stat">
-            <span class="hud-stat-label">Rake</span>
-            <span class="hud-stat-value">${Math.round(getHouseRakeRate(run.floor) * 100)}%</span>
-          </div>
-          <div class="hud-stat">
-            <span class="hud-stat-label">Debt</span>
-            <span class="hud-stat-value ${loanClass}">${loanStatus}</span>
           </div>
         </div>
 
@@ -8161,11 +8228,14 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       let html = `
         <div class="bj-header${watcherClass}">
           <div class="bj-title">${typeLabel}</div>
-          <div class="bj-status">Buy-in: ${blackjackMatch.buyIn} chips · Transfer x${transferMultiplier}</div>
+          <div class="bj-status">Buy-in: ${blackjackMatch.buyIn} chips · Side Bet x${transferMultiplier}</div>
           <div class="bj-status">${npcLine}</div>
           ${bossMeta}
         </div>
       `;
+      if (blackjackMatch.procBanner) {
+        html += `<div class="proc-banner"><div class="proc-banner-title">${escapeHtml(blackjackMatch.procBanner.suit || '')} ${escapeHtml(blackjackMatch.procBanner.title || 'Calling Proc')}</div><div class="proc-banner-desc">${escapeHtml(blackjackMatch.procBanner.desc || '')}</div></div>`;
+      }
 
       // Dealer + Player positions
       const laneWinners = (isResolved && result) ? result.positionResults : ['push','push','push','push','push'];
@@ -8213,6 +8283,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           : '';
 
         const scoreSeq = blackjackMatch.scoreSeq;
+        const earningsSeq = blackjackMatch.earningsSeq;
+        const earningsNow = earningsSeq && earningsSeq.active ? earningsSeq.accrued : netFromEnd;
+        const earningsLine = earningsSeq && earningsSeq.active
+          ? `<div class="bj-result-score" style="color:var(--accent-blue); font-weight:800;">Earnings tally: ${escapeHtml(earningsSeq.message || '')}</div>`
+          : '';
         const scoreLine = scoreSeq && scoreSeq.active
           ? `<div class="bj-result-score" style="color:var(--accent-blue); font-weight:800;">Karma tally: +${Math.max(0, scoreSeq.accrued)} / +${Math.max(0, scoreSeq.total)} · ${escapeHtml(scoreSeq.message || '')}</div>`
           : '';
@@ -8222,16 +8297,18 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             <div class="bj-result-title ${titleCls}">${outcome}</div>
             <div class="bj-result-score">
               Lanes: You ${result.playerWins} — Dealer ${result.dealerWins}<br/>
-              Payout: ${payout} · Transfer x${transferMultiplier}: ${transfer >= 0 ? '+' : ''}${transfer}${rakeLine} · Bonus: ${bonus}
+              Payout: ${payout} · Side Bet x${transferMultiplier}: ${transfer >= 0 ? '+' : ''}${transfer}${rakeLine} · Bonus: ${bonus}
             </div>
             <div class="bj-result-chips ${netCls}">
-              Match Net: ${netFromEnd >= 0 ? '+' : ''}${netFromEnd}
+              Match Earnings: ${earningsNow >= 0 ? '+' : ''}${earningsNow}
             </div>
             ${rewardNote}
             ${exhaustionNote}
+            ${earningsLine}
+            <div class="bj-result-chips ${Math.max(0, (result.karmaGained || 0)) > 0 ? 'positive' : 'neutral'}">Karma Gained: +${Math.max(0, (scoreSeq && scoreSeq.active) ? scoreSeq.accrued : (result.karmaGained || 0))}</div>
             ${scoreLine}
             <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-              <button class="bj-btn" onclick="blackjackContinue()" ${blackjackMatch.rewardPending || (scoreSeq && scoreSeq.active) ? 'disabled' : ''}>Continue</button>
+              <button class="bj-btn" onclick="blackjackContinue()" ${blackjackMatch.rewardPending || isResolutionAnimationActive() ? 'disabled' : ''}>Continue</button>
               ${(scoreSeq && scoreSeq.active) ? '<button class="bj-btn" onclick="skipScoreSequence()">Skip Tally</button>' : ''}
             </div>
           </div>
@@ -8250,13 +8327,13 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             betButtons = options.map(val => (
               `<button class="bj-btn" onclick="setTransferMultiplier(${val})">x${val}</button>`
             )).join('');
-            betHint = 'Choose your transfer multiplier. Dealer can call or raise by +1.';
+            betHint = 'Choose your side bet multiplier. Dealer can call or raise by +1.';
           } else if (stage === 'response' && blackjackMatch.transferRaiseOffer) {
             betButtons = `
               <button class="bj-btn success" onclick="acceptTransferRaise()">Accept x${blackjackMatch.transferRaiseOffer}</button>
               <button class="bj-btn danger" onclick="declineTransferRaise()">Decline</button>
             `;
-            betHint = `Dealer raised to x${blackjackMatch.transferRaiseOffer}. Accept or decline.`;
+            betHint = `Dealer raised side bet to x${blackjackMatch.transferRaiseOffer}. Accept or decline.`;
           } else {
             betButtons = `<button class="bj-btn" disabled>Waiting…</button>`;
             betHint = 'Dealer is deciding…';
@@ -8264,7 +8341,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
           html += `
             <div class="bj-controls">
-              <div class="bj-turn-info">Transfer Multiplier</div>
+              <div class="bj-turn-info">Side Bet Multiplier</div>
               <div class="bj-drawn-card" style="border-color: rgba(42,58,84,0.9); background: rgba(26,36,54,0.35);">
                 <div class="bj-drawn-label">${betHint}</div>
               </div>
@@ -8302,10 +8379,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
           const tokensHtml = Array.from({ length: tokenTotal }, (_, i) => {
             const spent = i < tokenSpent;
-            const disabled = spent || !clickable;
-            const cls = spent ? 'token-icon spent' : (disabled ? 'token-icon disabled' : 'token-icon');
+            const locked = !spent && !clickable;
+            const disabled = spent || (!clickable && !locked);
+            const cls = spent ? 'token-icon spent' : (locked ? 'token-icon locked' : (disabled ? 'token-icon disabled' : 'token-icon'));
             const handler = (!spent && clickable) ? `onclick="onActionTokenClick()"` : '';
-            return `<div class="${cls}" ${handler} title="${spent ? 'Spent' : (clickable ? 'Click to use an action token' : 'Unavailable')}">${i+1}</div>`;
+            return `<div class="${cls}" ${handler} title="${spent ? 'Spent' : (locked ? 'Locked' : (clickable ? 'Click to use an action token' : 'Unavailable'))}">${i+1}</div>`;
           }).join('');
 
           const actionsHtml = owned.length
@@ -8491,6 +8569,28 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const titleCls = isVictory ? 'victory' : 'gameover';
       const msg = isVictory ? 'You cleared the tower.' : (run.ui.message || 'Your run has ended.');
 
+      const events = (gameLog && gameLog.events) ? gameLog.events : [];
+      const matches = events.filter(e => e && e.type === 'MATCH_END');
+      const chipsSeries = matches.map(e => safeNumber(e.chips, 0));
+      const karmaSeries = matches.map(e => safeNumber(e.ctx && e.ctx.karma, 0));
+      const makeSpark = (vals, color) => {
+        if (!vals.length) return '<svg class="sparkline" viewBox="0 0 300 120"></svg>';
+        const min = Math.min(...vals), max = Math.max(...vals);
+        const span = Math.max(1, max - min);
+        const pts = vals.map((v, i) => `${(i/(Math.max(1, vals.length-1)))*300},${110-((v-min)/span)*100}`).join(' ');
+        return `<svg class="sparkline" viewBox="0 0 300 120"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round"/><line x1="0" y1="110" x2="300" y2="110" stroke="var(--border-color)"/></svg>`;
+      };
+      const summary = buildDeckSummary();
+      const suitEntries = Object.entries(summary.bySuit || {}).filter(([k]) => ['♠','♥','♦','♣','★'].includes(k));
+      const rankEntries = Object.entries(summary.byRank || {});
+      const makeBars = (entries, color='var(--accent-blue)') => {
+        const max = Math.max(1, ...entries.map(([,v]) => safeNumber(v,0)));
+        return `<div class="bar-grid">${entries.map(([k,v]) => {
+          const h = Math.round((safeNumber(v,0)/max)*84);
+          return `<div class="bar-item"><div class="bar-col"><div class="bar-fill" style="height:${h}px; background:${color};"></div></div><div class="bar-label">${k} (${v})</div></div>`;
+        }).join('')}</div>`;
+      };
+
       endScreen.innerHTML = `
         <div class="end-screen">
           <div class="end-title ${titleCls}">${title}</div>
@@ -8510,9 +8610,16 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
               <div class="end-stat-label">Deck Size</div>
             </div>
             <div class="end-stat">
-              <div class="end-stat-value">${run.bankedTokens || 0}</div>
-              <div class="end-stat-label">Banked Tokens</div>
+              <div class="end-stat-value">${safeNumber(run.karma)}</div>
+              <div class="end-stat-label">Karma</div>
             </div>
+          </div>
+
+          <div class="end-chart-wrap">
+            <div class="end-chart-card"><div class="end-chart-title">Chips Over Time</div>${makeSpark(chipsSeries, 'var(--accent-green)')}</div>
+            <div class="end-chart-card"><div class="end-chart-title">Karma Over Time</div>${makeSpark(karmaSeries, 'var(--accent-purple)')}</div>
+            <div class="end-chart-card"><div class="end-chart-title">Deck by Suit</div>${makeBars(suitEntries, 'var(--accent-gold)')}</div>
+            <div class="end-chart-card"><div class="end-chart-title">Deck by Rank</div>${makeBars(rankEntries, 'var(--accent-blue)')}</div>
           </div>
 
           <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
