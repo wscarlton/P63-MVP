@@ -823,6 +823,39 @@
     .bj-result-chips.negative { color: var(--accent-red); }
     .bj-result-chips.neutral { color: var(--text-muted); }
 
+    .boss-hp {
+      width: 100%;
+      max-width: 360px;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      margin: 6px auto 0;
+      border: 1px solid var(--border-color);
+    }
+
+    .boss-hp-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #f39c12, #e74c3c);
+      transition: width 0.3s ease;
+    }
+
+    .boss-phase2 .boss-hp-fill {
+      background: linear-gradient(90deg, #ff6b6b, #ff4757);
+      box-shadow: 0 0 12px rgba(255, 71, 87, 0.6);
+    }
+
+    .boss-target {
+      border-color: rgba(255, 107, 107, 0.9);
+      box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.6), 0 0 14px rgba(255, 107, 107, 0.5);
+      animation: bossPulse 1.6s ease-in-out infinite;
+    }
+
+    @keyframes bossPulse {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-2px); }
+    }
+
     /* Game Over / Victory Screens */
     .end-screen {
       display: flex;
@@ -1798,7 +1831,15 @@ const CALLING_RANK_THRESHOLDS = [
         visibility: {
           revealOnClose: (uiSettings && uiSettings.revealTotalsOnClose) !== false,
           difficulty: getOpponentDifficulty()
-        }
+        },
+        bossFight: (run && run.bossFight && run.bossFight.active) ? {
+          round: run.bossFight.round,
+          maxRounds: run.bossFight.maxRounds,
+          hp: run.bossFight.hp,
+          maxHp: run.bossFight.maxHp,
+          phase: run.bossFight.phase,
+          targetLaneIdx: run.bossFight.targetLaneIdx
+        } : null
       };
     }
 
@@ -3292,6 +3333,7 @@ function benchPush(card, source = '') {
         feedback: { comments: '', bugs: '', updatedAt: null },
         bankedTokens: 0,
         bossWins: 0,
+        bossFight: null,
         paidRemovalCount: 0,
         merchantStandardBuys: 0,
         merchantModifierBuys: 0,
@@ -3326,6 +3368,7 @@ function benchPush(card, source = '') {
       clearDealerTimers();
 
       run.floor = floor;
+      run.bossFight = null;
       run.board.tiles = generateBoard(floor);
       run.board.currentTileId = null;
       run.board.visited = new Set();
@@ -4503,7 +4546,50 @@ body += `
         return;
       }
       if (run.chips < BUYIN_BOSS) { gameOver("You can't afford the buy-in."); return; }
-      startBlackjackMatch('BOSS', BUYIN_BOSS);
+      startBossFight();
+    }
+
+    function startBossFight() {
+      run.bossFight = {
+        active: true,
+        floor: run.floor,
+        round: 1,
+        maxRounds: 3,
+        maxHp: 100,
+        hp: 100,
+        phase: 1,
+        targetLaneIdx: null,
+        benchCarry: [],
+        phase2Announced: false
+      };
+      logEvent('BOSS_FIGHT_START', {
+        floor: run.floor,
+        round: 1,
+        maxRounds: 3,
+        hp: run.bossFight.hp,
+        maxHp: run.bossFight.maxHp
+      });
+      startBossRound(1);
+    }
+
+    function startBossRound(roundIdx) {
+      const bf = run.bossFight;
+      if (!bf) return;
+      bf.round = roundIdx;
+      const buyIn = roundIdx === 1 ? BUYIN_BOSS : 0;
+      startBlackjackMatch('BOSS', buyIn, {
+        initialBench: bf.benchCarry || []
+      });
+      blackjackMatch.bossRound = bf.round;
+      blackjackMatch.bossMaxRounds = bf.maxRounds;
+      logEvent('BOSS_ROUND_START', {
+        round: bf.round,
+        maxRounds: bf.maxRounds,
+        hp: bf.hp,
+        maxHp: bf.maxHp,
+        phase: bf.phase
+      });
+      if (bf.phase === 2) bossUpdateTargetLane(true, 'round_start');
     }
 
     // =============================================
@@ -4515,7 +4601,7 @@ body += `
       return { min: 1, max: 3 };
     }
 
-    function startBlackjackMatch(type, buyIn) {
+    function startBlackjackMatch(type, buyIn, options = {}) {
       clearDealerTimers();
 
       run.chips -= buyIn;
@@ -4559,7 +4645,7 @@ body += `
         result: null,
 
         // Bench (player mods + normal cards)
-        bench: [],
+        bench: options.initialBench ? options.initialBench.slice() : [],
         armedBenchIdx: null,
 
         // bonuses + transfers
@@ -4886,6 +4972,70 @@ body += `
         trapTotalAfter: blackjackMatch.traps[targetSide][laneIdx],
         reason
       });
+    }
+
+    function bossUpdateTargetLane(force = false, reason = '') {
+      const bf = run && run.bossFight;
+      if (!bf || !bf.active || bf.phase !== 2) return;
+
+      const current = bf.targetLaneIdx;
+      if (!force && current !== null) {
+        const curPos = blackjackMatch.playerPositions[current];
+        if (curPos && curPos.isOpen && !curPos.isComplete) return;
+      }
+
+      let best = null;
+      for (let i = 0; i < 5; i++) {
+        const p = blackjackMatch.playerPositions[i];
+        if (!p.isOpen || p.isComplete) continue;
+        const t = getPositionTotal(p);
+        const diff = (t <= 21) ? (21 - t) : (1000 + (t - 21));
+        const score = diff * 100 - t;
+        if (!best || score < best.score) best = { i, score, t, diff };
+      }
+
+      bf.targetLaneIdx = best ? best.i : null;
+      logEvent('BOSS_TARGET_SET', { laneIdx: bf.targetLaneIdx, reason });
+    }
+
+    function bossTryCountermeasure() {
+      const bf = run && run.bossFight;
+      if (!bf || !bf.active || bf.phase !== 2) return false;
+      if (bf.targetLaneIdx === null) bossUpdateTargetLane(true, 'countermeasure_no_target');
+      if (bf.targetLaneIdx === null) return false;
+
+      const bench = blackjackMatch.dealerBench || [];
+      if (!bench.length) return false;
+
+      const laneIdx = bf.targetLaneIdx;
+      const p = blackjackMatch.playerPositions[laneIdx];
+      const cur = getPositionTotal(p);
+
+      let pick = 0;
+      let bestScore = -Infinity;
+      for (let i = 0; i < bench.length; i++) {
+        const m = bench[i];
+        if (!isModifier(m)) continue;
+        const applied = -m.delta;
+        const next = cur + applied;
+        const bust = next > 21 ? 1 : 0;
+        const away = (next <= 21) ? (21 - next) : (50 + (next - 21));
+        const score = (bust ? 1000 : 0) - away;
+        if (score > bestScore) { bestScore = score; pick = i; }
+      }
+
+      const mod = bench.splice(pick, 1)[0];
+      const appliedDelta = -mod.delta;
+      const state = applyLaneMod('player', laneIdx, appliedDelta);
+
+      logEvent('BOSS_COUNTERMEASURE', {
+        lane: laneIdx + 1,
+        dealerBenchMod: cardRef(mod),
+        appliedDelta,
+        targetState: state
+      });
+      showToast(`Countermeasure: Lane ${laneIdx + 1}`);
+      return true;
     }
 
     function recordLaneCard(side, laneIdx, count = 1, afterInitial = null) {
@@ -5319,6 +5469,7 @@ body += `
 
       maybeAward21BonusForPlayerPos(posIdx);
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
+      bossUpdateTargetLane(false, 'player_stand');
       const deferred = handleCallingSuitOnPlayerCardPlaced(c, posIdx, endPlayerTurn);
       if (!deferred) endPlayerTurn();
     };
@@ -5440,6 +5591,7 @@ body += `
       // Finalize busts at end of player's turn (per spec)
       const preBust = blackjackMatch.playerPositions.map(p => !!p.isBust);
       finalizeBusts(blackjackMatch.playerPositions, 'player');
+      bossUpdateTargetLane(false, 'bust_finalize');
 
       const lastPlay = blackjackMatch.lastCallingSuitPlay;
       if (lastPlay && lastPlay.procced && lastPlay.suit === '♥') {
@@ -5545,6 +5697,10 @@ function dealerLaneScore(idx, total, diff) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
 
       const diff = getOpponentDifficulty();
+
+      if (run.bossFight && run.bossFight.active && run.bossFight.phase === 2) {
+        bossTryCountermeasure();
+      }
 
       const open = blackjackMatch.dealerPositions
         .map((p, i) => ({ pos: p, idx: i }))
@@ -5816,6 +5972,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
     function endDealerTurn() {
       // Finalize busts at end of dealer turn
       finalizeBusts(blackjackMatch.dealerPositions, 'dealer');
+      bossUpdateTargetLane(false, 'bust_finalize');
 
       const fb = blackjackMatch.dealerBaseDeck || makeStandardDeck52();
       maintainOpenPositions(blackjackMatch.dealerPositions, blackjackMatch.dealerDrawPile, fb, 'dealer');
@@ -5920,8 +6077,11 @@ function dealerStandPhase(diff, maxPasses = 6) {
         payout = blackjackMatch.buyIn;
       }
 
-      // Boss tie = loss
-      if (blackjackMatch.type === 'BOSS' && outcome === 'TIE') {
+      const bf = run && run.bossFight;
+      const isBossRound = blackjackMatch.type === 'BOSS' && bf && bf.active;
+
+      // Boss tie = loss (only for legacy single-round boss fights)
+      if (!isBossRound && blackjackMatch.type === 'BOSS' && outcome === 'TIE') {
         outcome = 'LOSS';
         payout = 0;
       }
@@ -5934,6 +6094,40 @@ function dealerStandPhase(diff, maxPasses = 6) {
       }
 
       blackjackMatch.transferChipsNet = transferNet;
+      let bossDefeatedNow = false;
+
+      if (isBossRound && outcome === 'WIN') {
+        const laneDamage = positionResults.reduce((sum, r, i) => sum + (r === 'player' ? playerTotals[i] : 0), 0);
+        const lanesWon = playerWins;
+        const tm = blackjackMatch.transferMultiplier || 1;
+        const bonusDamage = Math.min(5, Math.round(Math.min(5, lanesWon) * ((tm - 1) / 4)));
+        const totalDamage = laneDamage + bonusDamage;
+        const hpBefore = bf.hp;
+        bf.hp = Math.max(0, bf.hp - totalDamage);
+        bossDefeatedNow = bf.hp === 0;
+
+        blackjackMatch.bossDamage = {
+          laneDamage,
+          bonusDamage,
+          totalDamage,
+          hpBefore,
+          hpAfter: bf.hp,
+          lanesWon,
+          transferMultiplier: tm
+        };
+
+        logEvent('BOSS_DAMAGE', blackjackMatch.bossDamage);
+      }
+
+      if (isBossRound && bf.phase === 1 && bf.hp > 0 && bf.hp <= bf.maxHp / 2) {
+        bf.phase = 2;
+        bf.targetLaneIdx = null;
+        if (!bf.phase2Announced) {
+          bf.phase2Announced = true;
+          showToast("Surveillance Online — Countermeasures active.");
+          logEvent('BOSS_PHASE2_START', { hp: bf.hp, maxHp: bf.maxHp, round: bf.round });
+        }
+      }
 
       let goldBonusTotal = 0;
       for (let i = 0; i < 5; i++) {
@@ -5954,8 +6148,18 @@ function dealerStandPhase(diff, maxPasses = 6) {
       const karmaLaneGain = karmaBreakdown.lanes.reduce((sum, lane) => sum + lane.laneTotal, 0);
       let karmaWinBonus = 0;
       if (outcome === 'WIN') {
-        const baseBonus = blackjackMatch.type === 'STANDARD' ? 50 : 100;
-        karmaWinBonus = baseBonus * transferMultiplier;
+        if (isBossRound) {
+          const roundWeight = Math.max(1, (bf.maxRounds - bf.round + 1));
+          const lanesWon = playerWins;
+          const bonusDamage = blackjackMatch.bossDamage ? blackjackMatch.bossDamage.bonusDamage : 0;
+          karmaWinBonus = (25 * roundWeight) + (10 * lanesWon) + (5 * bonusDamage);
+          if (bossDefeatedNow) {
+            karmaWinBonus += 50 * roundWeight;
+          }
+        } else {
+          const baseBonus = blackjackMatch.type === 'STANDARD' ? 50 : 100;
+          karmaWinBonus = baseBonus * transferMultiplier;
+        }
       }
       const karmaGained = karmaLaneGain + karmaWinBonus;
       run.karma = Math.max(0, safeNumber(run.karma, 0) + karmaGained);
@@ -6048,11 +6252,22 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       // Winner reward flow (only if WIN)
       if (blackjackMatch.result.outcome === 'WIN') {
-        blackjackMatch.rewardPending = true;
-        blackjackMatch.pendingRewardStart = true;
-        if (!blackjackMatch.scoreSeq || !blackjackMatch.scoreSeq.active) {
-          blackjackMatch.pendingRewardStart = false;
-          startWinnerRewardFlow();
+        if (isBossRound) {
+          if (bossDefeatedNow) {
+            blackjackMatch.rewardPending = true;
+            blackjackMatch.pendingRewardStart = true;
+            if (!blackjackMatch.scoreSeq || !blackjackMatch.scoreSeq.active) {
+              blackjackMatch.pendingRewardStart = false;
+              startWinnerRewardFlow();
+            }
+          }
+        } else {
+          blackjackMatch.rewardPending = true;
+          blackjackMatch.pendingRewardStart = true;
+          if (!blackjackMatch.scoreSeq || !blackjackMatch.scoreSeq.active) {
+            blackjackMatch.pendingRewardStart = false;
+            startWinnerRewardFlow();
+          }
         }
       }
     }
@@ -6682,6 +6897,35 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       const result = blackjackMatch.result;
 
+      if (blackjackMatch.type === 'BOSS' && run.bossFight && run.bossFight.active) {
+        const bf = run.bossFight;
+        if (bf.hp <= 0) {
+          logEvent('BOSS_FIGHT_DEFEATED', { floor: run.floor, round: bf.round, maxRounds: bf.maxRounds });
+          run.bossWins = safeNumber(run.bossWins, 0) + 1;
+          run.bossFight = null;
+          logEvent('BOSS_CLEARED', { floor: run.floor, bossWins: run.bossWins, benchCapacity: getBenchCapacity() });
+          showToast(`Boss cleared. Bench capacity is now ${getBenchCapacity()}.`);
+          if (run.floor < 3) {
+            blackjackMatch = null;
+            initFloor(run.floor + 1);
+            showToast(`Floor ${run.floor} begins!`);
+          } else {
+            victory();
+          }
+          return;
+        }
+
+        bf.benchCarry = (blackjackMatch.bench || []).slice();
+        if (bf.round < bf.maxRounds) {
+          startBossRound(bf.round + 1);
+          renderAll();
+        } else {
+          logEvent('BOSS_FIGHT_FAILED', { floor: run.floor, round: bf.round, maxRounds: bf.maxRounds, hp: bf.hp });
+          gameOver("The boss withstands the assault.");
+        }
+        return;
+      }
+
       if (blackjackMatch.type === 'BOSS') {
         if (result.outcome === 'WIN') {
           run.bossWins = safeNumber(run.bossWins, 0) + 1;
@@ -7220,6 +7464,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     && blackjackMatch.scoreSeq.focusSide === side) {
     cls += ' score-flash';
   }
+  if (side === 'player' && run && run.bossFight && run.bossFight.active
+    && run.bossFight.phase === 2 && run.bossFight.targetLaneIdx === idx) {
+    cls += ' boss-target';
+  }
   if (displayState === 'open') cls += ' open';
   if (displayState === 'stand') cls += ' stand';
   if (displayState === 'bust') cls += ' bust';
@@ -7287,11 +7535,25 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const typeLabel = blackjackMatch.type === 'BOSS' ? 'BOSS BATTLE' :
                         blackjackMatch.type === 'HIGH_STAKES' ? 'HIGH STAKES' : 'STANDARD TABLE';
 
+      const bossFight = run && run.bossFight;
+      const isBossFight = blackjackMatch.type === 'BOSS' && bossFight && bossFight.active;
+      const bossHpPct = isBossFight ? Math.max(0, Math.min(100, Math.round((bossFight.hp / bossFight.maxHp) * 100))) : 0;
+      const bossPhaseClass = isBossFight && bossFight.phase === 2 ? 'boss-phase2' : '';
+      const bossMeta = isBossFight ? `
+        <div class="bj-status ${bossPhaseClass}">
+          Round ${bossFight.round} / ${bossFight.maxRounds} · HP ${bossFight.hp} / ${bossFight.maxHp}
+          <div class="boss-hp ${bossPhaseClass}">
+            <div class="boss-hp-fill" style="width:${bossHpPct}%"></div>
+          </div>
+        </div>
+      ` : '';
+
       let html = `
         <div class="bj-header">
           <div class="bj-title">${typeLabel}</div>
           <div class="bj-status">Buy-in: ${blackjackMatch.buyIn} chips · Transfer x${transferMultiplier}</div>
           <div class="bj-status">${npcLine}</div>
+          ${bossMeta}
         </div>
       `;
 
