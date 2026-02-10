@@ -1245,27 +1245,68 @@
     .intro-suit-btn { text-align: left; }
     .intro-large-card { transform: scale(1.4); margin: 18px auto; }
 
-    .score-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(10, 12, 20, 0.75);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 40;
+    .score-flash {
+      animation: scorePulse 1.05s ease-in-out;
+      box-shadow: 0 0 0 2px rgba(255, 215, 128, 0.72), 0 0 22px rgba(255, 215, 128, 0.44);
     }
-    .score-panel {
-      background: rgba(18, 26, 42, 0.95);
+    @keyframes scorePulse {
+      0% { transform: translateY(0) scale(1); }
+      35% { transform: translateY(-2px) scale(1.015); }
+      100% { transform: translateY(0) scale(1); }
+    }
+
+    .karma-pop {
+      animation: karmaPop 0.6s ease-out;
+      box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.26);
+    }
+    @keyframes karmaPop {
+      0% { transform: scale(1); }
+      35% { transform: scale(1.16); }
+      100% { transform: scale(1); }
+    }
+
+    .karma-float {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      font-family: 'Fira Code', monospace;
+      font-size: 12px;
+      font-weight: 900;
+      color: var(--accent-gold);
+      text-shadow: 0 0 8px rgba(240, 192, 64, 0.45);
+      animation: karmaFloatUp 1s ease-out forwards;
+      pointer-events: none;
+    }
+    @keyframes karmaFloatUp {
+      0% { opacity: 0; transform: translateY(8px); }
+      20% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-16px); }
+    }
+
+    .scoring-mode .bj-position { opacity: 0.55; }
+    .scoring-mode .bj-position.score-flash { opacity: 1; }
+
+    .hud-calling {
+      min-width: 240px;
       border: 1px solid var(--border-color);
-      border-radius: 18px;
-      padding: 20px 24px;
-      max-width: 520px;
-      text-align: center;
+      border-radius: 10px;
+      background: var(--bg-card);
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
-    .score-title { font-size: 20px; font-weight: 900; margin-bottom: 6px; }
-    .score-sub { color: var(--text-secondary); margin-bottom: 12px; }
-    .score-total { font-size: 24px; font-weight: 900; color: var(--accent-gold); }
-    .score-flash { box-shadow: 0 0 0 2px rgba(255, 215, 128, 0.7), 0 0 18px rgba(255, 215, 128, 0.5); }
+    .hud-calling-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .hud-calling-main { font-family: 'Fira Code', monospace; font-weight: 800; color: var(--accent-gold); }
+    .hud-calling-sub { font-size: 11px; color: var(--text-secondary); }
+    .xpbar { width: 100%; height: 8px; border-radius: 999px; background: rgba(255,255,255,0.1); overflow: hidden; }
+    .xpbar-fill { height: 100%; background: linear-gradient(90deg, #60a5fa, #7dd3fc); transition: width 0.25s ease; }
+    .xpbar-text { font-size: 10px; color: var(--text-muted); text-align: right; }
+    .calling-rank-pulse { animation: rankPulse 0.85s ease-in-out 2; }
+    @keyframes rankPulse {
+      0%,100% { box-shadow: 0 0 0 rgba(125,211,252,0); }
+      50% { box-shadow: 0 0 0 2px rgba(125,211,252,0.35), 0 0 18px rgba(125,211,252,0.3); }
+    }
   </style>
 </head>
 
@@ -3006,23 +3047,51 @@ const CALLING_RANK_THRESHOLDS = [
       return '•';
     }
 
+    function getCallingRankInfo() {
+      if (!run || !run.callingCard) return null;
+      const rank = run.callingCard.rank || '2';
+      const idx = CALLING_RANK_THRESHOLDS.findIndex(t => t.rank === rank);
+      const safeIdx = idx >= 0 ? idx : 0;
+      const current = CALLING_RANK_THRESHOLDS[safeIdx];
+      const next = CALLING_RANK_THRESHOLDS[safeIdx + 1] || null;
+      const karma = safeNumber(run.karma, 0);
+      const prevKarma = current ? current.karma : 0;
+      const nextKarma = next ? next.karma : prevKarma;
+      const span = Math.max(1, nextKarma - prevKarma);
+      const progress = next ? Math.max(0, Math.min(1, (karma - prevKarma) / span)) : 1;
+      return {
+        rank,
+        current,
+        next,
+        isMax: !next,
+        progress,
+        toNext: next ? Math.max(0, next.karma - karma) : 0
+      };
+    }
+
     function maybeLevelUpCallingCardFromKarma() {
-      if (!run || !run.callingCard) return;
-      const currentRank = run.callingCard.rank || '2';
-      const currentIndex = CALLING_RANK_THRESHOLDS.findIndex(t => t.rank === currentRank);
-      const nextIndex = currentIndex + 1;
-      if (nextIndex <= 0 || nextIndex >= CALLING_RANK_THRESHOLDS.length) return;
-      const next = CALLING_RANK_THRESHOLDS[nextIndex];
-      if (safeNumber(run.karma, 0) < next.karma) return;
-      run.callingCard.rank = next.rank;
+      if (!run || !run.callingCard) return null;
+      const fromRank = run.callingCard.rank || '2';
+      let idx = CALLING_RANK_THRESHOLDS.findIndex(t => t.rank === fromRank);
+      if (idx < 0) idx = 0;
+      let gained = 0;
+      while (idx + 1 < CALLING_RANK_THRESHOLDS.length && safeNumber(run.karma, 0) >= CALLING_RANK_THRESHOLDS[idx + 1].karma) {
+        idx += 1;
+        gained += 1;
+      }
+      if (gained <= 0) return null;
+      const toRank = CALLING_RANK_THRESHOLDS[idx].rank;
+      run.callingCard.rank = toRank;
+      run.ui.callingRankPulseUntil = Date.now() + 1500;
       logEvent('CALLING_CARD_LEVEL_UP', {
-        fromRank: currentRank,
-        toRank: next.rank,
-        totalKarma: run.karma,
-        thresholdMet: next.karma
+        fromRank,
+        toRank,
+        levelsGained: gained,
+        karmaAtLevelUp: run.karma
       });
-      showToast(`Calling Card leveled up: ${currentRank} → ${next.rank}`);
+      showToast(`Calling Card leveled up: ${fromRank} → ${toRank}`);
       renderHUD();
+      return { fromRank, toRank, levelsGained: gained };
     }
 
     function getCardValueOptions(card) {
@@ -3380,6 +3449,7 @@ function benchPush(card, source = '') {
         floor: 1,
         chips: STARTING_CHIPS,
         karma: 0,
+        karmaWinStreak: 0,
         callingCard: null,
         callingCardChosenSuit: null,
         playerName: loadPlayerName() || '',
@@ -3415,7 +3485,9 @@ function benchPush(card, source = '') {
         },
         ui: {
           mode: 'INTRO',
-          message: ''
+          message: '',
+          callingRankPulseUntil: 0,
+          karmaTallyFast: false
         },
         intro: {
           step: null,
@@ -5357,51 +5429,121 @@ body += `
       }
     }
 
+
+    function flattenLaneForPatterns(laneCards) {
+      const out = [];
+      for (const c of laneCards || []) {
+        if (!c) continue;
+        if (isModifier(c) || isKeyCard(c)) continue;
+        if (isFused(c)) {
+          if (c.a && !isModifier(c.a) && !isKeyCard(c.a)) out.push({ rank: c.a.rank, suit: c.a.suit, parentUid: c.uid || null });
+          if (c.b && !isModifier(c.b) && !isKeyCard(c.b)) out.push({ rank: c.b.rank, suit: c.b.suit, parentUid: c.uid || null });
+          continue;
+        }
+        out.push({ rank: c.rank, suit: c.suit, parentUid: c.uid || null });
+      }
+      return out;
+    }
+
+    function detectLanePatterns(laneCards) {
+      const atoms = flattenLaneForPatterns(laneCards);
+      if (!atoms.length) return [];
+      const byRank = new Map();
+      const bySuit = new Map();
+      for (const a of atoms) {
+        if (!a.rank || !a.suit) continue;
+        if (!byRank.has(a.rank)) byRank.set(a.rank, []);
+        byRank.get(a.rank).push(a.parentUid);
+        if (!bySuit.has(a.suit)) bySuit.set(a.suit, []);
+        bySuit.get(a.suit).push(a.parentUid);
+      }
+      const uniqueUids = (arr) => Array.from(new Set((arr || []).filter(v => v !== null && v !== undefined)));
+      const rankCounts = Array.from(byRank.entries()).map(([rank, uids]) => ({ rank, count: uids.length, cardUids: uniqueUids(uids) }));
+      const pairRanks = rankCounts.filter(r => r.count >= 2);
+      const trips = rankCounts.find(r => r.count >= 3);
+      const quads = rankCounts.find(r => r.count >= 4);
+      const flush = Array.from(bySuit.entries()).find(([, uids]) => uids.length >= 3);
+
+      const values = Array.from(new Set(atoms.map(a => rankToValue(a.rank)).filter(v => v > 0)));
+      if (values.includes(14)) values.push(1);
+      const sorted = Array.from(new Set(values)).sort((a,b)=>a-b);
+      let bestRun = [];
+      let cur = [];
+      for (const v of sorted) {
+        if (!cur.length || v === cur[cur.length-1] + 1) cur.push(v);
+        else cur = [v];
+        if (cur.length > bestRun.length) bestRun = cur.slice();
+      }
+      const patterns=[];
+      if (quads) patterns.push({ name:'Quads', delta:35, cardUids:quads.cardUids });
+      if (trips && pairRanks.some(p => p.rank !== trips.rank)) patterns.push({ name:'Full House', delta:26, cardUids: uniqueUids([...trips.cardUids, ...pairRanks.filter(p=>p.rank!==trips.rank).flatMap(p=>p.cardUids)]) });
+      if (trips) patterns.push({ name:'Trips', delta:18, cardUids:trips.cardUids });
+      if (pairRanks.length >= 2) patterns.push({ name:'Two Pair', delta:14, cardUids: uniqueUids(pairRanks.slice(0,2).flatMap(p=>p.cardUids)) });
+      if (pairRanks.length >= 1) patterns.push({ name:'Pair', delta:8, cardUids: pairRanks[0].cardUids });
+      if (flush) patterns.push({ name:'Flush', delta:14, cardUids: uniqueUids(flush[1]) });
+      if (bestRun.length >= 3) {
+        const runVals = new Set(bestRun);
+        const runUids = uniqueUids(atoms.filter(a => {
+          const v = rankToValue(a.rank);
+          return runVals.has(v) || (v === 14 && runVals.has(1));
+        }).map(a => a.parentUid));
+        patterns.push({ name:'Straight', delta:14, cardUids: runUids });
+      }
+      return patterns;
+    }
+
     function buildKarmaBreakdown(positionResults, playerTotals) {
       const lanes = positionResults.map((result, idx) => {
-        const base = result === 'player' ? safeNumber(playerTotals[idx], 0) : 0;
+        const isWin = result === 'player';
+        const base = isWin ? safeNumber(playerTotals[idx], 0) : 0;
         const laneCards = blackjackMatch.playerPositions[idx].cards || [];
         const laneSize = laneCards.length || 1;
         const stamps = [];
         let stampTotal = 0;
-        laneCards.forEach(card => {
-          const stampId = getCardStampId(card);
-          if (!stampId) return;
-          const def = getStampDef(stampId);
-          const delta = getStampKarmaContribution(stampId, base, laneSize);
-          stampTotal += delta;
-          stamps.push({
-            stampId,
-            name: def ? def.name : stampId,
-            icon: def ? def.icon : '',
-            delta
+        let stampUids = [];
+        if (isWin) {
+          laneCards.forEach(card => {
+            const stampId = getCardStampId(card);
+            if (!stampId) return;
+            const def = getStampDef(stampId);
+            const delta = getStampKarmaContribution(stampId, base, laneSize);
+            stampTotal += delta;
+            if (card && card.uid !== null && card.uid !== undefined) stampUids.push(card.uid);
+            stamps.push({ stampId, name: def ? def.name : stampId, icon: def ? def.icon : '', delta, cardUid: card?.uid ?? null });
           });
-        });
+        }
+        const patterns = isWin ? detectLanePatterns(laneCards) : [];
+        const patternTotal = patterns.reduce((sum, p) => sum + safeNumber(p.delta, 0), 0);
         const mods = blackjackMatch.playerPositions[idx].mods || [];
         const modsText = mods.length ? mods.map(m => (m > 0 ? `+${m}` : `${m}`)).join(' ') : '';
         return {
-          idx,
-          outcome: result,
-          base,
-          stamps,
-          stampTotal,
+          idx, outcome: result, base,
+          stamps, stampTotal,
+          patterns, patternTotal,
+          stampUids: Array.from(new Set(stampUids)),
+          patternUids: Array.from(new Set(patterns.flatMap(p => p.cardUids || []))),
           modsText,
-          laneTotal: base + stampTotal
+          laneTotal: base + stampTotal + patternTotal
         };
       });
       return { lanes };
     }
 
-    function startScoreSequence(breakdown, winBonus, total) {
+    function startScoreSequence(breakdown, extras, total, levelUpSummary = null) {
       if (!blackjackMatch) return;
       const steps = [];
-      breakdown.lanes.forEach(lane => {
-        steps.push({ type: 'lane', lane });
-        lane.stamps.forEach(stamp => {
-          steps.push({ type: 'stamp', lane, stamp });
-        });
+      (breakdown.lanes || []).forEach(lane => {
+        if (lane.base > 0) steps.push({ type: 'laneBase', lane, delta: lane.base, message: `Lane ${lane.idx + 1} win +${lane.base}`, cardUids: [] });
+        if (lane.stampTotal > 0) steps.push({ type: 'laneStamps', lane, delta: lane.stampTotal, message: `Lane ${lane.idx + 1} stamps +${lane.stampTotal}`, cardUids: lane.stampUids || [] });
+        if (lane.patternTotal > 0) steps.push({ type: 'lanePatterns', lane, delta: lane.patternTotal, message: `Lane ${lane.idx + 1} patterns +${lane.patternTotal}`, cardUids: lane.patternUids || [] });
       });
-      if (winBonus > 0) steps.push({ type: 'winBonus', amount: winBonus });
+      for (const extra of (extras || [])) {
+        if (safeNumber(extra.delta, 0) <= 0) continue;
+        steps.push({ type: 'extra', lane: null, delta: safeNumber(extra.delta, 0), message: `${extra.name} +${extra.delta}`, cardUids: [] });
+      }
+      if (levelUpSummary && levelUpSummary.levelsGained > 0) {
+        steps.push({ type: 'levelUp', lane: null, delta: 0, message: `Calling rank up ${levelUpSummary.fromRank} → ${levelUpSummary.toRank}`, cardUids: [] });
+      }
 
       blackjackMatch.scoreSeq = {
         active: true,
@@ -5409,10 +5551,14 @@ body += `
         stepIndex: 0,
         accrued: 0,
         total,
-        winBonus,
         focusLane: null,
         focusSide: null,
-        message: 'Scoring…'
+        focusCardUids: [],
+        float: null,
+        message: 'Karma tally…',
+        speedMs: 1150,
+        fastMs: 250,
+        isFast: !!(run && run.ui && run.ui.karmaTallyFast)
       };
       advanceScoreSequence();
     }
@@ -5422,6 +5568,8 @@ body += `
       blackjackMatch.scoreSeq.active = false;
       blackjackMatch.scoreSeq.focusLane = null;
       blackjackMatch.scoreSeq.focusSide = null;
+      blackjackMatch.scoreSeq.focusCardUids = [];
+      blackjackMatch.scoreSeq.float = null;
       renderAll();
       if (blackjackMatch.pendingRewardStart) {
         blackjackMatch.pendingRewardStart = false;
@@ -5437,29 +5585,31 @@ body += `
         return;
       }
       const step = seq.steps[seq.stepIndex];
-      if (step.type === 'lane') {
-        seq.focusLane = step.lane.idx;
-        seq.focusSide = 'player';
-        seq.accrued += step.lane.base;
-        seq.message = `Lane ${step.lane.idx + 1}: ${step.lane.outcome.toUpperCase()} ${step.lane.base ? `+${step.lane.base}` : ''}`.trim();
-      } else if (step.type === 'stamp') {
-        seq.focusLane = step.lane.idx;
-        seq.focusSide = 'player';
-        seq.accrued += step.stamp.delta;
-        seq.message = `${step.stamp.name}: +${step.stamp.delta}`;
-      } else if (step.type === 'winBonus') {
-        seq.focusLane = null;
-        seq.focusSide = null;
-        seq.accrued += step.amount;
-        seq.message = `Win bonus +${step.amount}`;
+      seq.focusLane = step.lane ? step.lane.idx : null;
+      seq.focusSide = step.lane ? 'player' : null;
+      seq.focusCardUids = step.cardUids || [];
+      seq.message = step.message || 'Karma tally…';
+      if (step.delta > 0) {
+        seq.accrued += step.delta;
+        seq.float = {
+          id: `${Date.now()}_${seq.stepIndex}`,
+          laneIdx: step.lane ? step.lane.idx : null,
+          side: step.lane ? 'player' : null,
+          text: `+${step.delta}`,
+          kind: step.type
+        };
+      } else {
+        seq.float = null;
       }
       seq.stepIndex += 1;
       renderAll();
-      setTimeout(advanceScoreSequence, 650);
+      const delay = seq.isFast ? seq.fastMs : seq.speedMs;
+      setTimeout(advanceScoreSequence, delay);
     }
 
     window.skipScoreSequence = function() {
-      finishScoreSequence();
+      if (!blackjackMatch || !blackjackMatch.scoreSeq || !blackjackMatch.scoreSeq.active) return;
+      blackjackMatch.scoreSeq.isFast = true;
     };
 
     // =============================================
@@ -6327,26 +6477,60 @@ function dealerStandPhase(diff, maxPasses = 6) {
         blackjackMatch.bonusChipsEarned += goldBonusTotal;
       }
 
+      const callingRankBefore = run.callingCard ? run.callingCard.rank : null;
       const karmaBreakdown = buildKarmaBreakdown(positionResults, playerTotals);
       const karmaLaneGain = karmaBreakdown.lanes.reduce((sum, lane) => sum + lane.laneTotal, 0);
-      let karmaWinBonus = 0;
+      const karmaStampTotal = karmaBreakdown.lanes.reduce((sum, lane) => sum + lane.stampTotal, 0);
+      const karmaPatternTotal = karmaBreakdown.lanes.reduce((sum, lane) => sum + lane.patternTotal, 0);
+      const karmaExtras = [];
+
+      if (outcome === 'WIN') {
+        const decisiveMap = { 2: 10, 3: 25, 4: 45, 5: 70 };
+        const decisive = decisiveMap[playerWins] || 0;
+        if (decisive > 0) karmaExtras.push({ name: 'Decisive Win', delta: decisive, kind: 'decisive' });
+
+        run.karmaWinStreak = safeNumber(run.karmaWinStreak, 0) + 1;
+        const s = run.karmaWinStreak;
+        let streakBonus = 0;
+        if (s >= 5) streakBonus = 75;
+        else if (s === 4) streakBonus = 50;
+        else if (s === 3) streakBonus = 30;
+        else if (s === 2) streakBonus = 15;
+        if (streakBonus > 0) karmaExtras.push({ name: `Win Streak x${s}`, delta: streakBonus, kind: 'streak' });
+
+        if (safeNumber(blackjackMatch.metrics.playerBustsFinal, 0) === 0) {
+          karmaExtras.push({ name: 'No Bust Win', delta: 20, kind: 'clean' });
+        }
+
+        const twentyOneWins = positionResults.reduce((n, r, i) => n + ((r === 'player' && safeNumber(playerTotals[i], 0) === 21) ? 1 : 0), 0);
+        const exact21Bonus = Math.min(50, twentyOneWins * 10);
+        if (exact21Bonus > 0) karmaExtras.push({ name: '21-on-Win', delta: exact21Bonus, kind: 'twentyone' });
+      } else {
+        run.karmaWinStreak = 0;
+      }
+
       if (outcome === 'WIN') {
         if (isBossRound) {
           const roundWeight = Math.max(1, (bf.maxRounds - bf.round + 1));
           const lanesWon = playerWins;
           const bonusDamage = blackjackMatch.bossDamage ? blackjackMatch.bossDamage.bonusDamage : 0;
-          karmaWinBonus = (25 * roundWeight) + (10 * lanesWon) + (5 * bonusDamage);
+          const bossWinBonus = (25 * roundWeight) + (10 * lanesWon) + (5 * bonusDamage);
+          if (bossWinBonus > 0) karmaExtras.push({ name: 'Boss Win Bonus', delta: bossWinBonus, kind: 'boss_win' });
           if (bossDefeatedNow) {
-            karmaWinBonus += 50 * roundWeight;
+            karmaExtras.push({ name: 'Boss Defeat Bonus', delta: 50 * roundWeight, kind: 'boss_defeat' });
           }
         } else {
           const baseBonus = blackjackMatch.type === 'STANDARD' ? 50 : 100;
-          karmaWinBonus = baseBonus * transferMultiplier;
+          const standardWinBonus = baseBonus * transferMultiplier;
+          if (standardWinBonus > 0) karmaExtras.push({ name: 'Match Win Bonus', delta: standardWinBonus, kind: 'match_win' });
         }
       }
-      const karmaGained = karmaLaneGain + karmaWinBonus;
+
+      const karmaExtraTotal = karmaExtras.reduce((sum, e) => sum + safeNumber(e.delta, 0), 0);
+      const karmaGained = karmaLaneGain + karmaExtraTotal;
       run.karma = Math.max(0, safeNumber(run.karma, 0) + karmaGained);
-      maybeLevelUpCallingCardFromKarma();
+      const levelUpSummary = maybeLevelUpCallingCardFromKarma();
+      const callingRankAfter = run.callingCard ? run.callingCard.rank : null;
 
       blackjackMatch.result = {
         outcome,
@@ -6357,7 +6541,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
         transferMultiplier,
         exhaustion: options.exhaustion || null,
         karmaGained,
-        karmaBreakdown: { ...karmaBreakdown, winBonus: karmaWinBonus, total: karmaGained }
+        karmaBreakdown: { ...karmaBreakdown, extras: karmaExtras, total: karmaGained }
       };
 
       // finalize bust counts for match metrics
@@ -6411,6 +6595,14 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         rakeRate,
         bonusChips: blackjackMatch.bonusChipsEarned || 0,
         karmaGained,
+        callingRankBefore,
+        callingRankAfter,
+        levelsGained: levelUpSummary ? levelUpSummary.levelsGained : 0,
+        karmaLaneGain,
+        karmaStampTotal,
+        karmaPatternTotal,
+        karmaExtraTotal,
+        karmaExtras,
         exhaustion: options.exhaustion || null,
         durationMs,
         lanes: {
@@ -6424,10 +6616,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       });
 
       if (karmaGained > 0) {
-        logEvent('KARMA_GAIN', { amount: karmaGained, total: run.karma, laneKarma: karmaLaneGain, winBonus: karmaWinBonus });
+        logEvent('KARMA_GAIN', { amount: karmaGained, total: run.karma, laneKarma: karmaLaneGain, stampKarma: karmaStampTotal, patternKarma: karmaPatternTotal, extraKarma: karmaExtraTotal });
       }
 
-      startScoreSequence(karmaBreakdown, karmaWinBonus, karmaGained);
+      startScoreSequence(karmaBreakdown, karmaExtras, karmaGained, levelUpSummary);
 
       renderAll();
 
@@ -7237,6 +7429,14 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const loanStatus = run.loan.active ? (run.loan.repaid ? 'Repaid' : `Owed: ${LOAN_REPAY}`) : 'None';
       const loanClass = run.loan.active && !run.loan.repaid ? 'debt' : '';
       const canRepay = run.loan.active && !run.loan.repaid && chips >= LOAN_REPAY;
+      const rankInfo = getCallingRankInfo();
+      const pulseClass = (run.ui && safeNumber(run.ui.callingRankPulseUntil, 0) > Date.now()) ? 'calling-rank-pulse' : '';
+      const callingText = run.callingCard ? `${run.callingCard.rank}${run.callingCard.suit}` : '—';
+      const rankLine = rankInfo
+        ? (rankInfo.isMax ? `Rank ${rankInfo.rank} · MAX` : `Rank ${rankInfo.current.rank} → ${rankInfo.next.rank}`)
+        : 'Rank —';
+      const toNext = rankInfo ? (rankInfo.isMax ? 'Max rank reached' : `${rankInfo.toNext} karma to next rank`) : '';
+      const prog = rankInfo ? Math.round(rankInfo.progress * 100) : 0;
 
       hud.innerHTML = `
         <div class="hud-left">
@@ -7252,13 +7452,17 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             <span class="hud-stat-label">Chips</span>
             <span class="hud-stat-value chips">${chips}</span>
           </div>
-          <div class="hud-stat">
-            <span class="hud-stat-label">Karma</span>
-            <span class="hud-stat-value karma">${safeNumber(run.karma, 0)}</span>
-          </div>
-          <div class="hud-stat">
-            <span class="hud-stat-label">Calling</span>
-            <span class="hud-stat-value">${run.callingCard ? cardToString(run.callingCard) : '—'}</span>
+          <div class="hud-calling ${pulseClass}">
+            <div class="hud-calling-row">
+              <span class="hud-stat-label">Calling Card</span>
+              <span class="hud-calling-main">${callingText}</span>
+            </div>
+            <div class="hud-calling-row">
+              <span class="hud-calling-sub">Karma ${safeNumber(run.karma, 0)}</span>
+              <span class="hud-calling-sub">${rankLine}</span>
+            </div>
+            <div class="xpbar"><div class="xpbar-fill" style="width:${prog}%"></div></div>
+            <div class="xpbar-text">${escapeHtml(toNext)}</div>
           </div>
           <div class="hud-stat">
             <span class="hud-stat-label">Deck</span>
@@ -7268,14 +7472,14 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             <span class="hud-stat-label">Tokens</span>
             <span class="hud-stat-value tokens">${run.bankedTokens || 0}</span>
           </div>
-<div class="hud-stat">
-  <span class="hud-stat-label">Bench</span>
-  <span class="hud-stat-value">${getBenchCapacity()}</span>
-</div>
-<div class="hud-stat">
-  <span class="hud-stat-label">Rake</span>
-  <span class="hud-stat-value">${Math.round(getHouseRakeRate(run.floor) * 100)}%</span>
-</div>
+          <div class="hud-stat">
+            <span class="hud-stat-label">Bench</span>
+            <span class="hud-stat-value">${getBenchCapacity()}</span>
+          </div>
+          <div class="hud-stat">
+            <span class="hud-stat-label">Rake</span>
+            <span class="hud-stat-value">${Math.round(getHouseRakeRate(run.floor) * 100)}%</span>
+          </div>
           <div class="hud-stat">
             <span class="hud-stat-label">Debt</span>
             <span class="hud-stat-value ${loanClass}">${loanStatus}</span>
@@ -7516,11 +7720,12 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const sleeveId = !faceDown && card ? card.sleeveId : null;
       const dataAttrs = [
         `data-card-label="${text}"`,
-        `data-card-type="${isModifier(card) ? 'MOD' : (isFused(card) ? 'FUSE' : 'STANDARD')}"`,
+        `data-card-type="${isModifier(card) ? 'MOD' : (isFused(card) ? 'FUSE' : (isKeyCard(card) ? 'KEY' : 'STANDARD'))}"`,
         card && card.rank ? `data-card-rank="${card.rank}"` : '',
         card && card.suit ? `data-card-suit="${card.suit}"` : '',
         stampId ? `data-card-stamp="${stampId}"` : '',
-        sleeveId ? `data-card-sleeve="${sleeveId}"` : ''
+        sleeveId ? `data-card-sleeve="${sleeveId}"` : '',
+        card && card.uid !== undefined && card.uid !== null ? `data-card-uid="${card.uid}"` : ''
       ].filter(Boolean).join(' ');
       const stampIcon = (stampDef && stampDef.icon) ? `<div class="stamp-icon">${stampDef.icon}</div>` : '';
       return `<div class="${cls}" ${dataAttrs}>${text}${stampIcon}</div>`;
@@ -7738,12 +7943,15 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
   }
 
   // NEW: Dealer cards: first card face-down unless revealed; others face-up
+  const focusedUids = new Set((blackjackMatch && blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active && blackjackMatch.scoreSeq.focusLane === idx && blackjackMatch.scoreSeq.focusSide === side)
+    ? (blackjackMatch.scoreSeq.focusCardUids || []) : []);
   const cardsHtml = (pos.cards || []).map((c, j) => {
     if (side === 'dealer') {
       const faceDown = (j === 0) && !revealHole;
       return renderCard(c, faceDown);
     }
-    return renderCard(c, false);
+    const popClass = focusedUids.has(c && c.uid) ? 'karma-pop' : '';
+    return renderCard(c, false, popClass);
   }).join('');
 
   const mods = (pos.mods || []);
@@ -7753,6 +7961,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
   const modsLine = displayMods.length
     ? `<div class="bj-position-num" style="color: var(--accent-blue); font-weight:800;">MOD: ${modsText}</div>`
     : `<div class="bj-position-num">MOD: —</div>`;
+  const f = blackjackMatch && blackjackMatch.scoreSeq ? blackjackMatch.scoreSeq.float : null;
+  const floatHtml = (f && f.side === side && f.laneIdx === idx)
+    ? `<div class="karma-float" data-float-id="${f.id}">${escapeHtml(f.text || '')}</div>`
+    : '';
 
   return `
     <div class="${cls}" id="${side}_lane_${idx}">
@@ -7761,6 +7973,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       <div class="bj-total ${totalBustVisual}">${totalText}</div>
       ${stateBadge(displayState)}
       ${modsLine}
+      ${floatHtml}
       <div id="${side}_lane_actions_${idx}" style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center;"></div>
     </div>
   `;
@@ -7823,7 +8036,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const laneWinners = (isResolved && result) ? result.positionResults : ['push','push','push','push','push'];
 
       html += `
-        <div class="bj-board">
+        <div class="bj-board ${(blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active) ? 'scoring-mode' : ''}">
           <div class="bj-side">
             <div class="bj-side-label">${npc ? `${npc.name} · ${cardToString(npc.callingCard)}` : 'Dealer'}</div>
             <div class="bj-positions">
@@ -7865,16 +8078,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           : '';
 
         const scoreSeq = blackjackMatch.scoreSeq;
-        const scoreOverlay = scoreSeq && scoreSeq.active ? `
-          <div class="score-overlay" onclick="skipScoreSequence()">
-            <div class="score-panel">
-              <div class="score-title">Karma Tally</div>
-              <div class="score-sub">${escapeHtml(scoreSeq.message || '')}</div>
-              <div class="score-total">+${Math.max(0, scoreSeq.accrued)}</div>
-              <div class="score-sub">Tap to skip</div>
-            </div>
-          </div>
-        ` : '';
+        const scoreLine = scoreSeq && scoreSeq.active
+          ? `<div class="bj-result-score" style="color:var(--accent-blue); font-weight:800;">Karma tally: +${Math.max(0, scoreSeq.accrued)} / +${Math.max(0, scoreSeq.total)} · ${escapeHtml(scoreSeq.message || '')}</div>`
+          : '';
 
         html += `
           <div class="bj-result">
@@ -7888,9 +8094,12 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             </div>
             ${rewardNote}
             ${exhaustionNote}
-            <button class="bj-btn" onclick="blackjackContinue()" ${blackjackMatch.rewardPending || (scoreSeq && scoreSeq.active) ? 'disabled' : ''}>Continue</button>
+            ${scoreLine}
+            <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+              <button class="bj-btn" onclick="blackjackContinue()" ${blackjackMatch.rewardPending || (scoreSeq && scoreSeq.active) ? 'disabled' : ''}>Continue</button>
+              ${(scoreSeq && scoreSeq.active) ? '<button class="bj-btn" onclick="skipScoreSequence()">Skip Tally</button>' : ''}
+            </div>
           </div>
-          ${scoreOverlay}
         `;
       } else {
         if (blackjackMatch.phase === 'betting') {
