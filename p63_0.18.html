@@ -1318,6 +1318,8 @@ const CALLING_RANK_THRESHOLDS = [
     // Action tokens + cocktails
     const COCKTAIL_COST = 150;
     const ACTION_TOKEN_MAX_BANKED = 3;
+    const KEY_SUIT = '★';
+    const KEY_MERCHANT_COST = 150;
 
     // Rewards / mechanics
     const BLACKJACK_21_REWARD = 21;
@@ -1533,7 +1535,7 @@ const CALLING_RANK_THRESHOLDS = [
 
     function buildDeckSummary() {
       const deck = run ? (run.playerDeck || []) : [];
-      const bySuit = { '♠': 0, '♥': 0, '♦': 0, '♣': 0 };
+      const bySuit = { '♠': 0, '♥': 0, '♦': 0, '♣': 0, [KEY_SUIT]: 0 };
       const byRank = Object.fromEntries(RANKS.map(r => [r, 0]));
       let modCount = 0;
       let fusedCount = 0;
@@ -1569,6 +1571,7 @@ const CALLING_RANK_THRESHOLDS = [
     function serializeCard(card) {
       if (!card) return null;
       if (isModifier(card)) return { uid: card.uid || null, kind: 'MOD', delta: card.delta };
+      if (isKeyCard(card)) return { uid: card.uid || null, kind: 'KEY', rank: card.rank, suit: card.suit, keySource: card.keySource || null };
       if (isFused(card)) {
         return {
           uid: card.uid || null,
@@ -2671,7 +2674,9 @@ const CALLING_RANK_THRESHOLDS = [
       });
       const rankIndex = Object.fromEntries(RANKS.map((r, i) => [r, i]));
       standards.sort((a, b) => {
-        const suitDiff = SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit);
+        const suitIndexA = a.suit === KEY_SUIT ? 99 : SUITS.indexOf(a.suit);
+        const suitIndexB = b.suit === KEY_SUIT ? 99 : SUITS.indexOf(b.suit);
+        const suitDiff = suitIndexA - suitIndexB;
         if (suitDiff !== 0) return suitDiff;
         return (rankIndex[a.rank] || 0) - (rankIndex[b.rank] || 0);
       });
@@ -2806,6 +2811,15 @@ const CALLING_RANK_THRESHOLDS = [
       return c && c.type === 'FUSE';
     }
 
+    function isKeyCard(c) {
+      return c && c.type === 'KEY';
+    }
+
+    function makeKeyCard(source) {
+      const rank = randomChoice(RANKS);
+      return { uid: null, type: 'KEY', suit: KEY_SUIT, rank, keySource: source, sleeveId: null, laminationId: null };
+    }
+
     function isStandardCard(c) {
       return c && !c.type && c.rank && c.suit;
     }
@@ -2855,6 +2869,7 @@ const CALLING_RANK_THRESHOLDS = [
     function cloneCardWithNewUid(card) {
       if (!card) return null;
       if (isModifier(card)) return { uid: null, type: 'MOD', delta: card.delta };
+      if (isKeyCard(card)) return { ...card, uid: null };
       if (isFused(card)) return { uid: null, type: 'FUSE', a: card.a, b: card.b };
       return {
         uid: null,
@@ -2868,6 +2883,7 @@ const CALLING_RANK_THRESHOLDS = [
     function cardRef(card) {
       if (!card) return null;
       if (isModifier(card)) return { uid: card.uid || null, kind: 'MOD', delta: card.delta };
+      if (isKeyCard(card)) return { uid: card.uid || null, kind: 'KEY', rank: card.rank, suit: card.suit, keySource: card.keySource || null };
       if (isFused(card)) return { uid: card.uid || null, kind: 'FUSE', aUid: card.a?.uid || null, bUid: card.b?.uid || null };
       return {
         uid: card.uid || null,
@@ -2912,6 +2928,7 @@ const CALLING_RANK_THRESHOLDS = [
     function cardCssClass(card) {
       if (isModifier(card)) return 'mod';
       if (isFused(card)) return 'fused';
+      if (isKeyCard(card)) return 'black';
       const classes = [isRedSuit(card.suit) ? 'red' : 'black'];
       if (card && card.sleeveId) {
         const sleeve = getSleeveDef(card.sleeveId);
@@ -3031,6 +3048,14 @@ const CALLING_RANK_THRESHOLDS = [
     }
 
     // Merchant random offer: standard card OR modifier (intermixed)
+    function cloneDeck(deck) {
+      return (deck || []).map(card => {
+        const c = cloneCardWithNewUid(card);
+        assignUid(c);
+        return c;
+      });
+    }
+
     function randomCard() {
       if (Math.random() < MOD_OFFER_CHANCE) {
         const delta = MODIFIER_DELTAS[Math.floor(Math.random() * MODIFIER_DELTAS.length)];
@@ -3097,6 +3122,7 @@ function getMerchantCost(base) {
 }
 
 function getMerchantBuyCost(card) {
+  if (isKeyCard(card)) return KEY_MERCHANT_COST;
   const isMod = isModifier(card);
   const base = isMod ? MERCHANT_BUY_BASE_MOD : MERCHANT_BUY_BASE_STANDARD;
   const count = isMod
@@ -3334,6 +3360,13 @@ function benchPush(card, source = '') {
         bankedTokens: 0,
         bossWins: 0,
         bossFight: null,
+        secret: {
+          keys: {
+            highStakes: { obtained: false, floor: 1, tileId: null, hinted: false },
+            merchant: { state: 'unseen', floor: 2, chance: 0.05 },
+            boss: { obtained: false, floor: 3 }
+          }
+        },
         paidRemovalCount: 0,
         merchantStandardBuys: 0,
         merchantModifierBuys: 0,
@@ -3373,6 +3406,13 @@ function benchPush(card, source = '') {
       run.board.currentTileId = null;
       run.board.visited = new Set();
       run.board.path = [];
+      if (floor === 1 && run.secret && run.secret.keys && !run.secret.keys.highStakes.tileId) {
+        const highs = run.board.tiles.filter(t => t.type === 'HIGH_STAKES');
+        if (highs.length) {
+          const pick = randomChoice(highs);
+          run.secret.keys.highStakes.tileId = pick.id;
+        }
+      }
       run.ui.mode = 'BOARD';
 
       logEvent('FLOOR_START', { floor });
@@ -3477,7 +3517,8 @@ function benchPush(card, source = '') {
 
     // helper: free removal picker (3 random cards, choose one or none)
     function openFreeRemovalPicker(title, onDone) {
-      const candidates = distinctRandomIndices(3, run.playerDeck.length).map(i => ({ card: run.playerDeck[i] }));
+      const pool = run.playerDeck.filter(c => !isKeyCard(c));
+      const candidates = shuffle(pool.slice()).slice(0, Math.min(3, pool.length)).map(card => ({ card }));
       let selected = null;
 
       function renderPicker() {
@@ -3541,6 +3582,11 @@ function benchPush(card, source = '') {
       const ownedCount = run.ownedActions.length;
 
       let offerHtml = '';
+      const hsKey = run.secret && run.secret.keys ? run.secret.keys.highStakes : null;
+      if (hsKey && !hsKey.obtained && run.floor === hsKey.floor && !hsKey.hinted && hsKey.tileId !== null) {
+        offerHtml += `<p class="modal-text">"High roller on this floor. Find the right table and win big."</p>`;
+        hsKey.hinted = true;
+      }
       if (!offeredId) {
         offerHtml = `
           <p class="modal-text">The bartender has no new cocktails to offer right now.</p>
@@ -4255,6 +4301,7 @@ function benchPush(card, source = '') {
 
       merchantOffers = [randomCard(), randomCard(), randomCard()];
       merchantOffers.forEach(card => assignUid(card));
+      maybeInjectMerchantKey(merchantOffers);
       removalMode = false;
       removalCandidates = [];
       selectedRemovalIdx = null;
@@ -4382,7 +4429,7 @@ body += `
         });
         buttons.push({ text: 'Exit Removal', action: cancelRemoval });
       } else {
-        buttons.push({ text: 'Leave', action: () => { closeModal(); renderAll(); } });
+        buttons.push({ text: 'Leave', action: () => { leaveMerchant(); } });
       }
 
       showModal('Merchant', body, buttons);
@@ -4390,11 +4437,20 @@ body += `
     }
 
     window.rerollMerchantInventory = function() {
+      if (run && run.secret && run.secret.keys && run.floor === 2) {
+        const mk = run.secret.keys.merchant;
+        if (mk.state === 'offered') mk.state = 'missed';
+      }
       const cost = getMerchantCost(MERCHANT_INVENTORY_REROLL_COST);
       if (run.chips < cost) return;
       run.chips -= cost;
       merchantOffers = [randomCard(), randomCard(), randomCard()];
       merchantOffers.forEach(card => assignUid(card));
+      if (run.floor === 2 && run.secret && run.secret.keys) {
+        const mk = run.secret.keys.merchant;
+        mk.chance = Math.min(0.35, safeNumber(mk.chance, 0.05) + 0.03);
+      }
+      maybeInjectMerchantKey(merchantOffers);
       logEvent('MERCHANT_REROLL', { which: 'inventory', cost, offers: merchantOffers.map(cardRef) });
       renderMerchant();
       showToast(`Re-rolled inventory (-${cost})`);
@@ -4408,7 +4464,7 @@ body += `
   if (run.chips < cost) return;
 
   // Per-run purchase limit on modifiers (-4..+4)
-    if (isModifier(card) && getModifierRemaining(card.delta) <= 0) {
+  if (isModifier(card) && getModifierRemaining(card.delta) <= 0) {
       showToast(`Sold out: ${cardToString(card)}`);
       logEvent('MODIFIER_SOLD_OUT', {
         floor: run.floor,
@@ -4425,6 +4481,12 @@ body += `
 
   run.chips -= cost;
   run.playerDeck.push(card);
+
+  if (isKeyCard(card) && run.secret && run.secret.keys) {
+    run.secret.keys.merchant.state = 'obtained';
+    logEvent('KEYCARD_OBTAINED', { source: 'MERCHANT', card: cardRef(card), cost });
+    recordDeckSnapshot('KEYCARD_MERCHANT');
+  }
 
   if (isModifier(card)) {
     recordModifierPurchase(card.delta);
@@ -4449,6 +4511,7 @@ body += `
   // Refresh that inventory slot
   merchantOffers[idx] = randomCard();
   assignUid(merchantOffers[idx]);
+  maybeInjectMerchantKey(merchantOffers);
 
   renderMerchant();
   showToast(`Bought ${cardToString(card)}`);
@@ -4463,8 +4526,12 @@ body += `
   run.paidRemovalCount = safeNumber(run.paidRemovalCount, 0) + 1;
   removalPaidCost = cost;
 
-  const indices = distinctRandomIndices(3, run.playerDeck.length);
-  removalCandidates = indices.map(i => ({ card: run.playerDeck[i] }));
+  const eligible = run.playerDeck
+    .map((card, i) => ({ card, i }))
+    .filter(d => !isKeyCard(d.card));
+  if (eligible.length < 1) return;
+  const picks = shuffle(eligible.slice()).slice(0, Math.min(3, eligible.length));
+  removalCandidates = picks.map(d => ({ card: d.card }));
   removalMode = true;
   selectedRemovalIdx = null;
 
@@ -4484,8 +4551,11 @@ body += `
       if (run.chips < cost) return;
       run.chips -= cost;
 
-      const indices = distinctRandomIndices(3, run.playerDeck.length);
-      removalCandidates = indices.map(i => ({ card: run.playerDeck[i] }));
+      const eligible = run.playerDeck
+        .map((card, i) => ({ card, i }))
+        .filter(d => !isKeyCard(d.card));
+      const picks = shuffle(eligible.slice()).slice(0, Math.min(3, eligible.length));
+      removalCandidates = picks.map(d => ({ card: d.card }));
       selectedRemovalIdx = null;
 
       logEvent('MERCHANT_REROLL', { which: 'removal', cost, candidates: removalCandidates.map(x => cardRef(x.card)) });
@@ -4503,6 +4573,7 @@ body += `
       if (selectedRemovalIdx === null) return;
 
       const data = removalCandidates[selectedRemovalIdx];
+      if (isKeyCard(data.card)) return;
       const idx = run.playerDeck.indexOf(data.card);
       if (idx !== -1) {
         run.playerDeck.splice(idx, 1);
@@ -4529,6 +4600,31 @@ body += `
       renderMerchant();
     };
 
+    function maybeInjectMerchantKey(offers) {
+      if (!run || run.floor !== 2 || !run.secret || !run.secret.keys) return;
+      const mk = run.secret.keys.merchant;
+      if (mk.state === 'missed' || mk.state === 'obtained') return;
+      const already = offers.some(isKeyCard);
+      if (already) return;
+      const chance = safeNumber(mk.chance, 0.05);
+      if (Math.random() < chance) {
+        const slot = Math.floor(Math.random() * offers.length);
+        const key = makeKeyCard('MERCHANT');
+        assignUid(key);
+        offers[slot] = key;
+        mk.state = 'offered';
+      }
+    }
+
+    function leaveMerchant() {
+      if (run && run.secret && run.secret.keys && run.floor === 2) {
+        const mk = run.secret.keys.merchant;
+        if (mk.state === 'offered') mk.state = 'missed';
+      }
+      closeModal();
+      renderAll();
+    }
+
     // Blackjack encounters
     function encounterBlackjackStandard() {
       if (run.chips < BUYIN_STANDARD) { gameOver("You can't afford the buy-in."); return; }
@@ -4537,7 +4633,9 @@ body += `
 
     function encounterBlackjackHigh() {
       if (run.chips < BUYIN_HIGH) { gameOver("You can't afford the buy-in."); return; }
-      startBlackjackMatch('HIGH_STAKES', BUYIN_HIGH);
+      const hsKey = run.secret && run.secret.keys ? run.secret.keys.highStakes : null;
+      const specialReward = (run.floor === 1 && hsKey && !hsKey.obtained && run.board.currentTileId === hsKey.tileId) ? 'KEY_HIGH' : null;
+      startBlackjackMatch('HIGH_STAKES', BUYIN_HIGH, { specialReward });
     }
 
     function encounterBoss() {
@@ -4594,7 +4692,7 @@ body += `
         showToast("Surveillance Online — Countermeasures active.");
         logEvent('BOSS_PHASE2_START', { hp: bf.hp, maxHp: bf.maxHp, round: bf.round });
       }
-      if (bf.phase === 2) bossUpdateTargetLane(true, 'round_start');
+      if (bf.phase === 2) updateThreatTargetLane(true, 'round_start');
     }
 
     // =============================================
@@ -4615,8 +4713,8 @@ body += `
       const playerDrawPile = shuffle(run.playerDeck.slice());
 
       // Dealer deck = standard 52 + random bench modifiers (2/4/6 by floor)
-      const dealerBaseDeck = makeStandardDeck52();
-      const extraMods = Math.max(0, Math.min(20, safeNumber(run.floor, 1) * 2)); // F1=2, F2=4, F3=6
+      const dealerBaseDeck = options.dealerDeckOverride ? options.dealerDeckOverride.slice() : makeStandardDeck52();
+      const extraMods = options.dealerDeckOverride ? 0 : Math.max(0, Math.min(20, safeNumber(run.floor, 1) * 2)); // F1=2, F2=4, F3=6
       for (let i = 0; i < extraMods; i++) {
         const delta = MODIFIER_DELTAS[Math.floor(Math.random() * MODIFIER_DELTAS.length)];
         dealerBaseDeck.push({ type: 'MOD', delta });
@@ -4666,6 +4764,8 @@ body += `
         spadePeekLanes: new Set(),
         lastCallingSuitPlay: null,
         scoreSeq: null,
+        specialReward: options.specialReward || null,
+        watcherTargetLaneIdx: null,
         traps: {
           player: Array(5).fill(0),
           dealer: Array(5).fill(0)
@@ -4722,7 +4822,7 @@ body += `
       blackjackMatch.transferMultiplierMax = limits.max;
 
       const currentTile = run.board.tiles[run.board.currentTileId];
-      const npc = currentTile ? currentTile.npc : null;
+      const npc = options.npcOverride || (currentTile ? currentTile.npc : null);
       blackjackMatch.npc = npc;
       let affinity = 'neutral';
       let edgeDelta = 0;
@@ -5001,6 +5101,31 @@ body += `
 
       bf.targetLaneIdx = best ? best.i : null;
       logEvent('BOSS_TARGET_SET', { laneIdx: bf.targetLaneIdx, reason });
+    }
+
+    function watcherUpdateTargetLane(force = false, reason = '') {
+      if (!blackjackMatch || blackjackMatch.type !== 'WATCHER') return;
+      const current = blackjackMatch.watcherTargetLaneIdx;
+      if (!force && current !== null) {
+        const curPos = blackjackMatch.playerPositions[current];
+        if (curPos && curPos.isOpen && !curPos.isComplete) return;
+      }
+      let best = null;
+      for (let i = 0; i < 5; i++) {
+        const p = blackjackMatch.playerPositions[i];
+        if (!p.isOpen || p.isComplete) continue;
+        const t = getPositionTotal(p);
+        const diff = (t <= 21) ? (21 - t) : (1000 + (t - 21));
+        const score = diff * 100 - t;
+        if (!best || score < best.score) best = { i, score };
+      }
+      blackjackMatch.watcherTargetLaneIdx = best ? best.i : null;
+      logEvent('WATCHER_TARGET_SET', { laneIdx: blackjackMatch.watcherTargetLaneIdx, reason });
+    }
+
+    function updateThreatTargetLane(force = false, reason = '') {
+      if (run && run.bossFight && run.bossFight.active) return bossUpdateTargetLane(force, reason);
+      if (blackjackMatch && blackjackMatch.type === 'WATCHER') return watcherUpdateTargetLane(force, reason);
     }
 
     function bossTryCountermeasure() {
@@ -5484,7 +5609,7 @@ body += `
 
       maybeAward21BonusForPlayerPos(posIdx);
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
-      bossUpdateTargetLane(false, 'player_stand');
+      updateThreatTargetLane(false, 'bench_place');
       const deferred = handleCallingSuitOnPlayerCardPlaced(c, posIdx, endPlayerTurn);
       if (!deferred) endPlayerTurn();
     };
@@ -5547,6 +5672,7 @@ body += `
 
       maybeAward21BonusForPlayerPos(posIdx);
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
+      updateThreatTargetLane(false, 'player_place');
 
       // Apply pending splitDecision dealer gift (after player placement)
       if (blackjackMatch.pending && blackjackMatch.pending.type === 'splitDecision') {
@@ -5581,7 +5707,7 @@ body += `
       }
 
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
-      bossUpdateTargetLane(false, 'player_stand');
+      updateThreatTargetLane(false, 'player_stand');
 
       if (checkMatchEnd()) return;
 
@@ -5607,7 +5733,7 @@ body += `
       // Finalize busts at end of player's turn (per spec)
       const preBust = blackjackMatch.playerPositions.map(p => !!p.isBust);
       finalizeBusts(blackjackMatch.playerPositions, 'player');
-      bossUpdateTargetLane(false, 'bust_finalize');
+      updateThreatTargetLane(false, 'bust_finalize');
 
       const lastPlay = blackjackMatch.lastCallingSuitPlay;
       if (lastPlay && lastPlay.procced && lastPlay.suit === '♥') {
@@ -5716,6 +5842,9 @@ function dealerLaneScore(idx, total, diff) {
 
       if (run.bossFight && run.bossFight.active && run.bossFight.phase === 2) {
         bossTryCountermeasure();
+      }
+      if (blackjackMatch.type === 'WATCHER') {
+        updateThreatTargetLane(false, 'dealer_turn_start');
       }
 
       const open = blackjackMatch.dealerPositions
@@ -5988,7 +6117,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
     function endDealerTurn() {
       // Finalize busts at end of dealer turn
       finalizeBusts(blackjackMatch.dealerPositions, 'dealer');
-      bossUpdateTargetLane(false, 'bust_finalize');
+      updateThreatTargetLane(false, 'bust_finalize');
 
       const fb = blackjackMatch.dealerBaseDeck || makeStandardDeck52();
       maintainOpenPositions(blackjackMatch.dealerPositions, blackjackMatch.dealerDrawPile, fb, 'dealer');
@@ -6201,7 +6330,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
       const burnedSleeves = blackjackMatch.burnedSleeveCards || [];
       if (burnCards.length || burnedSleeves.length) {
         const burnSet = new Set([...burnCards, ...burnedSleeves]);
-        run.playerDeck = run.playerDeck.filter(card => !burnSet.has(card));
+        run.playerDeck = run.playerDeck.filter(card => isKeyCard(card) || !burnSet.has(card));
         recordDeckSnapshot('BURN_AFTER_READING');
       }
       if (burnCards.length) {
@@ -6287,6 +6416,30 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     // WINNER REWARD FLOW (after a WIN)
     // =============================================
     function startWinnerRewardFlow() {
+      if (blackjackMatch.specialReward === 'KEY_HIGH') {
+        const key = makeKeyCard('HIGH_STAKES');
+        assignUid(key);
+        run.playerDeck.push(key);
+        if (run.secret && run.secret.keys) run.secret.keys.highStakes.obtained = true;
+        logEvent('KEYCARD_OBTAINED', { source: 'HIGH_STAKES', card: cardRef(key) });
+        recordDeckSnapshot('KEYCARD_HIGH_STAKES');
+        blackjackMatch.rewardPending = false;
+        blackjackMatch.winnerReward = null;
+        showToast('You won a star keycard.');
+        return;
+      }
+      if (blackjackMatch.type === 'BOSS' && run.floor === 3 && run.secret && run.secret.keys && !run.secret.keys.boss.obtained) {
+        const key = makeKeyCard('BOSS');
+        assignUid(key);
+        run.playerDeck.push(key);
+        run.secret.keys.boss.obtained = true;
+        logEvent('KEYCARD_OBTAINED', { source: 'BOSS', card: cardRef(key) });
+        recordDeckSnapshot('KEYCARD_BOSS');
+        blackjackMatch.rewardPending = false;
+        blackjackMatch.winnerReward = null;
+        showToast('The boss dropped a star keycard.');
+        return;
+      }
       if (blackjackMatch.type === 'BOSS') {
         startBossFusionRewardFlow();
         return;
@@ -6407,8 +6560,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       blackjackMatch.winnerReward.mode = mode;
       blackjackMatch.winnerReward.stage = 'pick';
 
-      const idxs = distinctRandomIndices(5, run.playerDeck.length);
-      blackjackMatch.winnerReward.candidates = idxs.map(i => ({ index: i, card: run.playerDeck[i] }));
+      const eligibleIdxs = run.playerDeck.map((c,i)=>({c,i})).filter(d => !isKeyCard(d.c)).map(d=>d.i);
+      const picks = shuffle(eligibleIdxs).slice(0, Math.min(5, eligibleIdxs.length));
+      blackjackMatch.winnerReward.candidates = picks.map(i => ({ index: i, card: run.playerDeck[i] }));
       blackjackMatch.winnerReward.selected = null;
 
       logEvent('WINNER_REWARD_MODE', { mode });
@@ -6468,12 +6622,14 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       if (mode && pickData) {
         if (mode === 'remove') {
           const removed = run.playerDeck[pickData.index];
+          if (!removed || isKeyCard(removed)) { showToast('Cannot remove keycards'); return; }
           run.playerDeck.splice(pickData.index, 1);
           logEvent('WINNER_REWARD_APPLY', { mode, card: cardToString(removed), cardUid: removed?.uid || null, cardRef: cardRef(removed), deckSnapshot: deckSnapshot() });
           recordDeckSnapshot('REWARD_REMOVE');
           showToast(`Removed ${cardToString(removed)}`);
         } else if (mode === 'duplicate') {
           const c = run.playerDeck[pickData.index];
+          if (!c || isKeyCard(c)) { showToast('Cannot duplicate keycards'); return; }
           if (c) {
             const clone = cloneCardWithNewUid(c);
             assignUid(clone);
@@ -6895,6 +7051,33 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       });
     }
 
+    function shouldStartWatcher() {
+      const keyCount = (run.playerDeck || []).filter(isKeyCard).length;
+      const callingRank = run.callingCard ? rankToValue(run.callingCard.rank) : 0;
+      return keyCount >= 3 && callingRank >= 10;
+    }
+
+    function startWatcherEncounter() {
+      showModal('A New Opponent', `
+        <p class="modal-text">"I've been watching. Your progress is... impressive."</p>
+      `, [{
+        text: 'Face The Watcher',
+        primary: true,
+        action: () => {
+          closeModal();
+          const watcherCard = run.callingCard ? { ...run.callingCard } : { rank: 'A', suit: '♠' };
+          startBlackjackMatch('WATCHER', 0, {
+            npcOverride: { name: 'The Watcher', callingCard: watcherCard },
+            dealerDeckOverride: cloneDeck(run.playerDeck),
+            enableTargeting: true
+          });
+          blackjackMatch.watcherTargetLaneIdx = null;
+          updateThreatTargetLane(true, 'watcher_start');
+          logEvent('WATCHER_START', { deckSize: run.playerDeck.length });
+        }
+      }]);
+    }
+
     // =============================================
     // CONTINUE / END CONDITIONS
     // =============================================
@@ -6921,7 +7104,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             initFloor(run.floor + 1);
             showToast(`Floor ${run.floor} begins!`);
           } else {
-            victory();
+            blackjackMatch = null;
+            if (shouldStartWatcher()) startWatcherEncounter();
+            else victory();
           }
           return;
         }
@@ -6947,7 +7132,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             initFloor(run.floor + 1);
             showToast(`Floor ${run.floor} begins!`);
           } else {
-            victory();
+            blackjackMatch = null;
+            if (shouldStartWatcher()) startWatcherEncounter();
+            else victory();
           }
         } else {
           gameOver("You lost to the boss.");
@@ -7117,6 +7304,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         if (isVisited) tileClass += ' visited';
         if (isCurrent) tileClass += ' current';
         if (isAvailable) tileClass += ' available';
+        if (run.secret && run.secret.keys && run.secret.keys.highStakes.hinted
+          && !run.secret.keys.highStakes.obtained
+          && tile.id === run.secret.keys.highStakes.tileId) tileClass += ' key-roller';
 
         const clickHandler = isAvailable ? `onclick="onTileClick(${tile.id})"` : '';
         let subLabel = '';
@@ -7479,6 +7669,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     && run.bossFight.phase === 2 && run.bossFight.targetLaneIdx === idx) {
     cls += ' boss-target';
   }
+  if (side === 'player' && blackjackMatch && blackjackMatch.type === 'WATCHER'
+    && blackjackMatch.watcherTargetLaneIdx === idx) {
+    cls += ' watcher-target';
+  }
   if (displayState === 'open') cls += ' open';
   if (displayState === 'stand') cls += ' stand';
   if (displayState === 'bust') cls += ' bust';
@@ -7543,7 +7737,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         ? `${npc.name} · ${cardToString(npc.callingCard)} · ${affinityIcon(affinity)} · Edge ${edgeDelta >= 0 ? '+' : ''}${edgeDelta} · Proc ${procPct}%`
         : `Dealer · Proc ${procPct}%`;
 
-      const typeLabel = blackjackMatch.type === 'BOSS' ? 'BOSS BATTLE' :
+      const typeLabel = blackjackMatch.type === 'WATCHER' ? 'THE WATCHER' :
+                        blackjackMatch.type === 'BOSS' ? 'BOSS BATTLE' :
                         blackjackMatch.type === 'HIGH_STAKES' ? 'HIGH STAKES' : 'STANDARD TABLE';
 
       const bossFight = run && run.bossFight;
@@ -7559,8 +7754,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         </div>
       ` : '';
 
+      const watcherClass = blackjackMatch.type === 'WATCHER' ? ' watcher' : '';
       let html = `
-        <div class="bj-header">
+        <div class="bj-header${watcherClass}">
           <div class="bj-title">${typeLabel}</div>
           <div class="bj-status">Buy-in: ${blackjackMatch.buyIn} chips · Transfer x${transferMultiplier}</div>
           <div class="bj-status">${npcLine}</div>
@@ -7939,7 +8135,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
     function encounterBlackjackHigh() {
       if (run.chips < BUYIN_HIGH) { gameOver("You can't afford the buy-in."); return; }
-      startBlackjackMatch('HIGH_STAKES', BUYIN_HIGH);
+      const hsKey = run.secret && run.secret.keys ? run.secret.keys.highStakes : null;
+      const specialReward = (run.floor === 1 && hsKey && !hsKey.obtained && run.board.currentTileId === hsKey.tileId) ? 'KEY_HIGH' : null;
+      startBlackjackMatch('HIGH_STAKES', BUYIN_HIGH, { specialReward });
     }
 
     // =============================================
