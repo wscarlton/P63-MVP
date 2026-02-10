@@ -4,46 +4,87 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Project 63 - Slot Blackjack</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-primary: #0a0e17;
-      --bg-secondary: #121a2a;
-      --bg-card: #1a2436;
-      --bg-hover: #243044;
-      --text-primary: #e8edf5;
-      --text-secondary: #8b9cb8;
-      --text-muted: #5a6a84;
-      --accent-gold: #f0c040;
-      --accent-gold-dim: #9a7a20;
-      --accent-red: #e84545;
-      --accent-green: #3dd68c;
-      --accent-blue: #4da6ff;
-      --accent-purple: #a855f7;
-      --border-color: #2a3a54;
-      --card-red: #dc3545;
-      --card-black: #1a1a2e;
-    }
+  /* Film Noir — Default Theme */
+  --bg-primary: #0f0f0f;
+  --bg-secondary: #1a1a1a;
+  --bg-card: #262626;
+  --bg-hover: #2c2c2c;
 
-    .dark {
-      --bg-primary: #0a0e17;
-      --bg-secondary: #121a2a;
-      --bg-card: #1a2436;
-      --bg-hover: #243044;
-      --text-primary: #e8edf5;
-      --text-secondary: #8b9cb8;
-      --text-muted: #5a6a84;
-      --border-color: #2a3a54;
-    }
+  --text-primary: #f5f5f5;
+  --text-secondary: #b8b8b8;
+  --text-muted: #737373;
+
+  --accent-gold: #d4af37;
+  --accent-gold-dim: #8a6f1f;
+
+  --accent-red: #a83232;
+  --accent-green: #5e8c61;
+  --accent-blue: #5f7d95;
+  --accent-purple: #7d6a82;
+
+  --border-color: #404040;
+
+  /* Playing card ink (used on white cards) */
+  --card-red: #b13b3b;
+  --card-black: #111111;
+
+  /* Typography */
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+  --font-body: 'Inter', sans-serif;
+
+  /* Derived “wash” colors (keeps hover/bust backgrounds consistent) */
+  --wash-gold: rgba(212, 175, 55, 0.14);
+  --wash-red: rgba(168, 50, 50, 0.18);
+  --wash-green: rgba(94, 140, 97, 0.18);
+  --wash-blue: rgba(95, 125, 149, 0.16);
+  --wash-purple: rgba(125, 106, 130, 0.16);
+}
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: 'Inter', sans-serif;
+      font-family: var(--font-body);
+      font-size: 15px;
+      line-height: 1.35;
       background: var(--bg-primary);
       color: var(--text-primary);
       min-height: 100vh;
       overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+      isolation: isolate;
+    }
+
+    /* Ambient (subtle, non-gimmicky) */
+    body::before{
+      content:"";
+      position: fixed;
+      inset: -20%;
+      z-index: -2;
+      pointer-events: none;
+      background:
+        radial-gradient(600px 420px at 18% 12%, rgba(212,175,55,0.18), transparent 60%),
+        radial-gradient(700px 520px at 82% 18%, rgba(95,125,149,0.16), transparent 62%),
+        radial-gradient(720px 520px at 50% 86%, rgba(125,106,130,0.14), transparent 62%);
+      filter: blur(36px) saturate(115%);
+      opacity: 0.9;
+    }
+
+    /* Vignette + faint texture */
+    body::after{
+      content:"";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.55) 100%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 2px, transparent 6px);
+      opacity: 0.35;
+      mix-blend-mode: overlay;
     }
 
     /* HUD Styles */
@@ -110,14 +151,14 @@
     .hud-stat-label {
       color: var(--text-muted);
       text-transform: uppercase;
-      font-size: 10px;
-      letter-spacing: 1px;
+      font-size: clamp(11px, 2.2vw, 12px);
+      letter-spacing: 0.9px;
     }
 
     .hud-stat-value {
       color: var(--accent-gold);
       font-weight: 600;
-      font-size: 16px;
+      font-size: clamp(16px, 3.2vw, 18px);
     }
 
     .hud-stat-value.chips { color: var(--accent-green); }
@@ -126,9 +167,9 @@
     .hud-stat-value.karma { color: var(--accent-blue); }
 
     .hud-btn {
-      font-family: 'Cinzel', serif;
-      font-size: 12px;
-      padding: 8px 16px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      padding: 10px 16px;
       border: 1px solid var(--border-color);
       background: var(--bg-card);
       color: var(--text-primary);
@@ -143,10 +184,10 @@
     .hud-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .hud-btn.danger { border-color: var(--accent-red); color: var(--accent-red); }
-    .hud-btn.danger:hover:not(:disabled) { background: rgba(232, 69, 69, 0.2); }
+    .hud-btn.danger:hover:not(:disabled) { background: var(--wash-red); }
 
     .hud-btn.success { border-color: var(--accent-green); color: var(--accent-green); }
-    .hud-btn.success:hover:not(:disabled) { background: rgba(61, 214, 140, 0.2); }
+    .hud-btn.success:hover:not(:disabled) { background: var(--wash-green); }
 
     /* Main App Container */
     #app { padding-top: 70px; min-height: 100vh; }
@@ -190,7 +231,7 @@
 
     .hex-label {
       font-family: 'Fira Code', monospace;
-      font-size: 10px;
+      font-size: clamp(11px, 2.4vw, 13px);
       fill: var(--text-primary);
       text-anchor: middle;
       dominant-baseline: middle;
@@ -199,7 +240,7 @@
     }
     .hex-sub {
       font-family: 'Fira Code', monospace;
-      font-size: 9px;
+      font-size: clamp(10px, 2.2vw, 12px);
       fill: var(--text-secondary);
       text-anchor: middle;
       dominant-baseline: middle;
@@ -219,17 +260,20 @@
     #modalOverlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.85);
+      background: radial-gradient(ellipse at center, rgba(0,0,0,0.55), rgba(0,0,0,0.72));
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 200;
       padding: 20px;
-      backdrop-filter: blur(5px);
+      backdrop-filter: blur(7px) saturate(120%);
     }
 
     #modal {
-      background: var(--bg-secondary);
+      position: relative;
+      background:
+        linear-gradient(90deg, rgba(212,175,55,0.9), rgba(125,106,130,0.65)) top/100% 3px no-repeat,
+        var(--bg-secondary);
       border: 1px solid var(--border-color);
       border-radius: 12px;
       max-width: 560px;
@@ -284,7 +328,65 @@
     .modal-btn.primary:hover:not(:disabled) { background: #ffda70; }
 
     .modal-btn.danger { border-color: var(--accent-red); color: var(--accent-red); }
-    .modal-btn.danger:hover:not(:disabled) { background: rgba(232,69,69,0.18); }
+    .modal-btn.danger:hover:not(:disabled) { background: var(--wash-red); }
+
+
+    /* Unified button surface */
+    .hud-btn, .modal-btn, .bj-btn, .log-mini-btn, .hud-icon-btn, .action-chip, .token-icon{
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.18));
+      box-shadow:
+        0 10px 24px rgba(0,0,0,0.25),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    @media (hover:hover){
+      .hud-btn:hover:not(:disabled),
+      .modal-btn:hover:not(:disabled),
+      .bj-btn:hover:not(:disabled),
+      .log-mini-btn:hover:not(:disabled),
+      .hud-icon-btn:hover:not(:disabled),
+      .action-chip.ready:hover,
+      .token-icon:hover:not(.spent):not(.disabled){
+        transform: translateY(-1px);
+      }
+    }
+
+    /* Mobile press feedback (important for phones) */
+    .hud-btn:active:not(:disabled),
+    .modal-btn:active:not(:disabled),
+    .bj-btn:active:not(:disabled),
+    .log-mini-btn:active:not(:disabled),
+    .hud-icon-btn:active:not(:disabled),
+    .action-chip:active:not(.locked):not(.used),
+    .token-icon:active:not(.spent):not(.disabled){
+      transform: translateY(0px) scale(0.99);
+      filter: brightness(1.08);
+    }
+
+
+    /* keep semantic button colors over unified surface */
+    .modal-btn.primary {
+      background: var(--accent-gold);
+      color: var(--bg-primary);
+      border-color: var(--accent-gold);
+    }
+    .bj-btn.place,
+    .bj-btn.apply-mod {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: white;
+    }
+    .bj-btn.stand-pos {
+      background: var(--accent-green);
+      border-color: var(--accent-green);
+      color: white;
+    }
+    .bj-btn.place-bench {
+      background: rgba(95, 125, 149, 0.2);
+      border-color: var(--accent-blue);
+      color: white;
+    }
 
     .modal-text {
       color: var(--text-secondary);
@@ -458,14 +560,14 @@
 
     /* Modifier cards: shaded blue (per spec) */
     .playing-card.mod {
-      background: rgba(77, 166, 255, 0.18);
-      border-color: rgba(77, 166, 255, 0.65);
+      background: rgba(95, 125, 149, 0.18);
+      border-color: rgba(95, 125, 149, 0.65);
       color: #dbeafe;
     }
 
     .playing-card.sleeve-blue {
-      background: rgba(77, 166, 255, 0.18);
-      border-color: rgba(77, 166, 255, 0.65);
+      background: rgba(95, 125, 149, 0.18);
+      border-color: rgba(95, 125, 149, 0.65);
       color: #dbeafe;
     }
 
@@ -527,8 +629,8 @@
 
     /* Bench styling (subtle blue “bench” tint) */
     .playing-card.bench {
-      background: rgba(77, 166, 255, 0.10);
-      border-color: rgba(77, 166, 255, 0.55);
+      background: rgba(95, 125, 149, 0.10);
+      border-color: rgba(95, 125, 149, 0.55);
     }
 
     .playing-card.face-down {
@@ -548,7 +650,9 @@
       gap: 14px;
       align-items: center;
       padding: 16px;
-      background: var(--bg-secondary);
+      background:
+        linear-gradient(90deg, rgba(212,175,55,0.75), rgba(95,125,149,0.55)) top/100% 3px no-repeat,
+        var(--bg-secondary);
       border-radius: 14px;
       border: 1px solid var(--border-color);
     }
@@ -567,7 +671,7 @@
       align-items: center;
       gap: 12px;
       padding: 12px 14px;
-      background: rgba(77, 166, 255, 0.1);
+      background: rgba(95, 125, 149, 0.1);
       border: 1px solid var(--accent-blue);
       border-radius: 12px;
       flex-wrap: wrap;
@@ -606,7 +710,7 @@
       background: var(--accent-blue);
       border-color: var(--accent-blue);
       color: white;
-      font-size: 11px;
+      font-size: 12px;
       padding: 7px 10px;
       border-radius: 10px;
     }
@@ -615,7 +719,7 @@
       background: var(--accent-green);
       border-color: var(--accent-green);
       color: white;
-      font-size: 11px;
+      font-size: 12px;
       padding: 7px 10px;
       border-radius: 10px;
     }
@@ -624,16 +728,16 @@
       background: var(--accent-blue);
       border-color: var(--accent-blue);
       color: white;
-      font-size: 11px;
+      font-size: 12px;
       padding: 7px 10px;
       border-radius: 10px;
     }
 
     .bj-btn.place-bench {
-      background: rgba(77, 166, 255, 0.2);
+      background: rgba(95, 125, 149, 0.2);
       border-color: var(--accent-blue);
       color: white;
-      font-size: 11px;
+      font-size: 12px;
       padding: 7px 10px;
       border-radius: 10px;
     }
@@ -645,7 +749,9 @@
       padding: 12px;
       border: 1px solid var(--border-color);
       border-radius: 14px;
-      background: rgba(26, 36, 54, 0.55);
+      background:
+        linear-gradient(90deg, rgba(212,175,55,0.75), rgba(95,125,149,0.55)) top/100% 3px no-repeat,
+        var(--bg-secondary);
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -767,7 +873,7 @@
     .bench-card-btn:disabled { cursor: not-allowed; opacity: 0.5; }
 
     .bench-armed-ring {
-      outline: 2px solid rgba(77, 166, 255, 0.85);
+      outline: 2px solid rgba(95, 125, 149, 0.85);
       outline-offset: 2px;
       border-radius: 10px;
     }
@@ -961,13 +1067,13 @@
     .confirm-dialog {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.85);
+      background: radial-gradient(ellipse at center, rgba(0,0,0,0.55), rgba(0,0,0,0.72));
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 300;
       padding: 20px;
-      backdrop-filter: blur(5px);
+      backdrop-filter: blur(7px) saturate(120%);
     }
 
     .confirm-content {
@@ -1085,7 +1191,7 @@
     }
     .log-mini-btn:hover{ background: var(--bg-hover); border-color: var(--accent-gold); }
     .log-mini-btn.danger{ border-color: var(--accent-red); color: var(--accent-red); }
-    .log-mini-btn.danger:hover{ background: rgba(232,69,69,0.18); }
+    .log-mini-btn.danger:hover{ background: var(--wash-red); }
 
     .log-tabs{
       padding: 10px 16px;
@@ -1307,6 +1413,35 @@
       0%,100% { box-shadow: 0 0 0 rgba(125,211,252,0); }
       50% { box-shadow: 0 0 0 2px rgba(125,211,252,0.35), 0 0 18px rgba(125,211,252,0.3); }
     }
+
+
+    /* =========================================================
+       Film Noir Typography Map (overrides hard-coded fonts)
+       ========================================================= */
+    .hud-btn, .modal-btn, .bj-btn, .log-mini-btn,
+    .modal-header, .bj-title, .merchant-section-title,
+    .bj-side-label, .bj-turn-info,
+    .action-row-title, .bj-result-title, .end-title,
+    .log-panel-title, .log-tab {
+      font-family: var(--font-display) !important;
+    }
+
+    .hud-stat, .hud-stat-value,
+    .hex-label, .hex-sub,
+    .bj-position-num, .bj-total,
+    .playing-card, .modal-reward,
+    .bj-result-score, .bj-result-chips,
+    .end-stat-value, .stat-value,
+    .log-panel-sub, .log-card-head, .log-kv {
+      font-family: var(--font-mono) !important;
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      *{ transition: none !important; }
+      .hex-tile.available .hex-bg{ animation: none !important; }
+      .boss-target{ animation: none !important; }
+    }
+
   </style>
 </head>
 
