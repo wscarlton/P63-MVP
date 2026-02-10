@@ -171,6 +171,18 @@
       animation: pulse-glow 1.5s ease-in-out infinite;
     }
 
+    .hex-tile.key-roller .hex-bg {
+      stroke: rgba(240, 192, 64, 0.9);
+      stroke-width: 4;
+      animation: key-roller-glow 1.6s ease-in-out infinite;
+      filter: drop-shadow(0 0 10px rgba(240, 192, 64, 0.25));
+    }
+
+    @keyframes key-roller-glow {
+      0%, 100% { filter: drop-shadow(0 0 6px rgba(240, 192, 64, 0.18)); }
+      50% { filter: drop-shadow(0 0 18px rgba(240, 192, 64, 0.42)); }
+    }
+
     @keyframes pulse-glow {
       0%, 100% { filter: drop-shadow(0 0 5px var(--accent-gold-dim)); }
       50% { filter: drop-shadow(0 0 15px var(--accent-gold)); }
@@ -851,9 +863,20 @@
       animation: bossPulse 1.6s ease-in-out infinite;
     }
 
+    .watcher-target {
+      border-color: rgba(125, 211, 252, 0.92);
+      box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.25), 0 0 20px rgba(125, 211, 252, 0.22);
+      animation: watcherPulse 1.7s ease-in-out infinite;
+    }
+
     @keyframes bossPulse {
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-2px); }
+    }
+
+    @keyframes watcherPulse {
+      0%, 100% { box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.20), 0 0 12px rgba(125, 211, 252, 0.16); }
+      50% { box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.34), 0 0 22px rgba(125, 211, 252, 0.34); }
     }
 
     /* Game Over / Victory Screens */
@@ -1548,6 +1571,11 @@ const CALLING_RANK_THRESHOLDS = [
         }
         if (isFused(c)) {
           fusedCount += 1;
+          continue;
+        }
+        if (isKeyCard(c)) {
+          if (bySuit[c.suit] !== undefined) bySuit[c.suit] += 1;
+          if (byRank[c.rank] !== undefined) byRank[c.rank] += 1;
           continue;
         }
         if (isStandardCard(c)) {
@@ -2705,6 +2733,7 @@ const CALLING_RANK_THRESHOLDS = [
     // UI: MODALS, TOAST, CONFIRM
     // =============================================
     let __modalButtons = [];
+    let __modalTitle = '';
     window.__modalAction = function(i) {
       const b = __modalButtons[i];
       if (!b || b.disabled) return;
@@ -2713,6 +2742,7 @@ const CALLING_RANK_THRESHOLDS = [
 
     function showModal(title, bodyHtml, buttons = []) {
       __modalButtons = buttons.map(b => ({ ...b }));
+      __modalTitle = title || '';
       const overlay = document.getElementById('modalOverlay');
       const modal = document.getElementById('modal');
       const footer = buttons.length ? `
@@ -2738,6 +2768,11 @@ const CALLING_RANK_THRESHOLDS = [
     }
 
     function closeModal() {
+      if (__modalTitle === 'Merchant' && run && run.floor === 2 && run.secret && run.secret.keys && run.secret.keys.merchant) {
+        const mk = run.secret.keys.merchant;
+        if (mk.state === 'offered') mk.state = 'missed';
+      }
+      __modalTitle = '';
       document.getElementById('modalOverlay').classList.add('hidden');
       document.getElementById('modal').innerHTML = '';
       __modalButtons = [];
@@ -6066,6 +6101,14 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
       const diff = getOpponentDifficulty();
 
+      if (blackjackMatch.type === 'WATCHER') {
+        updateThreatTargetLane(true, 'watcher_turn_start');
+        const idx = blackjackMatch.watcherTargetLaneIdx;
+        if (idx !== null && idx !== undefined && blackjackMatch.dealerForcedLane == null) {
+          blackjackMatch.dealerForcedLane = idx;
+        }
+      }
+
       // 1) Strategic bench use (no forced plays; only if improves)
       const benchBudget = (diff === 'hard') ? 2 : (diff === 'medium') ? 1 : (Math.random() < 0.35 ? 1 : 0);
       for (let k = 0; k < benchBudget; k++) {
@@ -7090,6 +7133,18 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       }
 
       const result = blackjackMatch.result;
+
+      if (blackjackMatch.type === 'WATCHER') {
+        const win = result && result.outcome === 'WIN';
+        logEvent(win ? 'WATCHER_CLEARED' : 'WATCHER_FAILED', { floor: run.floor });
+
+        blackjackMatch = null;
+
+        if (win) victory();
+        else gameOver('You were outplayed by The Watcher.');
+
+        return;
+      }
 
       if (blackjackMatch.type === 'BOSS' && run.bossFight && run.bossFight.active) {
         const bf = run.bossFight;
