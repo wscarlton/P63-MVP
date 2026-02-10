@@ -4589,6 +4589,11 @@ body += `
         maxHp: bf.maxHp,
         phase: bf.phase
       });
+      if (bf.phase === 2 && !bf.phase2Announced) {
+        bf.phase2Announced = true;
+        showToast("Surveillance Online — Countermeasures active.");
+        logEvent('BOSS_PHASE2_START', { hp: bf.hp, maxHp: bf.maxHp, round: bf.round });
+      }
       if (bf.phase === 2) bossUpdateTargetLane(true, 'round_start');
     }
 
@@ -5002,13 +5007,20 @@ body += `
       const bf = run && run.bossFight;
       if (!bf || !bf.active || bf.phase !== 2) return false;
       if (bf.targetLaneIdx === null) bossUpdateTargetLane(true, 'countermeasure_no_target');
-      if (bf.targetLaneIdx === null) return false;
+      let targetIdx = bf.targetLaneIdx;
+      let targetPos = (targetIdx !== null) ? blackjackMatch.playerPositions[targetIdx] : null;
+      if (!targetPos || !targetPos.isOpen || targetPos.isComplete) {
+        bossUpdateTargetLane(true, 'countermeasure_retarget');
+        targetIdx = bf.targetLaneIdx;
+        targetPos = (targetIdx !== null) ? blackjackMatch.playerPositions[targetIdx] : null;
+      }
+      if (!targetPos || !targetPos.isOpen || targetPos.isComplete) return false;
 
       const bench = blackjackMatch.dealerBench || [];
       if (!bench.length) return false;
 
-      const laneIdx = bf.targetLaneIdx;
-      const p = blackjackMatch.playerPositions[laneIdx];
+      const laneIdx = targetIdx;
+      const p = targetPos;
       const cur = getPositionTotal(p);
 
       let pick = 0;
@@ -5024,9 +5036,12 @@ body += `
         if (score > bestScore) { bestScore = score; pick = i; }
       }
 
-      const mod = bench.splice(pick, 1)[0];
+      const mod = bench[pick];
       const appliedDelta = -mod.delta;
       const state = applyLaneMod('player', laneIdx, appliedDelta);
+      if (state !== 'open') return false;
+
+      bench.splice(pick, 1);
 
       logEvent('BOSS_COUNTERMEASURE', {
         lane: laneIdx + 1,
@@ -5566,6 +5581,7 @@ body += `
       }
 
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
+      bossUpdateTargetLane(false, 'player_stand');
 
       if (checkMatchEnd()) return;
 
@@ -6122,11 +6138,6 @@ function dealerStandPhase(diff, maxPasses = 6) {
       if (isBossRound && bf.phase === 1 && bf.hp > 0 && bf.hp <= bf.maxHp / 2) {
         bf.phase = 2;
         bf.targetLaneIdx = null;
-        if (!bf.phase2Announced) {
-          bf.phase2Announced = true;
-          showToast("Surveillance Online — Countermeasures active.");
-          logEvent('BOSS_PHASE2_START', { hp: bf.hp, maxHp: bf.maxHp, round: bf.round });
-        }
       }
 
       let goldBonusTotal = 0;
