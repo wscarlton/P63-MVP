@@ -164,14 +164,50 @@
       z-index: 100;
       background: linear-gradient(180deg, var(--bg-secondary) 0%, rgba(18, 26, 42, 0.95) 100%);
       border-bottom: 1px solid var(--border-color);
-      padding: 12px 20px;
+      padding: 10px 12px;
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 12px;
+      flex-direction: column;
+      gap: 10px;
       backdrop-filter: blur(10px);
     }
+
+    .hud-primary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .hud-primary-left {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      flex-wrap: nowrap;
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    .hud-primary-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+    }
+
+    .hud-secondary {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 12px;
+      width: 100%;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    #hud.hud-collapsed .hud-secondary { display: none; }
 
     .hud-left, .hud-right {
       display: flex;
@@ -257,8 +293,10 @@
     .hud-btn.success { border-color: var(--accent-green); color: var(--accent-green); }
     .hud-btn.success:hover:not(:disabled) { background: var(--wash-green); }
 
+    :root { --hud-offset: 70px; }
+
     /* Main App Container */
-    #app { padding-top: 70px; min-height: 100vh; }
+    #app { padding-top: var(--hud-offset); min-height: 100vh; }
     .hidden { display: none !important; }
 
     /* Board View */
@@ -3808,7 +3846,8 @@ function benchPush(card, source = '') {
           mode: 'INTRO',
           message: '',
           callingRankPulseUntil: 0,
-          karmaTallyFast: false
+          karmaTallyFast: false,
+          hudCollapsed: (window.innerWidth <= 520)
         },
         intro: {
           step: null,
@@ -5332,6 +5371,7 @@ body += `
 
       blackjackMatch.metrics.initialDealComplete = true;
       run.ui.mode = 'BLACKJACK';
+      if (run.ui) run.ui.hudCollapsed = true;
       renderAll();
     }
 
@@ -7846,6 +7886,25 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       return safeNumber(run && run.bankedTokens, 0);
     }
 
+    function syncHudOffset(){
+      const hud = document.getElementById('hud');
+      if (!hud) return;
+      const h = hud.offsetHeight || 70;
+      document.documentElement.style.setProperty('--hud-offset', `${h}px`);
+    }
+
+    window.toggleHud = function(){
+      if (!run || !run.ui) return;
+      run.ui.hudCollapsed = !run.ui.hudCollapsed;
+      renderHUD();
+      requestAnimationFrame(syncHudOffset);
+    };
+
+    window.addEventListener('resize', () => {
+      if (run && run.ui && window.innerWidth <= 520) run.ui.hudCollapsed = true;
+      syncHudOffset();
+    });
+
     function renderAll() {
       renderHUD();
       renderBoard();
@@ -7856,9 +7915,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     function renderHUD() {
       const hud = document.getElementById('hud');
       const chips = safeNumber(run.chips, 0);
-
       const loanStatus = run.loan.active ? (run.loan.repaid ? 'Repaid' : `Owed: ${LOAN_REPAY}`) : 'None';
-      const loanClass = run.loan.active && !run.loan.repaid ? 'debt' : '';
       const canRepay = run.loan.active && !run.loan.repaid && chips >= LOAN_REPAY;
       const rankInfo = getCallingRankInfo();
       const pulseClass = (run.ui && safeNumber(run.ui.callingRankPulseUntil, 0) > Date.now()) ? 'calling-rank-pulse' : '';
@@ -7868,64 +7925,92 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         : 'Rank —';
       const toNext = rankInfo ? (rankInfo.isMax ? 'Max rank reached' : `${rankInfo.toNext} karma to next rank`) : '';
       const prog = rankInfo ? Math.round(rankInfo.progress * 100) : 0;
+      const collapsed = !!(run.ui && run.ui.hudCollapsed);
+      const debtWarning = (run.loan.active && !run.loan.repaid)
+        ? '<span class="hud-stat-label" style="color:var(--accent-red);">Debt!</span>'
+        : '';
+
+      hud.classList.toggle('hud-collapsed', collapsed);
 
       hud.innerHTML = `
-        <div class="hud-left">
-          <div class="hud-stat">
-            <span class="hud-stat-label">Floor</span>
-            <span class="hud-stat-value">${run.floor}/3</span>
-          </div>
-          <div class="hud-stat">
-            <span class="hud-stat-label">Player</span>
-            <span class="hud-stat-value">${escapeHtml(run.playerName || '—')}</span>
-          </div>
-          <div class="hud-bank">
-            <div class="hud-stat-label">Bank</div>
-            <div class="hud-bank-main">Chips ${chips}</div>
-            <div class="hud-bank-sub">Rake ${Math.round(getHouseRakeRate(run.floor) * 100)}% · Debt ${escapeHtml(loanStatus)}</div>
-          </div>
-          <div class="hud-calling ${pulseClass}">
-            <div class="hud-calling-row">
-              <span class="hud-stat-label">Calling Card</span>
-              <span class="hud-calling-main">${callingText}</span>
+        <div class="hud-primary">
+          <div class="hud-primary-left">
+            <div class="hud-stat">
+              <span class="hud-stat-label">Floor</span>
+              <span class="hud-stat-value">${run.floor}/3</span>
             </div>
-            <div class="hud-calling-row">
-              <span class="hud-calling-sub">Karma ${safeNumber(run.karma, 0)}</span>
-              <span class="hud-calling-sub">${rankLine}</span>
+            <div class="hud-stat">
+              <span class="hud-stat-label">Chips</span>
+              <span class="hud-stat-value chips">${chips}</span>
+              ${debtWarning}
             </div>
-            <div class="xpbar"><div class="xpbar-fill" style="width:${prog}%"></div></div>
-            <div class="xpbar-text">${escapeHtml(toNext)}</div>
+            <div class="hud-stat">
+              <span class="hud-stat-label">Karma</span>
+              <span class="hud-stat-value karma">${safeNumber(run.karma, 0)}</span>
+            </div>
+            <div class="hud-stat">
+              <span class="hud-stat-label">Tokens</span>
+              <span class="hud-stat-value tokens">${getHudTokensValue()}</span>
+            </div>
           </div>
-          <div class="hud-stat">
-            <span class="hud-stat-label">Deck</span>
-            <span class="hud-stat-value">${run.playerDeck.length}</span>
-          </div>
-          <div class="hud-stat">
-            <span class="hud-stat-label">Tokens</span>
-            <span class="hud-stat-value tokens">${getHudTokensValue()}</span>
-          </div>
-          <div class="hud-stat">
-            <span class="hud-stat-label">Bench</span>
-            <span class="hud-stat-value">${getBenchCapacity()}</span>
+
+          <div class="hud-primary-right">
+            <button class="hud-icon-btn" title="Home" onclick="showStartScreen()">🏠</button>
+            <button class="hud-icon-btn" title="Deck Viewer" onclick="openDeckViewer()">🃏</button>
+            <button class="hud-icon-btn" title="Rules" onclick="openRulesPanel()">📖</button>
+            <button class="hud-icon-btn" title="${collapsed ? 'Expand HUD' : 'Collapse HUD'}" onclick="toggleHud()">${collapsed ? '▾' : '▴'}</button>
           </div>
         </div>
 
-        <div class="hud-center">
-          <button class="hud-icon-btn" title="Home" onclick="showStartScreen()">🏠</button>
-          <button class="hud-icon-btn" title="Run Log" onclick="openLogPanel('stats')">📋</button>
-          <button class="hud-icon-btn" title="Deck Viewer" onclick="openDeckViewer()">🃏</button>
-          <button class="hud-icon-btn" title="Settings" onclick="openSettingsPanel()">⚙️</button>
-          <button class="hud-icon-btn" title="Feedback" onclick="openFeedbackModal()">📝</button>
-          <button class="hud-icon-btn" title="Rules" onclick="openRulesPanel()">📖</button>
-        </div>
+        <div class="hud-secondary">
+          <div class="hud-left">
+            <div class="hud-stat">
+              <span class="hud-stat-label">Player</span>
+              <span class="hud-stat-value">${escapeHtml(run.playerName || '—')}</span>
+            </div>
+            <div class="hud-bank">
+              <div class="hud-stat-label">Bank</div>
+              <div class="hud-bank-main">Chips ${chips}</div>
+              <div class="hud-bank-sub">Rake ${Math.round(getHouseRakeRate(run.floor) * 100)}% · Debt ${escapeHtml(loanStatus)}</div>
+            </div>
+            <div class="hud-calling ${pulseClass}">
+              <div class="hud-calling-row">
+                <span class="hud-stat-label">Calling Card</span>
+                <span class="hud-calling-main">${callingText}</span>
+              </div>
+              <div class="hud-calling-row">
+                <span class="hud-calling-sub">Karma ${safeNumber(run.karma, 0)}</span>
+                <span class="hud-calling-sub">${rankLine}</span>
+              </div>
+              <div class="xpbar"><div class="xpbar-fill" style="width:${prog}%"></div></div>
+              <div class="xpbar-text">${escapeHtml(toNext)}</div>
+            </div>
+            <div class="hud-stat">
+              <span class="hud-stat-label">Deck</span>
+              <span class="hud-stat-value">${run.playerDeck.length}</span>
+            </div>
+            <div class="hud-stat">
+              <span class="hud-stat-label">Bench</span>
+              <span class="hud-stat-value">${getBenchCapacity()}</span>
+            </div>
+          </div>
 
-        <div class="hud-right">
-          ${run.loan.active && !run.loan.repaid ? `
-            <button class="hud-btn success" ${canRepay ? '' : 'disabled'} onclick="repayLoan()">Repay ${LOAN_REPAY}</button>
-          ` : ''}
-          <button class="hud-btn danger" onclick="confirmReset()">Reset Run</button>
+          <div class="hud-center">
+            <button class="hud-icon-btn" title="Run Log" onclick="openLogPanel('stats')">📋</button>
+            <button class="hud-icon-btn" title="Settings" onclick="openSettingsPanel()">⚙️</button>
+            <button class="hud-icon-btn" title="Feedback" onclick="openFeedbackModal()">📝</button>
+          </div>
+
+          <div class="hud-right">
+            ${run.loan.active && !run.loan.repaid ? `
+              <button class="hud-btn success" ${canRepay ? '' : 'disabled'} onclick="repayLoan()">Repay ${LOAN_REPAY}</button>
+            ` : ''}
+            <button class="hud-btn danger" onclick="confirmReset()">Reset Run</button>
+          </div>
         </div>
       `;
+
+      requestAnimationFrame(syncHudOffset);
     }
 
     window.repayLoan = function() {
