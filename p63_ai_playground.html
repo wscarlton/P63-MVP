@@ -1697,6 +1697,8 @@
   <aside id="logPanel" class="hidden" aria-label="Run Log"></aside>
 
   <script>
+    window.P63_AI_PLAYGROUND = true;
+
     // =============================================
     // CONSTANTS
     // =============================================
@@ -3221,15 +3223,19 @@ const CALLING_RANK_THRESHOLDS = [
     // =============================================
     let __modalButtons = [];
     let __modalTitle = '';
+    let __modalLocked = false;
+    let __modalOnClose = null;
     window.__modalAction = function(i) {
       const b = __modalButtons[i];
       if (!b || b.disabled) return;
       if (typeof b.action === 'function') b.action();
     };
 
-    function showModal(title, bodyHtml, buttons = []) {
+    function showModal(title, bodyHtml, buttons = [], opts = {}) {
       __modalButtons = buttons.map(b => ({ ...b }));
       __modalTitle = title || '';
+      __modalLocked = !!opts.lock;
+      __modalOnClose = typeof opts.onClose === 'function' ? opts.onClose : null;
       const overlay = document.getElementById('modalOverlay');
       const modal = document.getElementById('modal');
       const footer = buttons.length ? `
@@ -3254,15 +3260,20 @@ const CALLING_RANK_THRESHOLDS = [
       overlay.classList.remove('hidden');
     }
 
-    function closeModal() {
+    function closeModal(force = false) {
+      if (__modalLocked && !force) return;
       if (__modalTitle === 'Merchant' && run && run.floor === 2 && run.secret && run.secret.keys && run.secret.keys.merchant) {
         const mk = run.secret.keys.merchant;
         if (mk.state === 'offered') mk.state = 'missed';
       }
+      const onClose = __modalOnClose;
       __modalTitle = '';
+      __modalLocked = false;
+      __modalOnClose = null;
       document.getElementById('modalOverlay').classList.add('hidden');
       document.getElementById('modal').innerHTML = '';
       __modalButtons = [];
+      if (onClose) onClose();
     }
 
     let toastTimer = null;
@@ -3307,6 +3318,7 @@ const CALLING_RANK_THRESHOLDS = [
     // ESC closes modal or log panel
     window.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
+      if (__modalLocked) return;
       const overlay = document.getElementById('modalOverlay');
       if (overlay && !overlay.classList.contains('hidden')) closeModal();
       else if (logPanelOpen) closeLogPanel();
@@ -5341,9 +5353,12 @@ body += `
         // Action tokens + action usage
         tokensTotal,
         tokensSpent: 0,
+        dealerTokensSpent: 0,
         usedActions: {},
         actionUsedThisTurn: false,
         actionSelectionInProgress: false,
+        inputLocked: false,
+        inputLockReason: null,
 
         // Action effects state
         spyReveals: new Set(),
@@ -6156,6 +6171,7 @@ body += `
 
     window.applyBenchTo = function(side, posIdx) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (isMatchInputLocked()) return;
       if (blackjackMatch.turn !== 'player') return;
       if (blackjackMatch.drawnCard) return;
       if (blackjackMatch.actionUsedThisTurn) return;
@@ -6272,26 +6288,33 @@ body += `
             <button class="modal-btn" onclick="applyCallingClubs(${laneIdx}, 1)">+1</button>
             <button class="modal-btn danger" onclick="applyCallingClubs(${laneIdx}, -1)">-1</button>
           </div>
-        `, []);
+        `, [], { lock: true });
 
+        blackjackMatch.inputLocked = true;
+        blackjackMatch.inputLockReason = 'CALLING_CLUBS';
         window.applyCallingClubs = function(targetIdx, delta) {
-          const target = blackjackMatch.dealerPositions[targetIdx];
-          if (target && target.isOpen && !target.isComplete) {
-            target.mods = target.mods || [];
-            for (let i = 0; i < procMult; i++) target.mods.push(delta);
-            logEvent('CALLING_PROC_CLUBS', {
-              laneIdx: targetIdx + 1,
-              delta,
-              callingCard: run.callingCard,
-              playedCard: placedCard,
-              multiplier: procMult
-            });
-            showToast(`Power: Dealer lane #${targetIdx + 1} ${delta > 0 ? '+1' : '-1'}`);
+          try {
+            const target = blackjackMatch.dealerPositions[targetIdx];
+            if (target && target.isOpen && !target.isComplete) {
+              target.mods = target.mods || [];
+              for (let i = 0; i < procMult; i++) target.mods.push(delta);
+              logEvent('CALLING_PROC_CLUBS', {
+                laneIdx: targetIdx + 1,
+                delta,
+                callingCard: run.callingCard,
+                playedCard: placedCard,
+                multiplier: procMult
+              });
+              showToast(`Power: Dealer lane #${targetIdx + 1} ${delta > 0 ? '+1' : '-1'}`);
+            }
+            blackjackMatch.inputLocked = false;
+            blackjackMatch.inputLockReason = null;
+            closeModal(true);
+            delete window.applyCallingClubs;
+            onComplete();
+          } finally {
+            renderAll();
           }
-          closeModal();
-          delete window.applyCallingClubs;
-          renderAll();
-          onComplete();
         };
         return true;
       }
@@ -6301,6 +6324,7 @@ body += `
 
     window.playerPlaceBenchCard = function(posIdx) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (isMatchInputLocked()) return;
       if (blackjackMatch.turn !== 'player') return;
       if (blackjackMatch.drawnCard) return;
       if (blackjackMatch.actionUsedThisTurn) return;
@@ -6340,6 +6364,7 @@ body += `
     // =============================================
     window.playerDrawCard = function() {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (isMatchInputLocked()) return;
       if (blackjackMatch.drawnCard || blackjackMatch.turn !== 'player') return;
       if (countOpenPositions(blackjackMatch.playerPositions) === 0) return;
 
@@ -6378,6 +6403,7 @@ body += `
 
     window.playerPlaceCard = function(posIdx) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (isMatchInputLocked()) return;
       if (!blackjackMatch.drawnCard || blackjackMatch.turn !== 'player') return;
 
       const pos = blackjackMatch.playerPositions[posIdx];
@@ -6409,6 +6435,7 @@ body += `
 
     window.playerStand = function(posIdx) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (isMatchInputLocked()) return;
       if (blackjackMatch.drawnCard || blackjackMatch.turn !== 'player') return;
 
       const pos = blackjackMatch.playerPositions[posIdx];
@@ -7455,6 +7482,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       return Math.max(0, (blackjackMatch.tokensTotal || 0) - (blackjackMatch.tokensSpent || 0));
     }
 
+    function isMatchInputLocked() {
+      return !!(blackjackMatch && blackjackMatch.inputLocked);
+    }
+
     function canClickToken() {
       if (!blackjackMatch) return false;
       if (!isPlayerActionContextOK(blackjackMatch)) return false;
@@ -7463,6 +7494,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       if (tokensRemaining() <= 0) return false;
       if (!run.ownedActions || run.ownedActions.length === 0) return false;
       if (blackjackMatch.drawnCard) return false;
+      if (isMatchInputLocked()) return false;
       return true;
     }
 
@@ -7481,6 +7513,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
     window.useActionFromBar = function(actionId) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (isMatchInputLocked()) return;
       if (blackjackMatch.turn !== 'player') return;
       if (!run.ownedActions || !run.ownedActions.includes(actionId)) return;
 
@@ -7557,6 +7590,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
     window.attemptUseAction = function(actionId) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing' || blackjackMatch.turn !== 'player') return;
+      if (isMatchInputLocked()) return;
       const def = ACTIONS[actionId];
       if (!def) return;
 
@@ -8847,7 +8881,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
               ${drawnHtml}
 
               <div class="bj-action-btns">
-                <button class="bj-btn" onclick="playerDrawCard()" ${(!isPlayerTurn || !!drawn || countOpenPositions(blackjackMatch.playerPositions) === 0) ? 'disabled' : ''}>Draw</button>
+                <button class="bj-btn" onclick="playerDrawCard()" ${(!isPlayerTurn || !!drawn || isMatchInputLocked() || countOpenPositions(blackjackMatch.playerPositions) === 0) ? 'disabled' : ''}>Draw</button>
                 <button class="bj-btn" onclick="playerEndTurn()" ${(!isPlayerTurn || !!drawn) ? 'disabled' : ''}>Close & End</button>
               </div>
 
@@ -9065,6 +9099,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         }
       } catch (e) {}
 
+      if (window.P63_AI_PLAYGROUND) return;
       setupCardTooltip();
       setupActionTooltip();
       initRun();
@@ -9365,6 +9400,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       if (blackjackMatch && blackjackMatch.phase === 'betting') {
         finishTransferBetting?.();
       }
+    }
+
+    if (blackjackMatch) {
+      blackjackMatch.dealerTokensSpent = 0;
     }
 
     // Trace buffer per match
@@ -9893,16 +9932,16 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       // Pre-draw: apply strategic bench mods (same as player: before draw)
       const bench = blackjackMatch.dealerBench || [];
-      let benchBudget = aiTuning.benchBudget?.[diff] ?? ((diff==='hard')?2:1);
       const aggro = aiTuning.benchAggression?.[diff] ?? 0.8;
 
       let usedBench = 0;
-      if (benchBudget > 0 && bench.length && Math.random() < aggro) {
-        for (let k = 0; k < benchBudget; k++) {
-          const move = dealerFindBestBenchMove(diff, 'strategic');
-          if (!move) break;
+      const dealerTokensRemaining = Math.max(0, safeNumber(blackjackMatch.tokensTotal, 0) - safeNumber(blackjackMatch.dealerTokensSpent || 0, 0));
+      if (dealerTokensRemaining > 0 && bench.length && Math.random() < aggro) {
+        const move = dealerFindBestBenchMove(diff, 'strategic');
+        if (move) {
           dealerApplyBenchMod(move);
-          usedBench += 1;
+          blackjackMatch.dealerTokensSpent = safeNumber(blackjackMatch.dealerTokensSpent, 0) + 1;
+          usedBench = 1;
         }
       }
 
