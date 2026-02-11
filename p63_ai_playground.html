@@ -6461,6 +6461,10 @@ body += `
       endPlayerTurn();
     };
 
+    function shouldUseInstantDealerTurn() {
+      return !!(window.P63_AITUNING && window.P63_AITUNING.instantDealer);
+    }
+
     function endPlayerTurn() {
       blackjackMatch.metrics.turns += 1;
 
@@ -6508,7 +6512,8 @@ body += `
       renderBlackjack();
 
       clearDealerTimers();
-      dealerTimerA = setTimeout(dealerTurn, 800);
+      if (shouldUseInstantDealerTurn()) dealerTurn();
+      else dealerTimerA = setTimeout(dealerTurn, 800);
     }
 
     // =============================================
@@ -6887,7 +6892,8 @@ function dealerStandPhase(diff, maxPasses = 6) {
         blackjackMatch.turn = 'dealer';
         renderBlackjack();
         clearDealerTimers();
-        dealerTimerA = setTimeout(dealerTurn, 800);
+        if (shouldUseInstantDealerTurn()) dealerTurn();
+        else dealerTimerA = setTimeout(dealerTurn, 800);
         return true;
       }
 
@@ -9881,6 +9887,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       const diff = getOpponentDifficulty();
       const parity = !!aiTuning.parityMode;
+      const dealerFallbackDeck = blackjackMatch.dealerBaseDeck || makeStandardDeck52();
+      maintainOpenPositions(blackjackMatch.dealerPositions, blackjackMatch.dealerDrawPile, dealerFallbackDeck, 'dealer');
+      if (checkMatchEnd()) return;
 
       // Pre-draw: apply strategic bench mods (same as player: before draw)
       const bench = blackjackMatch.dealerBench || [];
@@ -9914,14 +9923,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       // End dealer turn immediately in parity mode (no post-draw salvage).
       if (parity) {
-        // finalize busts at end of dealer turn (mirrors player finalize at end turn)
-        finalizeBusts?.(blackjackMatch.dealerPositions, 'dealer');
-        if (checkMatchEnd()) return;
-
-        blackjackMatch.turn = 'player';
-        blackjackMatch.actionUsedThisTurn = false;
-        renderBlackjack();
         pgMaybeTrace({ type:'turn_end', who:'dealer', diff, usedBench });
+        endDealerTurn();
         return;
       }
 
@@ -9942,8 +9945,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
   // ---------- Match hooks ----------
   const _origResolveMatch = (typeof resolveMatch === 'function') ? resolveMatch : null;
   if (_origResolveMatch) {
-    resolveMatch = function(){
-      _origResolveMatch();
+    resolveMatch = function(options){
+      _origResolveMatch(options);
 
       // Capture summary for session
       try {
