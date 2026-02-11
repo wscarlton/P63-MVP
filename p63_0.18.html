@@ -4947,17 +4947,19 @@ body += `
 
     window.startRemoval = function() {
   const cost = getMerchantRemovalCost();
-  if (run.chips < cost || run.playerDeck.length < 3) return;
-
-  // pay immediately on entry, no refund; cost scales with each paid removal
-  run.chips -= cost;
-  run.paidRemovalCount = safeNumber(run.paidRemovalCount, 0) + 1;
-  removalPaidCost = cost;
+  if (run.playerDeck.length < 3) return;
 
   const eligible = run.playerDeck
     .map((card, i) => ({ card, i }))
     .filter(d => !isKeyCard(d.card));
-  if (eligible.length < 1) return;
+  if (eligible.length < 1) { showToast('No eligible cards to remove.'); return; }
+  if (run.chips < cost) { showToast('Not enough chips.'); return; }
+
+  // charge only after eligibility is confirmed
+  run.chips -= cost;
+  run.paidRemovalCount = safeNumber(run.paidRemovalCount, 0) + 1;
+  removalPaidCost = cost;
+
   const picks = shuffle(eligible.slice()).slice(0, Math.min(3, eligible.length));
   removalCandidates = picks.map(d => ({ card: d.card }));
   removalMode = true;
@@ -5303,8 +5305,7 @@ body += `
           bonus21Awarded: false,
           lastPlayedCard: null,
           lastPlayedAttackValue: 0,
-          attackFired: false,
-          attackMod: 0
+          attackFired: false
         });
         blackjackMatch.dealerPositions.push({
           cards: [],
@@ -5315,8 +5316,7 @@ body += `
           isBust: false,
           lastPlayedCard: null,
           lastPlayedAttackValue: 0,
-          attackFired: false,
-          attackMod: 0
+          attackFired: false
         });
       }
 
@@ -5442,7 +5442,7 @@ body += `
     }
 
     function getPositionTotal(pos) {
-      const modSum = (pos.mods || []).reduce((a, b) => a + b, 0) + safeNumber(pos.attackMod, 0);
+      const modSum = (pos.mods || []).reduce((a, b) => a + b, 0);
       const base = calcBestTotal(pos.cards, modSum);
       return safeNumber(base, 0);
     }
@@ -5481,7 +5481,6 @@ body += `
       if (d.isComplete) return;
       const dmg = safeNumber(a.lastPlayedAttackValue, 0);
       if (!dmg) return;
-      d.attackMod = safeNumber(d.attackMod, 0) - dmg;
       d.mods = d.mods || [];
       d.mods.push(-dmg);
       a.attackFired = true;
@@ -6187,6 +6186,7 @@ body += `
 
       pos.cards.push(c);
       pos.lastPlay = { kind: 'card', rank: c.rank, value: getStrikeValueFromCard(c) };
+      onCardPlacedForAttack(pos, c);
       recordLaneCard('player', posIdx);
       blackjackMatch.bench.splice(bi, 1);
       blackjackMatch.armedBenchIdx = null;
@@ -6291,9 +6291,6 @@ body += `
 
       logEvent('PLAYER_STAND', { lane: posIdx + 1, total, bust: pos.isBust });
 
-      if (!pos.isBust) {
-        tryTempoStrike('player', posIdx, 'stand');
-      }
 
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
       updateThreatTargetLane(false, 'player_stand');
@@ -6310,9 +6307,23 @@ body += `
 
     window.playerEndTurn = function() {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
-      if (blackjackMatch.drawnCard || blackjackMatch.turn !== 'player') return;
+      if (blackjackMatch.turn !== 'player') return;
+      if (blackjackMatch.drawnCard) return;
 
-      if (countOpenPositions(blackjackMatch.playerPositions) > 0) return;
+      for (let i = 0; i < 5; i++) {
+        const pos = blackjackMatch.playerPositions[i];
+        if (!pos || !pos.isOpen || pos.isComplete) continue;
+        tryFireCloseAttack('player', i);
+        pos.isComplete = true;
+        const total = getPositionTotal(pos);
+        pos.isBust = total > 21;
+        blackjackMatch.metrics.playerStands += 1;
+        logEvent('PLAYER_STAND', { lane: i + 1, total, bust: pos.isBust, source: 'CLOSE_END' });
+      }
+
+      maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
+      updateThreatTargetLane(false, 'player_end_turn_close');
+      if (checkMatchEnd()) return;
       endPlayerTurn();
     };
 
@@ -6480,6 +6491,7 @@ function dealerLaneScore(idx, total, diff) {
       if (targetIdx >= 0) {
         blackjackMatch.dealerPositions[targetIdx].cards.push(card);
         blackjackMatch.dealerPositions[targetIdx].lastPlay = { kind: 'card', rank: card.rank, value: getStrikeValueFromCard(card) };
+        onCardPlacedForAttack(blackjackMatch.dealerPositions[targetIdx], card);
         recordLaneCard('dealer', targetIdx);
         if (blackjackMatch.spadePeekLanes) blackjackMatch.spadePeekLanes.delete(targetIdx);
 
@@ -6520,6 +6532,7 @@ function dealerApplyBenchMod(bestMove) {
   pos.mods = pos.mods || [];
   pos.mods.push(modCard.delta);
   pos.lastPlay = { kind: 'mod', delta: modCard.delta };
+  onCardPlacedForAttack(pos, modCard);
 
   blackjackMatch.dealerBench.splice(modIdx, 1);
   blackjackMatch.metrics.dealerBenchModsUsed = safeNumber(blackjackMatch.metrics.dealerBenchModsUsed, 0) + 1;
@@ -6640,9 +6653,6 @@ function dealerStandPhase(diff, maxPasses = 6) {
         blackjackMatch.metrics.dealerStands += 1;
         changed = true;
 
-        if (!pos.isBust) {
-          tryTempoStrike('dealer', i, 'stand');
-        }
 
         // Keep 3 open lanes
         const fb = blackjackMatch.dealerBaseDeck || makeStandardDeck52();
@@ -7025,6 +7035,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         logEvent('KARMA_GAIN', { amount: karmaGained, total: run.karma, laneKarma: karmaLaneGain, stampKarma: karmaStampTotal, patternKarma: karmaPatternTotal, extraKarma: karmaExtraTotal });
       }
 
+      const bonus = blackjackMatch.bonusChipsEarned || 0;
       startEarningsSequence({ payout, sideBet: transferNet, rake, bonus }, () => startScoreSequence(karmaBreakdown, karmaExtras, karmaGained, levelUpSummary));
 
       renderAll();
@@ -7826,6 +7837,15 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     // =============================================
     // UI RENDERING
     // =============================================
+    function getHudTokensValue(){
+      if (blackjackMatch && blackjackMatch.phase === 'playing') {
+        const total = safeNumber(blackjackMatch.tokensTotal, 0);
+        const spent = safeNumber(blackjackMatch.tokensSpent, 0);
+        return Math.max(0, total - spent);
+      }
+      return safeNumber(run && run.bankedTokens, 0);
+    }
+
     function renderAll() {
       renderHUD();
       renderBoard();
@@ -7882,7 +7902,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           </div>
           <div class="hud-stat">
             <span class="hud-stat-label">Tokens</span>
-            <span class="hud-stat-value tokens">${safeNumber(run.karma)}</span>
+            <span class="hud-stat-value tokens">${getHudTokensValue()}</span>
           </div>
           <div class="hud-stat">
             <span class="hud-stat-label">Bench</span>
@@ -8644,7 +8664,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
               <div class="bj-action-btns">
                 <button class="bj-btn" onclick="playerDrawCard()" ${(!isPlayerTurn || !!drawn || countOpenPositions(blackjackMatch.playerPositions) === 0) ? 'disabled' : ''}>Draw</button>
-                <button class="bj-btn" onclick="playerEndTurn()" ${(!isPlayerTurn || !!drawn || countOpenPositions(blackjackMatch.playerPositions) > 0) ? 'disabled' : ''}>End Turn</button>
+                <button class="bj-btn" onclick="playerEndTurn()" ${(!isPlayerTurn || !!drawn) ? 'disabled' : ''}>Close & End</button>
               </div>
 
               <div class="controls-row">
