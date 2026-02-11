@@ -116,7 +116,7 @@
 
     .start-screen{
       position: fixed; inset: 0;
-      z-index: 9999;
+      z-index: 400;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -370,7 +370,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 200;
+      z-index: 700;
       padding: 20px;
       backdrop-filter: blur(7px) saturate(120%);
     }
@@ -1158,7 +1158,7 @@
       padding: 12px 16px;
       border-radius: 12px;
       font-size: 14px;
-      z-index: 300;
+      z-index: 800;
       animation: toast-in 0.3s ease-out;
       box-shadow: 0 18px 50px rgba(0,0,0,0.5);
       max-width: min(640px, 92vw);
@@ -1178,7 +1178,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 300;
+      z-index: 750;
       padding: 20px;
       backdrop-filter: blur(7px) saturate(120%);
     }
@@ -1242,7 +1242,7 @@
       width: min(420px, 92vw);
       background: var(--bg-secondary);
       border-left: 1px solid var(--border-color);
-      z-index: 150; /* below modal overlay */
+      z-index: 650; /* below modal overlay */
       transform: translateX(110%);
       transition: transform 0.24s ease;
       display: flex;
