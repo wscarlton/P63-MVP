@@ -9536,7 +9536,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const finalModCount = finalState && finalState.deckSnapshot ? safeNumber(finalState.deckSnapshot.modCount, null) : summaryDeck.modCount;
       const summary = {
         matches: matches.length,
-        runOutcome: { result: ((gameLog && gameLog.runOutcome && gameLog.runOutcome.outcome) || 'unknown').toUpperCase() === 'WIN' ? 'WIN' : (((gameLog && gameLog.runOutcome && gameLog.runOutcome.outcome) || '').toLowerCase() === 'loss' ? 'LOSS' : ((run && run.ui && run.ui.mode==='VICTORY') ? 'WIN' : (run && run.ui && run.ui.mode==='GAMEOVER' ? 'LOSS' : 'UNKNOWN')) },
+        runOutcome: { result: ((gameLog && gameLog.runOutcome && gameLog.runOutcome.outcome) || 'unknown').toUpperCase() === 'WIN' ? 'WIN' : (((gameLog && gameLog.runOutcome && gameLog.runOutcome.outcome) || '').toLowerCase() === 'loss' ? 'LOSS' : ((run && run.ui && run.ui.mode==='VICTORY') ? 'WIN' : (run && run.ui && run.ui.mode==='GAMEOVER' ? 'LOSS' : 'UNKNOWN'))) },
         appBuild: (gameLog && gameLog.app && gameLog.app.build) || null,
         appVersion: (gameLog && gameLog.app && gameLog.app.version) || null,
         sessionId: (gameLog && gameLog.sessionId) || null,
