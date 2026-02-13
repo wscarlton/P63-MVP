@@ -3541,6 +3541,26 @@ const CALLING_RANK_THRESHOLDS = [
       };
     }
 
+
+    function collectLaneCardsForEffects(cards) {
+      const out = [];
+      for (const c of cards || []) {
+        if (!c || isModifier(c) || isKeyCard(c)) continue;
+        if (isFused(c)) {
+          if (c.a) out.push(c.a);
+          if (c.b) out.push(c.b);
+        } else {
+          out.push(c);
+        }
+      }
+      return out;
+    }
+
+    function laneHasSleeve(pos, sleeveId) {
+      const cards = collectLaneCardsForEffects(pos?.cards || []);
+      return cards.some(c => c && c.sleeveId === sleeveId);
+    }
+
     function getStampKarmaContribution(stampId, baseValue, laneSize) {
       switch (stampId) {
         case 'PLUS_FIVE':
@@ -3665,13 +3685,17 @@ const CALLING_RANK_THRESHOLDS = [
 
     function getCardValueOptions(card) {
       if (!card || isModifier(card)) return [];
+
       if (isFused(card)) {
-        const options = [
-          ...getCardValueOptions(card.a),
-          ...getCardValueOptions(card.b)
-        ];
-        return Array.from(new Set(options));
+        const a = getCardValueOptions(card.a);
+        const b = getCardValueOptions(card.b);
+        const sums = [];
+        for (const av of a) {
+          for (const bv of b) sums.push(av + bv);
+        }
+        return Array.from(new Set(sums));
       }
+
       if (card.__negValue !== undefined) return [safeNumber(card.__negValue, 0)];
       if (card.rank === 'A') return [1, 11];
       if (['J', 'Q', 'K'].includes(card.rank)) return [10];
@@ -5813,6 +5837,19 @@ body += `
         return;
       }
 
+      if (attackerSide === 'dealer' && targetSide === 'player' && laneHasSleeve(targetPos, 'STEEL')) {
+        logEvent('TEMPO_STRIKE_BLOCKED', {
+          attacker: attackerSide,
+          lane: laneIdx + 1,
+          delta,
+          lastPlay: attackerPos.lastPlay,
+          targetState: 'blocked_steel',
+          trapTotalAfter: blackjackMatch.traps[targetSide][laneIdx],
+          reason
+        });
+        return;
+      }
+
       const targetState = applyLaneMod(targetSide, laneIdx, delta);
       const eventType = (targetState === 'unopened') ? 'TEMPO_STRIKE_TRAP_SET' : 'TEMPO_STRIKE_APPLIED';
       logEvent(eventType, {
@@ -5893,6 +5930,15 @@ body += `
 
       const laneIdx = targetIdx;
       const p = targetPos;
+      if (laneHasSleeve(p, 'STEEL')) {
+        logEvent('BOSS_COUNTERMEASURE', {
+          lane: laneIdx + 1,
+          dealerBenchMod: null,
+          appliedDelta: 0,
+          targetState: 'blocked_steel'
+        });
+        return false;
+      }
       const cur = getPositionTotal(p);
 
       let pick = 0;
@@ -5974,18 +6020,31 @@ body += `
 
           const trapDelta = blackjackMatch && blackjackMatch.traps ? blackjackMatch.traps[side][i] : 0;
           if (trapDelta) {
-            positions[i].mods = positions[i].mods || [];
-            positions[i].mods.push(trapDelta);
-            blackjackMatch.traps[side][i] = 0;
-            const attacker = side === 'dealer' ? 'player' : 'dealer';
-            logEvent('TEMPO_STRIKE_TRAP_TRIGGERED', {
-              attacker,
-              lane: i + 1,
-              delta: trapDelta,
-              lastPlay: null,
-              targetState: 'open',
-              trapTotalAfter: blackjackMatch.traps[side][i]
-            });
+            if (side === 'player' && laneHasSleeve(positions[i], 'STEEL')) {
+              logEvent('TEMPO_STRIKE_BLOCKED', {
+                attacker: 'dealer',
+                lane: i + 1,
+                delta: trapDelta,
+                lastPlay: null,
+                targetState: 'blocked_steel',
+                trapTotalAfter: blackjackMatch.traps[side][i],
+                reason: 'trap_trigger'
+              });
+              blackjackMatch.traps[side][i] = 0;
+            } else {
+              positions[i].mods = positions[i].mods || [];
+              positions[i].mods.push(trapDelta);
+              blackjackMatch.traps[side][i] = 0;
+              const attacker = side === 'dealer' ? 'player' : 'dealer';
+              logEvent('TEMPO_STRIKE_TRAP_TRIGGERED', {
+                attacker,
+                lane: i + 1,
+                delta: trapDelta,
+                lastPlay: null,
+                targetState: 'open',
+                trapTotalAfter: blackjackMatch.traps[side][i]
+              });
+            }
           }
 
           if (blackjackMatch && side === 'player') maybeAward21BonusForPlayerPos(i);
@@ -6123,7 +6182,7 @@ body += `
         let stampTotal = 0;
         let stampUids = [];
         if (isWin) {
-          laneCards.forEach(card => {
+          collectLaneCardsForEffects(laneCards).forEach(card => {
             const stampId = getCardStampId(card);
             if (!stampId) return;
             const def = getStampDef(stampId);
@@ -7234,8 +7293,9 @@ function dealerStandPhase(diff, maxPasses = 6) {
       for (let i = 0; i < 5; i++) {
         if (positionResults[i] !== 'player') continue;
         const laneCards = blackjackMatch.playerPositions[i].cards || [];
-        const vfCount = laneCards.filter(c => getCardStampId(c) === 'VENTURE_FUND').length;
-        if (vfCount > 0) ventureFundChips += safeNumber(playerTotals[i], 0) * vfCount;
+        const vfCount = collectLaneCardsForEffects(laneCards).filter(c => getCardStampId(c) === 'VENTURE_FUND').length;
+        const laneKarmaTotal = safeNumber(karmaBreakdown.lanes[i]?.laneTotal, 0);
+        if (vfCount > 0) ventureFundChips += laneKarmaTotal * vfCount;
       }
       if (ventureFundChips > 0) {
         run.chips = safeNumber(run.chips) + ventureFundChips;
@@ -7263,7 +7323,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
       const burnCards = [];
       blackjackMatch.playerPositions.forEach(pos => {
-        (pos.cards || []).forEach(card => {
+        collectLaneCardsForEffects(pos.cards).forEach(card => {
           if (getCardStampId(card) === 'BURN_AFTER_READING') burnCards.push(card);
         });
       });
