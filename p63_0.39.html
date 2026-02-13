@@ -1543,6 +1543,15 @@
   transform: translateZ(0);
 }
 
+:root{
+  --cc-reveal-scale: 0.6;
+}
+
+.cc-scale{
+  transform: scale(var(--cc-reveal-scale));
+  transform-origin: center;
+}
+
 .cc-tilt{
   width: min(460px, 88vw);
   aspect-ratio: 300 / 420;
@@ -4101,7 +4110,7 @@ function benchPush(card, source = '') {
         bossFight: null,
         secret: {
           keys: {
-            highStakes: { obtained: false, floor: 1, tileId: null, hinted: false },
+            highStakes: { obtained: false, tileIdByFloor: {}, revealedByFloor: {} },
             merchant: { state: 'unseen', floor: 2, chance: 0.05 },
             boss: { obtained: false, floor: 3 }
           }
@@ -4149,11 +4158,12 @@ function benchPush(card, source = '') {
       run.board.currentTileId = null;
       run.board.visited = new Set();
       run.board.path = [];
-      if (floor === 1 && run.secret && run.secret.keys && !run.secret.keys.highStakes.tileId) {
+      if (run.secret && run.secret.keys && run.secret.keys.highStakes && !run.secret.keys.highStakes.obtained) {
         const highs = run.board.tiles.filter(t => t.type === 'HIGH_STAKES');
         if (highs.length) {
           const pick = randomChoice(highs);
-          run.secret.keys.highStakes.tileId = pick.id;
+          run.secret.keys.highStakes.tileIdByFloor[String(floor)] = pick.id;
+          run.secret.keys.highStakes.revealedByFloor[String(floor)] = false;
         }
       }
       run.ui.mode = 'BOARD';
@@ -4325,10 +4335,15 @@ function benchPush(card, source = '') {
       const ownedCount = run.ownedActions.length;
 
       let offerHtml = '';
+      let bartenderHintHtml = '';
       const hsKey = run.secret && run.secret.keys ? run.secret.keys.highStakes : null;
-      if (hsKey && !hsKey.obtained && run.floor === hsKey.floor && !hsKey.hinted && hsKey.tileId !== null) {
-        offerHtml += `<p class="modal-text">"High roller on this floor. Find the right table and win big."</p>`;
-        hsKey.hinted = true;
+      if (hsKey && !hsKey.obtained) {
+        const floorKey = String(run.floor);
+        const tileId = hsKey.tileIdByFloor ? hsKey.tileIdByFloor[floorKey] : null;
+        if (tileId !== undefined && tileId !== null) {
+          hsKey.revealedByFloor[floorKey] = true;
+          bartenderHintHtml = `<p class="modal-text">"There’s a high-stakes table with a Key Card on this floor."</p>`;
+        }
       }
       if (!offeredId) {
         offerHtml = `
@@ -4354,7 +4369,7 @@ function benchPush(card, source = '') {
         `;
       }
 
-      showModal('Bartender', offerHtml, [
+      showModal('Bartender', `${bartenderHintHtml}${offerHtml}`, [
         {
           text: `Take +${BARTENDER_REWARD} Chips`,
           primary: true,
@@ -5388,7 +5403,10 @@ body += `
     function encounterBlackjackHigh() {
       if (run.chips < BUYIN_HIGH) { gameOver("You can't afford the buy-in."); return; }
       const hsKey = run.secret && run.secret.keys ? run.secret.keys.highStakes : null;
-      const specialReward = (run.floor === 1 && hsKey && !hsKey.obtained && run.board.currentTileId === hsKey.tileId) ? 'KEY_HIGH' : null;
+      const floorKey = String(run.floor);
+      const tileId = hsKey && hsKey.tileIdByFloor ? hsKey.tileIdByFloor[floorKey] : null;
+      const revealed = !!(hsKey && hsKey.revealedByFloor && hsKey.revealedByFloor[floorKey]);
+      const specialReward = (hsKey && !hsKey.obtained && revealed && run.board.currentTileId === tileId) ? 'KEY_HIGH' : null;
       startBlackjackMatch('HIGH_STAKES', BUYIN_HIGH, { specialReward });
     }
 
@@ -5737,11 +5755,13 @@ body += `
 
         const c = drawCardFromPile(pile, fb);
         if (!c) return null;
-        if (isModifier(c)) {
+        if (isModifier(c) || (side === 'player' && c && c.sleeveId === 'BLUE')) {
           if (blackjackMatch) {
             if (side === 'player') {
-              benchPush(c, 'auto-bench');
+              const src = isModifier(c) ? 'auto-bench' : 'blue-sleeve-deal';
+              benchPush(c, src);
               blackjackMatch.metrics.modifiersBenched += 1;
+              logEvent('PLAYER_DRAW_BENCH', { card: cardToString(c), cardUid: c.uid || null, cardRef: cardRef(c), source: src });
             } else if (side === 'dealer') {
               blackjackMatch.dealerBench = blackjackMatch.dealerBench || [];
               blackjackMatch.dealerBench.push(c);
@@ -6563,6 +6583,15 @@ body += `
     };
 
 
+    function fuseCardsInDeck(cardA, cardB) {
+      const fused = { uid: nextCardUid(), type: 'FUSE', a: cardA, b: cardB, sleeveId: 'FUSION' };
+      run.playerDeck = (run.playerDeck || []).filter(c => c !== cardA && c !== cardB);
+      run.playerDeck.push(fused);
+      recordDeckSnapshot('FUSION_CREATED', { a: cardRef(cardA), b: cardRef(cardB), fused: cardRef(fused) });
+      return fused;
+    }
+
+
     function handleFusionOnCardPlaced(pos, placed) {
       if (!pos || !placed || !isStandardCard(placed)) return placed;
 
@@ -6572,12 +6601,17 @@ body += `
         if (pendingIdx !== -1 && placedIdx !== -1 && pendingIdx !== placedIdx) {
           const fusionCard = pos.cards[pendingIdx];
           const placedCard = pos.cards[placedIdx];
-          const fused = { uid: null, type: 'FUSE', a: fusionCard, b: placedCard, sleeveId: 'FUSION' };
-          assignUid(fused);
+          const fusedDeckCard = fuseCardsInDeck(fusionCard, placedCard);
           pos.cards = pos.cards.filter((_, i) => i !== pendingIdx && i !== placedIdx);
-          pos.cards.push(fused);
+          pos.cards.push(fusedDeckCard);
           pos.pendingFusionUid = null;
-          return fused;
+          logEvent('FUSION_TRIGGERED', {
+            laneCards: (pos.cards || []).map(cardRef),
+            a: cardRef(fusionCard),
+            b: cardRef(placedCard),
+            fused: cardRef(fusedDeckCard)
+          });
+          return fusedDeckCard;
         }
       }
 
@@ -7393,6 +7427,8 @@ blackjackMatch.result.rake = rake;
 blackjackMatch.result.rakeRate = rakeRate;
 
 run.chips = safeNumber(run.chips) + payout + transferNet - rake;
+      blackjackMatch.postMatchGameOver = run.chips < 0;
+      blackjackMatch.postMatchGameOverReason = blackjackMatch.postMatchGameOver ? 'CHIPS_NEGATIVE' : null;
 
       const durationMs = Math.round(performance.now() - blackjackMatch.metrics.startedAtMs);
 
@@ -7471,7 +7507,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         const key = makeKeyCard('HIGH_STAKES');
         assignUid(key);
         run.playerDeck.push(key);
-        if (run.secret && run.secret.keys) run.secret.keys.highStakes.obtained = true;
+        if (run.secret && run.secret.keys) {
+          run.secret.keys.highStakes.obtained = true;
+          run.secret.keys.highStakes.tileIdByFloor = {};
+          run.secret.keys.highStakes.revealedByFloor = {};
+        }
         logEvent('KEYCARD_OBTAINED', { source: 'HIGH_STAKES', card: cardRef(key) });
         recordDeckSnapshot('KEYCARD_HIGH_STAKES');
         blackjackMatch.rewardPending = false;
@@ -8134,9 +8174,30 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     // =============================================
     window.blackjackContinue = function() {
       clearDealerTimers();
+      if (!blackjackMatch) return;
+
+      if (isResolutionAnimationActive()) {
+        if (blackjackMatch.earningsSeq && blackjackMatch.earningsSeq.active) blackjackMatch.earningsSeq.active = false;
+        if (blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active) blackjackMatch.scoreSeq.active = false;
+        if (blackjackMatch.pendingRewardStart) {
+          blackjackMatch.pendingRewardStart = false;
+          startWinnerRewardFlow();
+        }
+        renderAll();
+      }
 
       if (blackjackMatch.rewardPending) {
-        showToast('Resolve winner reward first');
+        if (blackjackMatch.pendingRewardStart) {
+          blackjackMatch.pendingRewardStart = false;
+          startWinnerRewardFlow();
+        } else if (blackjackMatch.winnerReward) {
+          showToast('Choose a reward to continue.');
+        }
+        return;
+      }
+
+      if (blackjackMatch.postMatchGameOver) {
+        triggerGameOver(blackjackMatch.postMatchGameOverReason || 'CHIPS_NEGATIVE');
         return;
       }
 
@@ -8213,6 +8274,13 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         renderAll();
       }
     };
+    function triggerGameOver(reason) {
+      if (reason === 'CHIPS_NEGATIVE') {
+        gameOver('Chips below zero');
+        return;
+      }
+      gameOver('Run ended.');
+    }
 
     function gameOver(message) {
       clearDealerTimers();
@@ -8452,9 +8520,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         if (isVisited) tileClass += ' visited';
         if (isCurrent) tileClass += ' current';
         if (isAvailable) tileClass += ' available';
-        if (run.secret && run.secret.keys && run.secret.keys.highStakes.hinted
-          && !run.secret.keys.highStakes.obtained
-          && tile.id === run.secret.keys.highStakes.tileId) tileClass += ' key-roller';
+        if (run.secret && run.secret.keys && run.secret.keys.highStakes && !run.secret.keys.highStakes.obtained) {
+          const floorKey = String(run.floor);
+          const hs = run.secret.keys.highStakes;
+          if (hs.revealedByFloor && hs.revealedByFloor[floorKey] && hs.tileIdByFloor && tile.id === hs.tileIdByFloor[floorKey]) tileClass += ' key-roller';
+        }
 
         const clickHandler = isAvailable ? `onclick="onTileClick(${tile.id})"` : '';
 
@@ -8602,8 +8672,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           <div class="cc-card-stage">
             <div class="cc-bounce" id="ccBounce">
               <div class="cc-float" id="ccFloat">
-                <div class="cc-tilt" id="ccTilt">
-                  <div class="cc-flip ${flipped ? 'is-flipped' : ''}" id="ccFlip" role="button" tabindex="0" aria-label="Calling card. Click to flip for details.">
+                <div class="cc-scale">
+                  <div class="cc-tilt" id="ccTilt">
+                    <div class="cc-flip ${flipped ? 'is-flipped' : ''}" id="ccFlip" role="button" tabindex="0" aria-label="Calling card. Click to flip for details.">
                     <div class="cc-face cc-neon cc-front">
                       <div class="cc-corner">${escapeHtml(rank)}</div>
                       <div class="cc-suit">${escapeHtml(suit)}</div>
@@ -8620,6 +8691,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
                       <div class="cc-back-lines" style="opacity:0.85;">Tap / click to flip back</div>
                     </div>
 
+                  </div>
                   </div>
                 </div>
               </div>
@@ -9339,6 +9411,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
         const scoreSeq = blackjackMatch.scoreSeq;
         const earningsSeq = blackjackMatch.earningsSeq;
+        const continueLabel = isResolutionAnimationActive() ? 'Skip & Continue' : 'Continue';
         const earningsNow = earningsSeq && earningsSeq.active ? earningsSeq.accrued : netFromEnd;
         const earningsLine = earningsSeq && earningsSeq.active
           ? `<div class="bj-result-score" style="color:var(--accent-blue); font-weight:800;">Earnings tally: ${escapeHtml(earningsSeq.message || '')}</div>`
@@ -9363,7 +9436,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             <div class="bj-result-chips ${Math.max(0, (result.karmaGained || 0)) > 0 ? 'positive' : 'neutral'}">Karma Gained: +${Math.max(0, (scoreSeq && scoreSeq.active) ? scoreSeq.accrued : (result.karmaGained || 0))}</div>
             ${scoreLine}
             <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-              <button class="bj-btn" onclick="blackjackContinue()" ${blackjackMatch.rewardPending || isResolutionAnimationActive() ? 'disabled' : ''}>Continue</button>
+              <button class="bj-btn" onclick="blackjackContinue()">${continueLabel}</button>
               ${(scoreSeq && scoreSeq.active) ? '<button class="bj-btn" onclick="skipScoreSequence()">Skip Tally</button>' : ''}
             </div>
           </div>
@@ -9999,7 +10072,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     function encounterBlackjackHigh() {
       if (run.chips < BUYIN_HIGH) { gameOver("You can't afford the buy-in."); return; }
       const hsKey = run.secret && run.secret.keys ? run.secret.keys.highStakes : null;
-      const specialReward = (run.floor === 1 && hsKey && !hsKey.obtained && run.board.currentTileId === hsKey.tileId) ? 'KEY_HIGH' : null;
+      const floorKey = String(run.floor);
+      const tileId = hsKey && hsKey.tileIdByFloor ? hsKey.tileIdByFloor[floorKey] : null;
+      const revealed = !!(hsKey && hsKey.revealedByFloor && hsKey.revealedByFloor[floorKey]);
+      const specialReward = (hsKey && !hsKey.obtained && revealed && run.board.currentTileId === tileId) ? 'KEY_HIGH' : null;
       startBlackjackMatch('HIGH_STAKES', BUYIN_HIGH, { specialReward });
     }
 
