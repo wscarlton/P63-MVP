@@ -200,6 +200,17 @@
     .mono{font-family:var(--mono)}
     .tiny{font-size:11px}
     .divider{height:1px; background:rgba(255,255,255,.10); margin:10px 0;}
+    .preBox{
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 10px;
+      padding: 10px;
+      min-height: 180px;
+      max-height: 420px;
+      overflow: auto;
+    }
   </style>
 </head>
 <body>
@@ -216,6 +227,7 @@
       <button class="tabbtn active" data-tab="importTab">Import</button>
       <button class="tabbtn" data-tab="dashboardTab">Dashboard</button>
       <button class="tabbtn" data-tab="runsTab">Runs</button>
+      <button class="tabbtn" data-tab="feedbackTab">Feedback</button>
       <button class="tabbtn" data-tab="configsTab">Configs</button>
       <button class="tabbtn" data-tab="settingsTab">Settings</button>
     </nav>
@@ -613,6 +625,35 @@
     </div>
   </section>
 
+  <!-- FEEDBACK -->
+  <section id="feedbackTab" class="tab" style="display:none">
+    <div class="card">
+      <div class="cardHeader">
+        <div>
+          <div class="cardTitle">Feedback</div>
+          <div class="cardSub">Comments and bug notes captured during playtests. Export includes all runs.</div>
+        </div>
+        <div class="row" style="gap:8px; flex-wrap:wrap">
+          <input id="fbSearch" placeholder="Search runId, file, tags, notes, comments, bugs…" style="min-width:320px" />
+          <label class="tiny" style="display:flex; align-items:center; gap:6px">
+            <input type="checkbox" id="fbOnlyWithText" checked />
+            Only runs with feedback
+          </label>
+          <button class="btn small primary" id="btnExportFeedbackCSV">Export Feedback CSV</button>
+        </div>
+      </div>
+
+      <div class="cardBody">
+        <div class="tiny muted" id="fbSummary" style="margin-bottom:10px"></div>
+        <div class="tableWrap">
+          <table id="feedbackTable"></table>
+        </div>
+        <div class="tiny muted" id="fbWarn" style="margin-top:10px; display:none"></div>
+      </div>
+    </div>
+  </section>
+
+
   <!-- CONFIGS -->
   <section id="configsTab" class="tab" style="display:none">
     <div class="split">
@@ -735,6 +776,30 @@
   </div>
 </dialog>
 
+<dialog id="dlgFeedbackView" class="dlg">
+  <div class="dlgHead">
+    <div>
+      <div class="dlgTitle" id="fbDlgTitle">Feedback</div>
+      <div class="tiny muted" id="fbDlgMeta"></div>
+    </div>
+    <div class="row">
+      <button class="btn small" id="btnCloseFeedbackDlg">Close</button>
+    </div>
+  </div>
+  <div class="dlgBody">
+    <div class="grid cols2" style="gap:12px">
+      <div>
+        <div class="tiny muted" style="margin-bottom:6px">Comments</div>
+        <pre id="fbDlgComments" class="preBox"></pre>
+      </div>
+      <div>
+        <div class="tiny muted" style="margin-bottom:6px">Bugs</div>
+        <pre id="fbDlgBugs" class="preBox"></pre>
+      </div>
+    </div>
+  </div>
+</dialog>
+
 <script>
 /* =========================================================
    Project 63 Run Analyzer — Single-file MVP+
@@ -753,6 +818,7 @@ const defaultSettings = {
 let DB = loadDB();
 let currentRunId = null;
 let currentConfigId = null;
+const feedbackCache = {}; // runId -> feedback summary
 
 function loadDB(){
   try{
@@ -831,6 +897,36 @@ function toISO(ts){
     return d.toISOString();
   }catch{ return String(ts); }
 }
+function normText(s){
+  if(s===null || s===undefined) return "";
+  return String(s).replace(/\r\n/g,"\n").trim();
+}
+function extractFeedbackSummary(log){
+  const fb = log && typeof log==="object" ? (log.feedback || null) : null;
+  const comments = normText(fb?.comments);
+  const bugs = normText(fb?.bugs);
+  const updatedAtISO = fb?.updatedAt ? toISO(fb.updatedAt) : null;
+
+  const events = Array.isArray(log?.events) ? log.events : [];
+  const fbEvents = events.filter(e=>e && e.type==="FEEDBACK_UPDATED");
+  const updatesCount =
+    (log?.stats && typeof log.stats.feedbackUpdates==="number") ? log.stats.feedbackUpdates :
+    (fbEvents.length || null);
+
+  let lastUpdateISO = null;
+  if(fbEvents.length){
+    const last = fbEvents.reduce((acc,e)=>{
+      const t = new Date(e.ts||0).getTime();
+      const a = new Date(acc.ts||0).getTime();
+      return t>a ? e : acc;
+    }, fbEvents[0]);
+    lastUpdateISO = last?.ts ? toISO(last.ts) : null;
+  }
+
+  const hasText = !!(comments || bugs);
+
+  return { comments, bugs, updatedAtISO, updatesCount, lastUpdateISO, hasText };
+}
 function escapeHTML(str){
   return String(str ?? "").replace(/[&<>"']/g, m=>({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
@@ -890,6 +986,7 @@ function setTab(tabId){
   if(tabId==="configsTab") renderConfigs();
   if(tabId==="settingsTab") renderSettings();
   if(tabId==="dashboardTab" && currentRunId) renderDashboard(currentRunId);
+  if(tabId==="feedbackTab") renderFeedbackTab();
 }
 
 /* =========================
@@ -1508,6 +1605,7 @@ function analyzeLog(log){
     startCallingRank,
     endCallingSuit,
     endCallingRank,
+    feedback: extractFeedbackSummary(log),
     warnings
   };
 
@@ -2168,6 +2266,178 @@ function getRunAnalysis(runRec){
     if(parsed.ok) return analyzeLog(parsed.value);
   }
   return { summary: runRec.summary, derived: runRec.derived };
+}
+
+
+function getFeedbackForRun(runRec){
+  const id = runRec?.meta?.runId;
+  if(id && feedbackCache[id]) return feedbackCache[id];
+
+  const sf = runRec?.summary?.feedback;
+  if(sf && typeof sf==="object"){
+    if(id) feedbackCache[id] = sf;
+    return sf;
+  }
+
+  if(runRec?.rawLog){
+    const parsed = safeParseJSON(runRec.rawLog);
+    if(parsed.ok){
+      const fb = extractFeedbackSummary(parsed.value);
+      if(id) feedbackCache[id] = fb;
+      return fb;
+    }
+  }
+
+  const empty = {comments:"", bugs:"", updatedAtISO:null, updatesCount:null, lastUpdateISO:null, hasText:false};
+  if(id) feedbackCache[id] = empty;
+  return empty;
+}
+function clip(s, n=140){
+  s = normText(s);
+  if(!s) return "—";
+  return s.length > n ? (s.slice(0,n-1) + "…") : s;
+}
+function renderFeedbackTab(){
+  const search = (document.getElementById("fbSearch")?.value || "").toLowerCase().trim();
+  const onlyWithText = !!document.getElementById("fbOnlyWithText")?.checked;
+
+  const runs = Object.values(DB.runs);
+  const rows = runs.map(r=>{
+    const fb = getFeedbackForRun(r);
+    const startedAt = r.meta.startedAtISO || r.summary?.startedAtISO || r.meta.importedAtISO || null;
+    const cfgName = DB.configs[r.meta.configId]?.name || "(No config)";
+    const outcome = r.summary?.runOutcome || {};
+    return {
+      _runId: r.meta.runId,
+      startedAtISO: startedAt,
+      importedAtISO: r.meta.importedAtISO || null,
+      sourceFilename: r.meta.sourceFilename || "—",
+      sessionId: r.meta.sessionId || "—",
+      logVersion: r.meta.logVersion || "—",
+      configId: r.meta.configId || "—",
+      configName: cfgName,
+      tags: (r.meta.tags || []).join("; "),
+      notes: r.meta.notes || "",
+      outcome: outcome.result || "—",
+      outcomeReason: outcome.reason || "—",
+      endFloor: outcome.floor ?? r.summary?.floorsReached ?? "—",
+      endChips: outcome.chips ?? r.summary?.endChips ?? "—",
+      endKarma: r.summary?.endKarma ?? "—",
+      feedbackUpdatedAtISO: fb.updatedAtISO || fb.lastUpdateISO || "—",
+      updatesCount: fb.updatesCount ?? "—",
+      comments: fb.comments,
+      bugs: fb.bugs,
+      hasText: fb.hasText
+    };
+  });
+
+  const filtered = rows.filter(x=>{
+    if(onlyWithText && !x.hasText) return false;
+    if(search){
+      const hay = [
+        x._runId, x.startedAtISO, x.importedAtISO, x.sourceFilename, x.sessionId,
+        x.configName, x.tags, x.notes, x.comments, x.bugs
+      ].join(" ").toLowerCase();
+      if(!hay.includes(search)) return false;
+    }
+    return true;
+  }).sort((a,b)=>{
+    const ta = new Date(a.startedAtISO||0).getTime();
+    const tb = new Date(b.startedAtISO||0).getTime();
+    return tb - ta;
+  });
+
+  const total = rows.length;
+  const withText = rows.filter(r=>r.hasText).length;
+  document.getElementById("fbSummary").textContent =
+    `${filtered.length} run(s) shown • ${withText} run(s) contain feedback • ${total} total stored`;
+
+  const missing = rows.filter(r=>!r.hasText).length;
+  const warnEl = document.getElementById("fbWarn");
+  if(missing && onlyWithText){
+    warnEl.style.display = "none";
+    warnEl.textContent = "";
+  }else if(missing){
+    warnEl.style.display = "block";
+    warnEl.textContent =
+      `Note: ${missing} run(s) have no feedback text stored. If these were imported before feedback scraping existed and stored without raw logs, you may need to re-import those JSON logs to capture feedback.`;
+  }else{
+    warnEl.style.display = "none";
+    warnEl.textContent = "";
+  }
+
+  const el = document.getElementById("feedbackTable");
+  const cols = [
+    ["startedAtISO","Started"],
+    ["_runId","Run ID"],
+    ["configName","Config"],
+    ["tags","Tags"],
+    ["outcome","Outcome"],
+    ["endFloor","Floor"],
+    ["endChips","Chips"],
+    ["endKarma","Karma"],
+    ["feedbackUpdatedAtISO","Feedback Updated"],
+    ["updatesCount","Edits"],
+    ["comments","Comments (preview)"],
+    ["bugs","Bugs (preview)"]
+  ];
+
+  el.innerHTML = `
+    <thead><tr>
+      ${cols.map(c=>`<th>${escapeHTML(c[1])}</th>`).join("")}
+      <th>Action</th>
+    </tr></thead>
+    <tbody>
+      ${filtered.map(r=>`
+        <tr>
+          <td>${escapeHTML(fmt(r.startedAtISO||""))}</td>
+          <td title="${escapeHTML(r._runId)}">${escapeHTML(r._runId)}</td>
+          <td>${escapeHTML(r.configName)}</td>
+          <td title="${escapeHTML(r.tags)}">${escapeHTML(clip(r.tags, 60))}</td>
+          <td>${escapeHTML(r.outcome)}</td>
+          <td>${escapeHTML(fmt(r.endFloor))}</td>
+          <td>${escapeHTML(fmt(r.endChips))}</td>
+          <td>${escapeHTML(fmt(r.endKarma))}</td>
+          <td>${escapeHTML(fmt(r.feedbackUpdatedAtISO||""))}</td>
+          <td>${escapeHTML(fmt(r.updatesCount))}</td>
+          <td title="${escapeHTML(r.comments)}">${escapeHTML(clip(r.comments, 90))}</td>
+          <td title="${escapeHTML(r.bugs)}">${escapeHTML(clip(r.bugs, 90))}</td>
+          <td style="white-space:nowrap">
+            <button class="btn small" data-view="${escapeHTML(r._runId)}">View</button>
+            <button class="btn small primary" data-open="${escapeHTML(r._runId)}">Open</button>
+          </td>
+        </tr>
+      `).join("")}
+    </tbody>
+  `;
+
+  el.querySelectorAll("button[data-open]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const id = btn.getAttribute("data-open");
+      currentRunId = id;
+      setTab("dashboardTab");
+      renderDashboard(id);
+    });
+  });
+
+  el.querySelectorAll("button[data-view]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const id = btn.getAttribute("data-view");
+      const runRec = getRunRecord(id);
+      if(!runRec) return;
+
+      const fb = getFeedbackForRun(runRec);
+      const startedAt = runRec.meta.startedAtISO || runRec.summary?.startedAtISO || runRec.meta.importedAtISO || "";
+      const cfgName = DB.configs[runRec.meta.configId]?.name || "(No config)";
+
+      document.getElementById("fbDlgTitle").textContent = `Feedback • ${id}`;
+      document.getElementById("fbDlgMeta").textContent = `${startedAt} • ${cfgName} • ${(runRec.meta.tags||[]).join(", ")}`;
+      document.getElementById("fbDlgComments").textContent = fb.comments || "—";
+      document.getElementById("fbDlgBugs").textContent = fb.bugs || "—";
+
+      document.getElementById("dlgFeedbackView").showModal();
+    });
+  });
 }
 
 function renderDashboard(runId){
@@ -3035,6 +3305,69 @@ document.getElementById("btnExportLanesCSV").addEventListener("click", ()=>{
   ];
   downloadText(`p63_lanes_${currentRunId}.csv`, toCSV(rows, cols));
 });
+
+document.getElementById("btnExportFeedbackCSV").addEventListener("click", ()=>{
+  const runs = Object.values(DB.runs);
+
+  const rows = runs.map(r=>{
+    const fb = getFeedbackForRun(r);
+    const startedAt = r.meta.startedAtISO || r.summary?.startedAtISO || r.meta.importedAtISO || null;
+    const cfgName = DB.configs[r.meta.configId]?.name || "(No config)";
+    const outcome = r.summary?.runOutcome || {};
+
+    return {
+      runId: r.meta.runId,
+      startedAtISO: startedAt,
+      importedAtISO: r.meta.importedAtISO || null,
+      sourceFilename: r.meta.sourceFilename || null,
+      sessionId: r.meta.sessionId || null,
+      logVersion: r.meta.logVersion || null,
+      configId: r.meta.configId || null,
+      configName: cfgName,
+      tags: (r.meta.tags || []).join("; "),
+      notes: r.meta.notes || "",
+      outcomeResult: outcome.result || "",
+      outcomeReason: outcome.reason || "",
+      endFloor: outcome.floor ?? r.summary?.floorsReached ?? "",
+      endChips: outcome.chips ?? r.summary?.endChips ?? "",
+      endKarma: r.summary?.endKarma ?? "",
+      feedbackUpdatedAtISO: fb.updatedAtISO || fb.lastUpdateISO || "",
+      feedbackEdits: fb.updatesCount ?? "",
+      comments: fb.comments || "",
+      bugs: fb.bugs || ""
+    };
+  }).sort((a,b)=>{
+    const ta = new Date(a.startedAtISO||0).getTime();
+    const tb = new Date(b.startedAtISO||0).getTime();
+    return tb - ta;
+  });
+
+  const cols = [
+    ["runId","runId"],
+    ["startedAtISO","startedAtISO"],
+    ["importedAtISO","importedAtISO"],
+    ["sourceFilename","sourceFilename"],
+    ["sessionId","sessionId"],
+    ["logVersion","logVersion"],
+    ["configId","configId"],
+    ["configName","configName"],
+    ["tags","tags"],
+    ["notes","notes"],
+    ["outcomeResult","outcomeResult"],
+    ["outcomeReason","outcomeReason"],
+    ["endFloor","endFloor"],
+    ["endChips","endChips"],
+    ["endKarma","endKarma"],
+    ["feedbackUpdatedAtISO","feedbackUpdatedAtISO"],
+    ["feedbackEdits","feedbackEdits"],
+    ["comments","comments"],
+    ["bugs","bugs"]
+  ];
+
+  const day = new Date().toISOString().slice(0,10);
+  downloadText(`p63_feedback_all_${day}.csv`, toCSV(rows, cols));
+});
+
 document.getElementById("btnExportFloorCSV").addEventListener("click", ()=>{
   if(!currentRunId) return;
   const rr = getRunRecord(currentRunId);
@@ -3407,6 +3740,14 @@ document.getElementById("btnSaveSettings").addEventListener("click", ()=>{
   document.getElementById("settingsHint").textContent = "Saved.";
 });
 
+
+document.getElementById("fbSearch").addEventListener("input", ()=>{
+  if(document.getElementById("feedbackTab").style.display!=="none") renderFeedbackTab();
+});
+document.getElementById("fbOnlyWithText").addEventListener("change", ()=>{
+  if(document.getElementById("feedbackTab").style.display!=="none") renderFeedbackTab();
+});
+
 /* =========================
    Edit/Delete run
    ========================= */
@@ -3421,6 +3762,9 @@ document.getElementById("btnEditRun").addEventListener("click", ()=>{
   document.getElementById("editRunNotes").value = r.meta.notes || "";
   document.getElementById("editRunInfo").textContent = `Run ID: ${currentRunId} • Imported: ${r.meta.importedAtISO || "—"}`;
   editDlg.showModal();
+});
+document.getElementById("btnCloseFeedbackDlg").addEventListener("click", ()=>{
+  document.getElementById("dlgFeedbackView").close();
 });
 document.getElementById("btnCancelEditRun").addEventListener("click", ()=> editDlg.close());
 document.getElementById("btnSaveEditRun").addEventListener("click", ()=>{
