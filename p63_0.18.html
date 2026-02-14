@@ -280,6 +280,23 @@
       margin-bottom: 16px;
     }
 
+    .modal-input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      font-family: 'Fira Code', monospace;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .modal-input:focus {
+      border-color: var(--accent-gold);
+      box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25);
+    }
+
     .modal-reward {
       font-family: 'Fira Code', monospace;
       font-size: 24px;
@@ -439,6 +456,14 @@
       font-weight: 700;
       box-shadow: 0 2px 4px rgba(0,0,0,0.3);
       border: 1px solid #ddd;
+    }
+
+    .playing-card.large {
+      width: 86px;
+      height: 120px;
+      font-size: 20px;
+      border-radius: 14px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.35);
     }
 
     .playing-card.red { color: var(--card-red); }
@@ -684,6 +709,42 @@
       line-height: 1.4;
     }
 
+    /* ACTIONS BOX (owned cocktails surfaced on-board) */
+    .action-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding-top: 6px;
+    }
+
+    .action-chip {
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .action-chip.ready:hover { border-color: var(--accent-gold); transform: translateY(-1px); }
+    .action-chip.locked { opacity: 0.45; cursor: not-allowed; transform: none; }
+    .action-chip.used { opacity: 0.3; cursor: not-allowed; text-decoration: line-through; }
+
+    .action-chip .pill {
+      font-family: 'Fira Code', monospace;
+      font-size: 11px;
+      color: var(--accent-gold);
+      opacity: 0.9;
+    }
+
     /* Bench block next to Actions */
     .controls-row {
       width: 100%;
@@ -717,6 +778,81 @@
     }
 
     .bench-card-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+    /* Karma sequence */
+    .karma-seq {
+      width: 100%;
+      max-width: 560px;
+      margin: 12px auto 0;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: rgba(26, 36, 54, 0.55);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .karma-seq-title {
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .karma-seq-total {
+      font-family: 'Fira Code', monospace;
+      font-size: 14px;
+      color: var(--accent-gold);
+      text-align: center;
+      font-weight: 800;
+    }
+
+    .karma-seq-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+    }
+
+    .karma-step {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.6);
+      color: var(--text-secondary);
+    }
+
+    .karma-step.active {
+      color: var(--text-primary);
+      border: 1px solid rgba(234, 179, 8, 0.5);
+      box-shadow: 0 0 12px rgba(234, 179, 8, 0.25);
+    }
+
+    .karma-step.completed {
+      color: var(--text-primary);
+      opacity: 0.85;
+    }
+
+    .karma-step .karma-amount {
+      font-family: 'Fira Code', monospace;
+      font-weight: 800;
+      color: var(--accent-gold);
+    }
+
+    .karma-pulse {
+      animation: karmaPulse 0.6s ease-in-out;
+      box-shadow: 0 0 18px rgba(234, 179, 8, 0.35);
+    }
+
+    @keyframes karmaPulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+      100% { transform: scale(1); }
+    }
 
     .bench-armed-ring {
       outline: 2px solid rgba(77, 166, 255, 0.85);
@@ -822,6 +958,77 @@
       margin-bottom: 30px;
       max-width: 520px;
       line-height: 1.6;
+    }
+
+    .run-end-card {
+      width: min(920px, 95vw);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: rgba(26, 36, 54, 0.7);
+      padding: 18px;
+      text-align: left;
+      margin-bottom: 24px;
+    }
+
+    .run-end-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .run-end-title {
+      font-family: 'Cinzel', serif;
+      font-size: 18px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--accent-gold);
+    }
+
+    .run-end-sub {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .run-end-lore {
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--text-primary);
+      font-size: 15px;
+    }
+
+    .run-end-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 10px;
+      margin: 10px 0;
+    }
+
+    .run-end-meta > div {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+
+    .run-end-meta b { color: var(--text-primary); }
+    .run-end-tiny { font-size: 12px; color: var(--text-secondary); }
+    .run-end-muted { color: var(--text-muted); }
+
+    #chartEndSummary {
+      width: 100%;
+      height: 240px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.35);
+      display: block;
+    }
+
+    @media (max-width: 760px) {
+      .run-end-meta { grid-template-columns: 1fr; }
     }
 
     .end-stats { display: flex; gap: 26px; margin-bottom: 30px; flex-wrap: wrap; justify-content: center; }
@@ -1325,11 +1532,14 @@ const CALLING_RANK_THRESHOLDS = [
     // Dealer timers (bug-proof reset)
     let dealerTimerA = null;
     let dealerTimerB = null;
+    let karmaSeqTimer = null;
     function clearDealerTimers() {
       if (dealerTimerA) clearTimeout(dealerTimerA);
       if (dealerTimerB) clearTimeout(dealerTimerB);
+      if (karmaSeqTimer) clearTimeout(karmaSeqTimer);
       dealerTimerA = null;
       dealerTimerB = null;
+      karmaSeqTimer = null;
     }
 
     // =============================================
@@ -1521,8 +1731,8 @@ const CALLING_RANK_THRESHOLDS = [
         exportedAt: null,
         app: {
           name: "Project 63",
-          build: "0.16",
-          variant: "p63_0.16.html",
+          build: "0.18",
+          variant: "p63_0.18.html",
           userAgent: navigator.userAgent
         },
         settingsAtStart: getSettingsSnapshot(),
@@ -2920,6 +3130,223 @@ const CALLING_RANK_THRESHOLDS = [
       return Number.isFinite(n) ? n : fallback;
     }
 
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function fmt(n) {
+      if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
+      return String(Math.round(Number(n)));
+    }
+
+    function formatCompact(n) {
+      const x = safeNumber(n, 0);
+      const abs = Math.abs(x);
+      if (abs >= 1000000) return `${(x / 1000000).toFixed(1)}m`;
+      if (abs >= 1000) return `${(x / 1000).toFixed(1)}k`;
+      return `${Math.round(x)}`;
+    }
+
+    function num(v, fallback = 0) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function numOrNull(v) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function avg(arr) {
+      const vals = (arr || []).filter(v => v !== null && v !== undefined && Number.isFinite(Number(v))).map(Number);
+      if (!vals.length) return null;
+      return vals.reduce((a, b) => a + b, 0) / vals.length;
+    }
+
+    function clamp01(v){ return Math.max(0, Math.min(1, v)); }
+    function normRange(v, lo, hi){
+      if(v===null || v===undefined || Number.isNaN(v)) return 0;
+      if(hi===lo) return 0;
+      return clamp01((v - lo) / (hi - lo));
+    }
+    function countEvents(events, matcher){
+      if(!events || !events.length) return 0;
+      if(typeof matcher === 'function') return events.filter(matcher).length;
+      const m = String(matcher||'');
+      return events.filter(e=>String(e.type||'').toUpperCase().includes(m)).length;
+    }
+    function herfindahl(obj){
+      if(!obj || typeof obj!=='object') return null;
+      const values = Object.values(obj).map(v=>Number(v)).filter(v=>!Number.isNaN(v));
+      const total = values.reduce((a,b)=>a+b,0);
+      if(!total) return null;
+      return values.reduce((a,v)=> a + Math.pow(v/total,2), 0);
+    }
+
+    const PIT_MESSAGES = {
+      WIN:  'You escaped this time, but the Pit remembers.',
+      LOSS: 'You fell short. The only way out is back through.',
+      UNKNOWN: 'The Pit watches. The ledger remains open.'
+    };
+
+    const ARCHETYPE_EXEMPLARS = {
+      'The Surgeon': { name: 'Maria', epithet: 'The Surgeon' },
+      'The Saboteur': { name: 'Rook', epithet: 'The Saboteur' },
+      'The High Roller': { name: 'Vance', epithet: 'The High Roller' },
+      'The Engine Builder': { name: 'Inez', epithet: 'The Engine Builder' },
+      'The Karma Chaser': { name: 'Sol', epithet: 'The Karma Chaser' },
+      'The Banker': { name: 'Edwin', epithet: 'The Banker' }
+    };
+
+    function formatArchetypeAttribution(primaryName){
+      const ex = ARCHETYPE_EXEMPLARS[primaryName];
+      if(!ex) return 'The play pattern most closely matches that of an Unknown hand.';
+      return `The play pattern most closely matches that of ${ex.name}, ${ex.epithet}.`;
+    }
+
+    function computePlaystyle(summary, derived){
+      const matches = derived.matches || [];
+      const events = derived.events || [];
+      const lanes = derived.lanes || [];
+      const deckTimeline = derived.deckTimeline || [];
+
+      const matchesN = Math.max(1, summary.matches || matches.length || 1);
+      const highTables = matches.filter(m=>String(m.tableType||'').toUpperCase()==='HIGH_STAKES').length;
+      const bossTables = matches.filter(m=>String(m.tableType||'').toUpperCase()==='BOSS').length;
+      const tableIntensity = (0.65*highTables + 1.0*bossTables) / matchesN;
+      const avgTransferMult = avg(matches.map(m=>numOrNull(m.transferMultiplier)));
+
+      const tempoApplied = countEvents(events, 'TEMPO_STRIKE_APPLIED');
+      const tempoBlocked = countEvents(events, 'TEMPO_STRIKE_BLOCKED');
+      const tempoApplyRate = (tempoApplied + tempoBlocked) ? tempoApplied / (tempoApplied + tempoBlocked) : 0;
+
+      const tokensSpent = countEvents(events, 'TOKEN_SPENT');
+      const actionsUsed = countEvents(events, 'ACTION_USED');
+      const tokensPerMatch = tokensSpent / matchesN;
+      const actionsPerMatch = actionsUsed / matchesN;
+
+      const callingProcs = events.filter(e=>String(e.type||'').startsWith('CALLING_PROC_')).length;
+      const karmaGainEvents = countEvents(events, 'KARMA_GAIN');
+      const callingPerMatch = callingProcs / matchesN;
+
+      const deckEdits = deckTimeline.length ? Math.max(0, deckTimeline.length-1) : 0;
+      const deckEditsPerMatch = deckEdits / matchesN;
+      const editReasons = deckTimeline.map(d=>String(d.reason||'').toUpperCase());
+      const stampCount = editReasons.filter(r=>r==='STAMP_APPLY').length;
+      const sleeveCount = editReasons.filter(r=>r==='SLEEVE_APPLY').length;
+      const fuseCount = editReasons.filter(r=>r==='REWARD_FUSE').length;
+      const duplicateCount = editReasons.filter(r=>r==='REWARD_DUPLICATE').length;
+
+      const sinkAgg = summary.sinkAgg || {};
+      const totalSpend = summary.totalSpend || 0;
+      const merchantSpend = Math.abs((sinkAgg['Merchant removals']||0) + (sinkAgg['Merchant buys']||0) + (sinkAgg['Merchant rerolls']||0));
+      const collectorSpend = Math.abs(sinkAgg['Collector']||0);
+      const modifySpend = Math.abs(sinkAgg['Modify']||0);
+      const surgerySpendShare = totalSpend ? (merchantSpend + collectorSpend + modifySpend) / totalSpend : 0;
+
+      const bustRate = summary.playerBustRate ?? (lanes.length ? lanes.filter(l=>l.playerBust).length / lanes.length : 0);
+      const controlTotals = summary.avgPlayerTotalNoBust ?? summary.avgPlayerTotal ?? null;
+      const deckEnd = deckTimeline.length ? deckTimeline[deckTimeline.length-1] : null;
+      herfindahl(deckEnd?.bySuit ?? deckEnd?.summary?.bySuit);
+      const modDensity = summary.modDensityEnd ?? null;
+
+      const risk = 100 * (0.45*clamp01(tableIntensity) + 0.35*normRange(avgTransferMult, 1, 5) + 0.20*normRange(summary.profitStdDev, 0, 200));
+      const pressure = 100 * (0.55*normRange(tempoApplied / matchesN, 0, 6) + 0.25*normRange(actionsPerMatch, 0, 2) + 0.20*normRange(tempoApplyRate, 0.2, 0.6));
+      const control = 100 * (0.5*(1 - normRange(bustRate, 0, 0.35)) + 0.25*normRange(controlTotals, 17, 20) + 0.25*normRange(modDensity, 0, 0.25));
+      const surgery = 100 * (0.5*normRange(deckEditsPerMatch, 0, 1.5) + 0.25*normRange(surgerySpendShare, 0, 0.6) + 0.25*normRange(merchantSpend / Math.max(1, totalSpend), 0, 0.6));
+      const engine = 100 * (0.45*normRange(stampCount + sleeveCount, 0, 6) + 0.35*normRange(fuseCount + duplicateCount, 0, 6) + 0.20*normRange(summary.player21Rate, 0.15, 0.65));
+      const karma = 100 * (0.6*normRange(callingPerMatch, 0, 3) + 0.4*normRange(karmaGainEvents / matchesN, 0, 4));
+      const actions = 100 * (0.55*normRange(tokensPerMatch, 0, 2) + 0.45*normRange(actionsPerMatch, 0, 1.5));
+      const economy = 100 * (0.6*normRange((summary.chipsLow||0) / Math.max(1, summary.startChips||1), 0.2, 0.8) + 0.4*(1 - normRange(totalSpend / Math.max(1, Math.abs(summary.matchProfitTotal)||1), 0.5, 2)));
+
+      const axes = { risk, pressure, control, surgery, engine, karma, actions, economy };
+      const axes01 = Object.fromEntries(Object.entries(axes).map(([k,v])=>[k, clamp01(v/100)]));
+      const archetypes = [
+        {name:'The Surgeon', vec:{surgery:0.85, control:0.65, engine:0.4, economy:0.4}},
+        {name:'The Saboteur', vec:{pressure:0.85, actions:0.7, risk:0.5}},
+        {name:'The High Roller', vec:{risk:0.9, economy:0.2, control:0.2}},
+        {name:'The Engine Builder', vec:{engine:0.9, control:0.45, surgery:0.35}},
+        {name:'The Karma Chaser', vec:{karma:0.9, engine:0.5, control:0.35}},
+        {name:'The Banker', vec:{economy:0.9, control:0.7, risk:0.1}}
+      ];
+
+      function cosineScore(vec){
+        const keys = Object.keys(axes01);
+        const a = keys.map(k=>axes01[k] ?? 0);
+        const b = keys.map(k=>vec[k] ?? 0);
+        const dot = a.reduce((s,v,i)=>s + v*b[i], 0);
+        const magA = Math.sqrt(a.reduce((s,v)=>s+v*v, 0)) || 1;
+        const magB = Math.sqrt(b.reduce((s,v)=>s+v*v, 0)) || 1;
+        return dot / (magA * magB);
+      }
+
+      const scored = archetypes.map(a=>({name:a.name, score: cosineScore(a.vec)})).sort((a,b)=>b.score-a.score);
+      const primary = scored[0] || {name:'Unknown', score:0};
+      const secondary = scored[1] || {name:'None', score:0};
+      const confidence = clamp01((primary.score - secondary.score) / 0.2);
+      return { axes, primary, secondary, confidence, archetypeScores: scored };
+    }
+
+    function buildRunEndAnalysis() {
+      const events = (gameLog && gameLog.events) ? gameLog.events : [];
+      const deckTimeline = (gameLog && gameLog.deckHistory) ? gameLog.deckHistory : [];
+      const matches = events.filter(e => e.type === 'MATCH_END').map(e => ({
+        floor: safeNumber(e.floor, null),
+        tableType: e.data ? (e.data.type || null) : null,
+        chipsAfter: safeNumber(e.chips, 0),
+        karmaGained: safeNumber(e.data && e.data.karmaGained, 0),
+        transferMultiplier: safeNumber(e.data && e.data.transferMultiplier, 1)
+      }));
+
+      const startDeck = (gameLog && gameLog.initialState && gameLog.initialState.deckSnapshot) || null;
+      const endDeck = (gameLog && gameLog.finalState && gameLog.finalState.deckSnapshot) || startDeck;
+      const deckSizeStart = startDeck ? safeNumber(startDeck.deckSize, null) : null;
+      const deckSizeEnd = endDeck ? safeNumber(endDeck.deckSize, null) : null;
+      const modCountEnd = endDeck ? safeNumber(endDeck.modCount, null) : null;
+      const modDensityEnd = (deckSizeEnd && modCountEnd !== null) ? (modCountEnd / Math.max(1, deckSizeEnd)) : null;
+
+      const summary = {
+        matches: matches.length,
+        runOutcome: { result: ((gameLog && gameLog.runOutcome && gameLog.runOutcome.outcome) || 'unknown').toUpperCase() },
+        appBuild: gameLog && gameLog.app ? gameLog.app.build : null,
+        appVersion: gameLog && gameLog.app ? gameLog.app.version : null,
+        sessionId: gameLog ? gameLog.sessionId : null,
+        startedAtISO: gameLog ? gameLog.startedAt : null,
+        deckSizeStart,
+        deckSizeEnd,
+        modCountEnd,
+        modDensityEnd,
+        startChips: gameLog && gameLog.initialState ? safeNumber(gameLog.initialState.chips, 0) : 0,
+        endChips: gameLog && gameLog.finalState ? safeNumber(gameLog.finalState.chips, 0) : safeNumber(run && run.chips, 0),
+        startKarma: gameLog && gameLog.initialState ? safeNumber(gameLog.initialState.karma, 0) : 0,
+        endKarma: gameLog && gameLog.finalState ? safeNumber(gameLog.finalState.karma, 0) : safeNumber(run && run.karma, 0),
+        chipsLow: gameLog && gameLog.stats ? safeNumber(gameLog.stats.chipsLow, 0) : 0,
+        matchProfitTotal: gameLog && gameLog.stats ? safeNumber(gameLog.stats.payoutReceived, 0) + safeNumber(gameLog.stats.transferNet, 0) : 0,
+        totalSpend: gameLog && gameLog.stats ? safeNumber(gameLog.stats.buyinSpent, 0) : 0,
+        sinkAgg: {
+          'Merchant removals': gameLog && gameLog.stats ? -safeNumber(gameLog.stats.merchantRemoves, 0) * MERCHANT_REMOVE_COST : 0,
+          'Merchant buys': gameLog && gameLog.stats ? -safeNumber(gameLog.stats.merchantBuys, 0) * MERCHANT_BUY_BASE_STANDARD : 0,
+          'Merchant rerolls': gameLog && gameLog.stats ? -safeNumber(gameLog.stats.merchantRerolls, 0) * MERCHANT_REROLL_COST : 0,
+          'Collector': 0,
+          'Modify': 0
+        },
+        playerBustRate: null,
+        avgPlayerTotalNoBust: null,
+        avgPlayerTotal: null,
+        player21Rate: null,
+        profitStdDev: null
+      };
+
+      const derived = { matches, events, lanes: [], deckTimeline };
+      summary.playstyle = computePlaystyle(summary, derived);
+      return { summary, derived };
+    }
 
 // =============================================
 // ECONOMY / LIMIT HELPERS
@@ -3180,6 +3607,7 @@ function benchPush(card, source = '') {
         floor: 1,
         chips: STARTING_CHIPS,
         karma: 0,
+        playerName: '',
         callingCard: null,
         callingCardChosenSuit: null,
         playerDeck: makeStandardDeck52(),
@@ -3212,6 +3640,29 @@ function benchPush(card, source = '') {
 
       resetLog();
       run.playerDeck.forEach(card => assignUid(card));
+
+      const randomNames = [
+        'Aria', 'Milo', 'Nova', 'Jax', 'Sable', 'Riven', 'Zara', 'Quinn',
+        'Luna', 'Cass', 'Kai', 'Echo', 'Vera', 'Juno', 'Rook', 'Nyx'
+      ];
+
+      const getRandomName = () => randomNames[Math.floor(Math.random() * randomNames.length)];
+
+      const showCallingCardReveal = (suit) => {
+        showModal('Calling Card Revealed', `
+          <p class="modal-text">Your Calling Card is chosen. Let it guide your fortune.</p>
+          <div style="display:flex; justify-content:center; margin: 12px 0;">
+            ${renderCard(run.callingCard, false, 'large')}
+          </div>
+          <p class="modal-text" style="text-align:center;">${suit === '♥' ? 'Hearts favor bold wagers.' :
+            suit === '♠' ? 'Spades cut through uncertainty.' :
+            suit === '♦' ? 'Diamonds sharpen your edge.' :
+            'Clubs reward steady pressure.'}</p>
+        `, [
+          { text: 'Begin Run', primary: true, action: () => { closeModal(); initFloor(1); } }
+        ]);
+      };
+
       const chooseSuit = (suit) => {
         run.callingCard = { rank: '2', suit };
         run.callingCardChosenSuit = suit;
@@ -3220,7 +3671,8 @@ function benchPush(card, source = '') {
           startingChips: STARTING_CHIPS,
           deckSize: run.playerDeck.length,
           deckSnapshot: deckSnapshot(),
-          settings: getSettingsSnapshot()
+          settings: getSettingsSnapshot(),
+          playerName: run.playerName || null
         });
         if (gameLog) {
           gameLog.initialState = {
@@ -3233,23 +3685,55 @@ function benchPush(card, source = '') {
         }
         recordDeckSnapshot('GAME_START');
         closeModal();
-        initFloor(1);
+        showCallingCardReveal(suit);
       };
 
-      showModal('Choose Calling Suit', `
-        <p class="modal-text">Choose your Calling Suit for this run.</p>
-        <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
-          <button class="modal-btn" onclick="setCallingSuit('♥')">♥ Hearts</button>
-          <button class="modal-btn" onclick="setCallingSuit('♠')">♠ Spades</button>
-          <button class="modal-btn" onclick="setCallingSuit('♦')">♦ Diamonds</button>
-          <button class="modal-btn" onclick="setCallingSuit('♣')">♣ Clubs</button>
-        </div>
-      `, []);
+      const showCallingSuitModal = () => {
+        showModal('Choose Calling Suit', `
+          <p class="modal-text">Choose your Calling Suit for this run.</p>
+          <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
+            <button class="modal-btn" onclick="setCallingSuit('♥')">♥ Hearts</button>
+            <button class="modal-btn" onclick="setCallingSuit('♠')">♠ Spades</button>
+            <button class="modal-btn" onclick="setCallingSuit('♦')">♦ Diamonds</button>
+            <button class="modal-btn" onclick="setCallingSuit('♣')">♣ Clubs</button>
+          </div>
+        `, []);
 
-      window.setCallingSuit = function(suit) {
-        chooseSuit(suit);
-        delete window.setCallingSuit;
+        window.setCallingSuit = function(suit) {
+          chooseSuit(suit);
+          delete window.setCallingSuit;
+        };
       };
+
+      const showIntroModal = () => {
+        const defaultName = getRandomName();
+        showModal('Welcome to the Pit', `
+          <p class="modal-text">The tower hums with chance. Every card is a promise, every wager a dare.</p>
+          <p class="modal-text">Tell us your name, cardshark.</p>
+          <input id="playerNameInput" class="modal-input" value="${escapeHtml(defaultName)}" maxlength="20" />
+        `, [
+          {
+            text: 'Random',
+            action: () => {
+              const input = document.getElementById('playerNameInput');
+              if (input) input.value = getRandomName();
+            }
+          },
+          {
+            text: 'Continue',
+            primary: true,
+            action: () => {
+              const input = document.getElementById('playerNameInput');
+              const picked = (input && input.value) ? input.value.trim() : '';
+              run.playerName = picked || getRandomName();
+              closeModal();
+              showCallingSuitModal();
+            }
+          }
+        ]);
+      };
+
+      showIntroModal();
     }
 
     function initFloor(floor) {
@@ -4522,6 +5006,7 @@ body += `
         pending: null,
         rewardPending: false,
         winnerReward: null,
+        scoreSeq: null,
         exhaustion: null,
         burnedSleeveCards: [],
 
@@ -5774,27 +6259,39 @@ function dealerStandPhase(diff, maxPasses = 6) {
         blackjackMatch.bonusChipsEarned += goldBonusTotal;
       }
 
-      const karmaLaneGain = positionResults.reduce((sum, result, idx) => {
-        if (result !== 'player') return sum;
-        const base = safeNumber(playerTotals[idx], 0);
-        const laneCards = blackjackMatch.playerPositions[idx].cards || [];
+      const laneKarmaDetails = [];
+      let karmaLaneGain = 0;
+      for (let i = 0; i < 5; i++) {
+        const laneCards = blackjackMatch.playerPositions[i].cards || [];
+        const base = safeNumber(playerTotals[i], 0);
         const laneSize = laneCards.length || 1;
-        let laneKarma = base;
-        laneCards.forEach(card => {
-          const stampId = getCardStampId(card);
-          if (!stampId) return;
-          laneKarma += getStampKarmaContribution(stampId, base, laneSize);
+        const stamps = [];
+
+        if (positionResults[i] === 'player') {
+          laneCards.forEach(card => {
+            const stampId = getCardStampId(card);
+            if (!stampId) return;
+            const stampDef = getStampDef(stampId);
+            const amount = getStampKarmaContribution(stampId, base, laneSize);
+            stamps.push({ id: stampId, name: stampDef ? stampDef.name : stampId, amount });
+          });
+          const stampTotal = stamps.reduce((sum, s) => sum + s.amount, 0);
+          karmaLaneGain += base + stampTotal;
+        }
+
+        laneKarmaDetails.push({
+          base,
+          stamps,
+          mods: blackjackMatch.playerPositions[i].mods || [],
+          winner: positionResults[i]
         });
-        return sum + laneKarma;
-      }, 0);
+      }
       let karmaWinBonus = 0;
       if (outcome === 'WIN') {
         const baseBonus = blackjackMatch.type === 'STANDARD' ? 50 : 100;
         karmaWinBonus = baseBonus * transferMultiplier;
       }
       const karmaGained = karmaLaneGain + karmaWinBonus;
-      run.karma = Math.max(0, safeNumber(run.karma, 0) + karmaGained);
-      maybeLevelUpCallingCardFromKarma();
 
       blackjackMatch.result = {
         outcome,
@@ -5870,17 +6367,134 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         deckSnapshot: deckSnapshot()
       });
 
-      if (karmaGained > 0) {
-        logEvent('KARMA_GAIN', { amount: karmaGained, total: run.karma, laneKarma: karmaLaneGain, winBonus: karmaWinBonus });
+      if (blackjackMatch.result.outcome === 'WIN') {
+        blackjackMatch.rewardPending = true;
       }
+
+      blackjackMatch.scoreSeq = buildKarmaSequence(laneKarmaDetails, karmaWinBonus, outcome);
+      startKarmaSequence();
 
       renderAll();
 
       if (transferNet !== 0) showToast(`Hand transfers: ${transferNet > 0 ? '+' : ''}${transferNet} chips`);
 
       // Winner reward flow (only if WIN)
-      if (blackjackMatch.result.outcome === 'WIN') {
-        blackjackMatch.rewardPending = true;
+      // handled after karma sequence finishes
+    }
+
+    // =============================================
+    // KARMA SEQUENCE
+    // =============================================
+    function buildKarmaSequence(laneDetails, winBonus, outcome) {
+      const steps = [];
+      for (let i = 0; i < 5; i++) {
+        const lane = laneDetails[i] || {};
+        steps.push({
+          label: `Lane ${i + 1}`,
+          amount: 0,
+          target: { type: 'lane', side: 'player', idx: i }
+        });
+
+        if (lane.winner === 'player') {
+          steps.push({
+            label: `Lane ${i + 1} base`,
+            amount: lane.base || 0,
+            target: { type: 'lane', side: 'player', idx: i }
+          });
+
+          if (lane.mods && lane.mods.length) {
+            steps.push({
+              label: `Lane ${i + 1} mods`,
+              amount: 0,
+              target: { type: 'mod', side: 'player', idx: i }
+            });
+          }
+
+          (lane.stamps || []).forEach(stamp => {
+            steps.push({
+              label: `${stamp.name} stamp`,
+              amount: stamp.amount || 0,
+              target: { type: 'stamp', side: 'player', idx: i }
+            });
+          });
+        } else {
+          steps.push({
+            label: `Lane ${i + 1} no karma`,
+            amount: 0,
+            target: { type: 'lane', side: 'player', idx: i }
+          });
+        }
+      }
+
+      if (outcome === 'WIN' && winBonus > 0) {
+        steps.push({
+          label: 'Win bonus',
+          amount: winBonus,
+          target: { type: 'result' }
+        });
+      }
+
+      return {
+        steps,
+        idx: 0,
+        running: true,
+        runningTotal: 0,
+        totalGained: steps.reduce((sum, step) => sum + safeNumber(step.amount, 0), 0),
+        karmaBefore: safeNumber(run.karma, 0),
+        laneKarma: laneDetails.reduce((sum, lane) => sum + ((lane.winner === 'player') ? safeNumber(lane.base, 0) + (lane.stamps || []).reduce((s, st) => s + safeNumber(st.amount, 0), 0) : 0), 0),
+        winBonus: winBonus,
+        activeTarget: null
+      };
+    }
+
+    function startKarmaSequence() {
+      if (!blackjackMatch || !blackjackMatch.scoreSeq) return;
+      const seq = blackjackMatch.scoreSeq;
+      if (!seq.steps.length) {
+        finalizeKarmaSequence();
+        return;
+      }
+      runKarmaStep();
+    }
+
+    function runKarmaStep() {
+      if (!blackjackMatch || !blackjackMatch.scoreSeq) return;
+      const seq = blackjackMatch.scoreSeq;
+      if (!seq.running) return;
+
+      if (seq.idx >= seq.steps.length) {
+        finalizeKarmaSequence();
+        return;
+      }
+
+      const step = seq.steps[seq.idx];
+      seq.activeTarget = step.target || null;
+
+      if (step.amount) {
+        run.karma = Math.max(0, safeNumber(run.karma, 0) + step.amount);
+        seq.runningTotal += step.amount;
+      }
+
+      seq.idx += 1;
+      renderAll();
+      const delay = step.amount ? 650 : 400;
+      karmaSeqTimer = setTimeout(runKarmaStep, delay);
+    }
+
+    function finalizeKarmaSequence() {
+      if (!blackjackMatch || !blackjackMatch.scoreSeq) return;
+      const seq = blackjackMatch.scoreSeq;
+      seq.running = false;
+      seq.activeTarget = null;
+      run.karma = Math.max(0, seq.karmaBefore + seq.runningTotal);
+      renderAll();
+      maybeLevelUpCallingCardFromKarma();
+
+      if (seq.totalGained > 0) {
+        logEvent('KARMA_GAIN', { amount: seq.totalGained, total: run.karma, laneKarma: seq.laneKarma, winBonus: seq.winBonus });
+      }
+
+      if (blackjackMatch.result && blackjackMatch.result.outcome === 'WIN' && blackjackMatch.rewardPending && !blackjackMatch.winnerReward) {
         startWinnerRewardFlow();
       }
     }
@@ -6131,6 +6745,37 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       renderBlackjack();
       openActionPickerModal();
+    };
+
+    window.useActionFromBar = function(actionId) {
+      if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (blackjackMatch.turn !== 'player') return;
+      if (!run.ownedActions || !run.ownedActions.includes(actionId)) return;
+
+      const def = ACTIONS[actionId];
+      if (!def) return;
+
+      if (blackjackMatch.actionSelectionInProgress) return;
+      if (blackjackMatch.actionUsedThisTurn) return;
+      if (blackjackMatch.usedActions && blackjackMatch.usedActions[actionId]) return;
+
+      if (tokensRemaining() <= 0) { showToast('No tokens left'); return; }
+      if (def.isUsable && !def.isUsable(blackjackMatch)) { showToast('Action unavailable'); return; }
+
+      blackjackMatch.tokensSpent = safeNumber(blackjackMatch.tokensSpent, 0) + 1;
+      blackjackMatch.actionUsedThisTurn = true;
+      blackjackMatch.actionSelectionInProgress = true;
+
+      logEvent('TOKEN_SPENT', { amount: 1, source: 'COCKTAIL', actionId, via: 'ACTION_BAR' });
+      renderAll();
+
+      try { def.activate(); }
+      catch (e) {
+        blackjackMatch.actionSelectionInProgress = false;
+        renderAll();
+        console.error(e);
+        showToast('Action failed');
+      }
     };
 
     function openActionPickerModal() {
@@ -6534,6 +7179,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     function renderHUD() {
       const hud = document.getElementById('hud');
       const chips = safeNumber(run.chips, 0);
+      const playerName = run.playerName ? escapeHtml(run.playerName) : '';
 
       const loanStatus = run.loan.active ? (run.loan.repaid ? 'Repaid' : `Owed: ${LOAN_REPAY}`) : 'None';
       const loanClass = run.loan.active && !run.loan.repaid ? 'debt' : '';
@@ -6541,6 +7187,12 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       hud.innerHTML = `
         <div class="hud-left">
+          ${playerName ? `
+          <div class="hud-stat">
+            <span class="hud-stat-label">Player</span>
+            <span class="hud-stat-value">${playerName}</span>
+          </div>
+          ` : ''}
           <div class="hud-stat">
             <span class="hud-stat-label">Floor</span>
             <span class="hud-stat-value">${run.floor}/3</span>
@@ -6725,13 +7377,30 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         `;
       };
 
-      const showTooltip = (cardEl, x, y) => {
-        if (!cardEl || !cardEl.dataset || !cardEl.dataset.cardLabel) return;
-        tooltip.innerHTML = buildTooltipHtml(cardEl);
+      const buildActionTooltipHtml = (el) => {
+        const ds = el.dataset || {};
+        const title = ds.ttTitle || '';
+        const rawLines = ds.ttLines || '';
+        const lines = rawLines.split('|').map(l => l.trim()).filter(Boolean);
+        return `
+          <div class="tooltip-title">${title}</div>
+          ${lines.map(line => `<div class="tooltip-line">${line}</div>`).join('')}
+        `;
+      };
+
+      const showTooltip = (el, x, y) => {
+        if (!el || !el.dataset) return;
+        if (el.dataset.cardLabel) {
+          tooltip.innerHTML = buildTooltipHtml(el);
+        } else if (el.dataset.ttTitle) {
+          tooltip.innerHTML = buildActionTooltipHtml(el);
+        } else {
+          return;
+        }
         tooltip.classList.remove('hidden');
         tooltip.style.left = `${x + 12}px`;
         tooltip.style.top = `${y + 12}px`;
-        activeCard = cardEl;
+        activeCard = el;
       };
 
       const hideTooltip = () => {
@@ -6740,13 +7409,18 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       };
 
       document.addEventListener('mouseover', (e) => {
+        const actionEl = e.target.closest('[data-tt-title]');
+        if (actionEl) {
+          showTooltip(actionEl, e.clientX, e.clientY);
+          return;
+        }
         const cardEl = e.target.closest('.playing-card');
         if (!cardEl || cardEl.classList.contains('face-down')) return;
         showTooltip(cardEl, e.clientX, e.clientY);
       });
 
       document.addEventListener('mouseout', (e) => {
-        if (activeCard && !e.relatedTarget?.closest('.playing-card')) {
+        if (activeCard && !e.relatedTarget?.closest('.playing-card') && !e.relatedTarget?.closest('[data-tt-title]')) {
           hideTooltip();
         }
       });
@@ -6758,6 +7432,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       });
 
       document.addEventListener('pointerdown', (e) => {
+        const actionEl = e.target.closest('[data-tt-title]');
+        if (actionEl) {
+          longPressTimer = setTimeout(() => showTooltip(actionEl, e.clientX, e.clientY), 450);
+          return;
+        }
         const cardEl = e.target.closest('.playing-card');
         if (!cardEl || cardEl.classList.contains('face-down')) return;
         longPressTimer = setTimeout(() => showTooltip(cardEl, e.clientX, e.clientY), 450);
@@ -6774,7 +7453,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       });
 
       document.addEventListener('click', (e) => {
-        if (!e.target.closest('.playing-card')) hideTooltip();
+        if (!e.target.closest('.playing-card') && !e.target.closest('[data-tt-title]')) hideTooltip();
       });
     }
 
@@ -6791,6 +7470,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     function renderPosition(pos, idx, side, isResolved, laneWinner) {
   const state = posState(pos);
   const total = getPositionTotal(pos);
+  const activeTarget = blackjackMatch && blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.activeTarget;
+  const pulseLane = activeTarget && activeTarget.type === 'lane' && activeTarget.side === side && activeTarget.idx === idx;
+  const pulseMod = activeTarget && activeTarget.type === 'mod' && activeTarget.side === side && activeTarget.idx === idx;
+  const pulseStamp = activeTarget && activeTarget.type === 'stamp' && activeTarget.side === side && activeTarget.idx === idx;
 
   // Spy Glass should always override visibility for that lane
   const spy = (side === 'dealer')
@@ -6822,6 +7505,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
   if (displayState === 'stand') cls += ' stand';
   if (displayState === 'bust') cls += ' bust';
   if (displayState === 'closed') cls += ' closed';
+  if (pulseLane) cls += ' karma-pulse';
 
   if (isResolved) {
     if (laneWinner === side) cls += ' winner';
@@ -6840,14 +7524,15 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
   const trapDelta = (!pos.isOpen && blackjackMatch && blackjackMatch.traps) ? blackjackMatch.traps[side][idx] : 0;
   const displayMods = mods.length ? mods : (trapDelta ? [trapDelta] : []);
   const modsText = displayMods.length ? displayMods.map(m => (m > 0 ? `+${m}` : `${m}`)).join(' ') : '';
+  const modsLineClass = pulseMod ? 'bj-position-num karma-pulse' : 'bj-position-num';
   const modsLine = displayMods.length
-    ? `<div class="bj-position-num" style="color: var(--accent-blue); font-weight:800;">MOD: ${modsText}</div>`
-    : `<div class="bj-position-num">MOD: —</div>`;
+    ? `<div class="${modsLineClass}" style="color: var(--accent-blue); font-weight:800;">MOD: ${modsText}</div>`
+    : `<div class="${modsLineClass}">MOD: —</div>`;
 
   return `
     <div class="${cls}">
       <div class="bj-position-num">${side.toUpperCase()} #${idx+1}</div>
-      <div class="bj-cards">${cardsHtml}</div>
+      <div class="bj-cards ${pulseStamp ? 'karma-pulse' : ''}">${cardsHtml}</div>
       <div class="bj-total ${totalBustVisual}">${totalText}</div>
       ${stateBadge(displayState)}
       ${modsLine}
@@ -6918,6 +7603,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       if (isResolved && result) {
         const outcome = result.outcome;
         const titleCls = outcome === 'WIN' ? 'win' : (outcome === 'LOSS' ? 'lose' : 'tie');
+        const seq = blackjackMatch.scoreSeq;
+        const resultPulse = seq && seq.activeTarget && seq.activeTarget.type === 'result' ? ' karma-pulse' : '';
 
         const transfer = blackjackMatch.transferChipsNet || 0;
         const bonus = blackjackMatch.bonusChipsEarned || 0;
@@ -6938,9 +7625,24 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           ? `<div class="bj-result-score" style="color:var(--accent-red); font-weight:800;">Deck exhaustion (${result.exhaustion.side})</div>`
           : '';
 
+        const activeSeqIndex = (seq && seq.running) ? Math.max(0, seq.idx - 1) : (seq ? seq.steps.length - 1 : -1);
+        const karmaSeqHtml = seq ? `
+          <div class="karma-seq">
+            <div class="karma-seq-title">Karma Tally</div>
+            <div class="karma-seq-total">+${seq.runningTotal} / ${seq.totalGained}</div>
+            <div class="karma-seq-steps">
+              ${seq.steps.map((step, i) => {
+                const cls = i === activeSeqIndex && seq.running ? 'karma-step active' : (i < activeSeqIndex ? 'karma-step completed' : 'karma-step');
+                const amountText = step.amount ? `+${step.amount}` : '—';
+                return `<div class="${cls}"><span>${escapeHtml(step.label)}</span><span class="karma-amount">${amountText}</span></div>`;
+              }).join('')}
+            </div>
+          </div>
+        ` : '';
+
         html += `
           <div class="bj-result">
-            <div class="bj-result-title ${titleCls}">${outcome}</div>
+            <div class="bj-result-title ${titleCls}${resultPulse}">${outcome}</div>
             <div class="bj-result-score">
               Lanes: You ${result.playerWins} — Dealer ${result.dealerWins}<br/>
               Payout: ${payout} · Transfer x${transferMultiplier}: ${transfer >= 0 ? '+' : ''}${transfer}${rakeLine} · Bonus: ${bonus}
@@ -6948,6 +7650,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             <div class="bj-result-chips ${netCls}">
               Match Net: ${netFromEnd >= 0 ? '+' : ''}${netFromEnd}
             </div>
+            ${karmaSeqHtml}
             ${rewardNote}
             ${exhaustionNote}
             <button class="bj-btn" onclick="blackjackContinue()" ${blackjackMatch.rewardPending ? 'disabled' : ''}>Continue</button>
@@ -7019,6 +7722,32 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             return `<div class="${cls}" ${handler} title="${spent ? 'Spent' : (clickable ? 'Click to use an action token' : 'Unavailable')}">${i+1}</div>`;
           }).join('');
 
+          const owned = run.ownedActions || [];
+          const canSpend = (blackjackMatch.turn === 'player')
+            && blackjackMatch.phase === 'playing'
+            && !blackjackMatch.actionUsedThisTurn
+            && !blackjackMatch.actionSelectionInProgress
+            && tokensRemaining() > 0;
+
+          const actionsHtml = owned.length
+            ? owned.map(id => {
+                const def = ACTIONS[id];
+                const already = blackjackMatch.usedActions && blackjackMatch.usedActions[id];
+                const usable = !!def && !already && canSpend && (!def.isUsable || def.isUsable(blackjackMatch));
+                const cls = already ? 'action-chip used' : (usable ? 'action-chip ready' : 'action-chip locked');
+                const name = def ? def.name : id;
+                const desc = def ? def.desc : '';
+                const ttTitle = name;
+                const ttLines = `${desc}|Costs 1 token · Once per match`;
+
+                return `<button class="${cls}" onclick="${usable ? `useActionFromBar('${id}')` : ''}"
+                  data-tt-title="${escapeHtml(ttTitle)}"
+                  data-tt-lines="${escapeHtml(ttLines)}">
+                  ${escapeHtml(name)} <span class="pill">1⚡</span>
+                </button>`;
+              }).join('')
+            : `<div class="action-hint" style="padding:6px 2px;">No cocktails owned yet. Visit the Bartender.</div>`;
+
           // Bench UI
           const bench = blackjackMatch.bench || [];
           const armedIdx = blackjackMatch.armedBenchIdx;
@@ -7061,13 +7790,14 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
               <div class="controls-row">
                 <div class="action-bar">
-                  <div class="action-bar-title">Actions · Tokens</div>
+                  <div class="action-bar-title">Tokens</div>
                   <div class="action-tokens">${tokensHtml || '<div class="action-hint">No tokens</div>'}</div>
-                  <div class="action-hint">
-                    ${run.ownedActions && run.ownedActions.length
-                      ? 'Click a token to choose a cocktail action.'
-                      : 'No cocktails owned yet. Visit the Bartender.'}
-                  </div>
+                  <div class="action-hint">Tokens power Bench plays and Cocktails.</div>
+                </div>
+                <div class="action-bar">
+                  <div class="action-bar-title">Actions</div>
+                  <div class="action-chips">${actionsHtml}</div>
+                  <div class="action-hint">Hover / long-press an action for details.</div>
                 </div>
                 ${benchHtml}
               </div>
@@ -7162,6 +7892,204 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       }
     }
 
+    function buildKarmaCumulative(matches, startKarma){
+      let k = (typeof startKarma==='number') ? startKarma : 0;
+      return (matches || []).map(m=>{
+        const g = (typeof m.karmaGained==='number') ? m.karmaGained : 0;
+        k += g;
+        return k;
+      });
+    }
+
+    function buildFloorEndMarkers(matches){
+      const byFloor = new Map();
+      (matches || []).forEach((m, i)=>{
+        const f = (m.floor==null) ? null : Number(m.floor);
+        if(f==null || Number.isNaN(f)) return;
+        byFloor.set(f, i);
+      });
+      const floors = [...byFloor.keys()].sort((a,b)=>a-b);
+      return floors.map(f=>{
+        const i = byFloor.get(f);
+        const isBoss = String(matches[i]?.tableType||'').toUpperCase()==='BOSS';
+        return { floor:f, matchPos:i, isBoss };
+      });
+    }
+
+    function setupCanvas(canvas) {
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const rect = canvas.getBoundingClientRect();
+      const w = Math.max(320, Math.floor(rect.width || canvas.clientWidth || 640));
+      const h = Math.max(200, Math.floor(rect.height || canvas.clientHeight || 240));
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return ctx;
+    }
+
+    function clearChart(ctx, w, h) {
+      ctx.clearRect(0, 0, w, h);
+    }
+
+    function drawAxes(ctx, w, h, pad, xLabel, yLabel, yMin, yMax) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad, pad);
+      ctx.lineTo(pad, h - pad);
+      ctx.lineTo(w - pad, h - pad);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(203, 213, 225, 0.8)';
+      ctx.font = '11px Fira Code, monospace';
+      ctx.fillText(yLabel, 8, pad - 8);
+      ctx.fillText(xLabel, w - pad - 36, h - pad + 18);
+      ctx.fillText(formatCompact(yMax), 8, pad + 3);
+      ctx.fillText(formatCompact(yMin), 8, h - pad + 3);
+      ctx.restore();
+    }
+
+    function drawLineScaled(ctx, w, h, pad, xs, ys, yMin, yMax, color) {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < xs.length; i++) {
+        const x = pad + xs[i] * (w - 2 * pad);
+        const y = pad + (1 - ((ys[i] - yMin) / (yMax - yMin || 1))) * (h - 2 * pad);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawPoint(ctx, x, y, r=3){
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    }
+
+    function drawTextBox(ctx, text, x, y){
+      ctx.font = '11px Fira Code, monospace';
+      const pad = 4;
+      const w = ctx.measureText(text).width + pad*2;
+      const h = 16;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(x, y-h, w, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillText(text, x+pad, y-4);
+    }
+
+    function renderEndSummaryChart(summary, derived){
+      const canvas = document.getElementById('chartEndSummary');
+      if(!canvas) return;
+      const ctx = setupCanvas(canvas);
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      const pad = 42;
+
+      const matches = derived.matches || [];
+      if(!matches.length){
+        clearChart(ctx,w,h);
+        const caption = document.getElementById('endChartCaption');
+        if (caption) caption.textContent = 'No match data available for this run.';
+        return;
+      }
+
+      const xs = matches.map((_,i)=> i/(Math.max(1, matches.length-1)));
+      const chips = matches.map(m=> (typeof m.chipsAfter==='number') ? m.chipsAfter : 0);
+      const karma = buildKarmaCumulative(matches, summary.startKarma);
+      const yVals = [...chips, ...karma].filter(v=>typeof v==='number');
+      const yMin = Math.min(0, ...yVals);
+      const yMax = Math.max(1, ...yVals);
+
+      clearChart(ctx,w,h);
+      drawAxes(ctx,w,h,pad,'Match','Value',yMin,yMax);
+      drawLineScaled(ctx,w,h,pad,xs,chips,yMin,yMax,'rgba(125,211,252,0.90)');
+      drawLineScaled(ctx,w,h,pad,xs,karma,yMin,yMax,'rgba(52,211,153,0.90)');
+
+      const markers = buildFloorEndMarkers(matches);
+      const labelStride = (markers.length > 8) ? 2 : 1;
+
+      markers.forEach((m, idx)=>{
+        const xN = xs[m.matchPos] || 0;
+        const x = pad + xN*(w-2*pad);
+
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+        ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h-pad); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.65)';
+        ctx.font = '11px Fira Code, monospace';
+        if(idx % labelStride === 0) ctx.fillText(`F${m.floor}`, x+4, pad+12);
+        if(m.isBoss) ctx.fillText('♛', x+4, pad+26);
+        ctx.restore();
+
+        const chipV = chips[m.matchPos] ?? 0;
+        const karmaV = karma[m.matchPos] ?? 0;
+        const yChip = pad + (1-((chipV-yMin)/(yMax-yMin||1)))*(h-2*pad);
+        const yKarma = pad + (1-((karmaV-yMin)/(yMax-yMin||1)))*(h-2*pad);
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(125,211,252,0.95)';
+        drawPoint(ctx, x, yChip, 3);
+        drawTextBox(ctx, `C ${formatCompact(chipV)}`, x+6, yChip-2);
+        ctx.restore();
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(52,211,153,0.95)';
+        drawPoint(ctx, x, yKarma, 3);
+        drawTextBox(ctx, `K ${formatCompact(karmaV)}`, x+6, yKarma-2);
+        ctx.restore();
+      });
+
+      const caption = document.getElementById('endChartCaption');
+      if (caption) caption.textContent = 'Chips (C) and Karma (K) by match • floor ends marked • boss floors flagged ♛';
+    }
+
+    function renderRunEndPanel() {
+      const analysis = buildRunEndAnalysis();
+      const s = analysis.summary;
+      const d = analysis.derived;
+      const result = (s.runOutcome?.result || 'UNKNOWN').toUpperCase();
+      const loreEl = document.getElementById('endLore');
+      if (loreEl) loreEl.textContent = PIT_MESSAGES[result] || PIT_MESSAGES.UNKNOWN;
+
+      const play = s.playstyle || computePlaystyle(s, d);
+      const archetypeLine = formatArchetypeAttribution(play.primary?.name);
+      const resonancePct = Math.round((play.confidence || 0) * 100);
+
+      const archetypeEl = document.getElementById('endArchetypeLine');
+      const resonanceEl = document.getElementById('endResonance');
+      if (archetypeEl) archetypeEl.textContent = archetypeLine;
+      if (resonanceEl) resonanceEl.textContent = `${resonancePct}% Resonance`;
+
+      const build = s.appBuild ?? '—';
+      const deckStart = s.deckSizeStart ?? '—';
+      const deckEnd = s.deckSizeEnd ?? '—';
+      const modsEnd = s.modCountEnd ?? '—';
+      const modDens = (s.modDensityEnd!=null) ? `${Math.round(s.modDensityEnd*100)}%` : '—';
+      const sid = (s.sessionId || '—');
+      const sidShort = (typeof sid==='string' && sid.length>10) ? sid.slice(0,10)+'…' : sid;
+
+      const stats = document.getElementById('endBuildDeckStats');
+      if (stats) {
+        stats.innerHTML = `
+          <div>
+            <div><b>Build:</b> ${escapeHtml(String(build))}</div>
+            <div><b>Config:</b> —</div>
+            <div><b>Session:</b> ${escapeHtml(String(sidShort))}</div>
+            <div><b>Start:</b> ${escapeHtml(String(s.startedAtISO || '—'))}</div>
+          </div>
+          <div>
+            <div><b>Deck:</b> ${escapeHtml(String(deckStart))} → ${escapeHtml(String(deckEnd))}</div>
+            <div><b>Mods:</b> ${escapeHtml(String(modsEnd))}</div>
+            <div><b>Mod density:</b> ${escapeHtml(String(modDens))}</div>
+            <div><b>Chips:</b> ${escapeHtml(fmt(s.startChips))} → ${escapeHtml(fmt(s.endChips))}</div>
+          </div>
+        `;
+      }
+
+      renderEndSummaryChart(s, d);
+    }
+
     function renderEndScreen() {
       const boardView = document.getElementById('boardView');
       const blackjackView = document.getElementById('blackjackView');
@@ -7186,23 +8114,22 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           <div class="end-title ${titleCls}">${title}</div>
           <div class="end-message">${msg}</div>
 
-          <div class="end-stats">
-            <div class="end-stat">
-              <div class="end-stat-value">${run.floor}</div>
-              <div class="end-stat-label">Floor</div>
+          <div class="run-end-card" id="runEndCard">
+            <div class="run-end-header">
+              <div>
+                <div class="run-end-title">Run End</div>
+                <div class="run-end-sub" id="runEndSub">A compact summary for players.</div>
+              </div>
             </div>
-            <div class="end-stat">
-              <div class="end-stat-value">${safeNumber(run.chips)}</div>
-              <div class="end-stat-label">Chips</div>
-            </div>
-            <div class="end-stat">
-              <div class="end-stat-value">${run.playerDeck.length}</div>
-              <div class="end-stat-label">Deck Size</div>
-            </div>
-            <div class="end-stat">
-              <div class="end-stat-value">${run.bankedTokens || 0}</div>
-              <div class="end-stat-label">Banked Tokens</div>
-            </div>
+
+            <div class="run-end-lore" id="endLore"></div>
+            <div id="endArchetypeLine" class="run-end-tiny" style="margin-bottom:2px;"></div>
+            <div id="endResonance" class="run-end-tiny run-end-muted" style="margin-bottom:10px;"></div>
+
+            <div id="endBuildDeckStats" class="run-end-meta"></div>
+
+            <canvas id="chartEndSummary"></canvas>
+            <div class="run-end-tiny run-end-muted" id="endChartCaption" style="margin-top:8px;"></div>
           </div>
 
           <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
@@ -7212,6 +8139,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           </div>
         </div>
       `;
+
+      renderRunEndPanel();
     }
 
     // =============================================
