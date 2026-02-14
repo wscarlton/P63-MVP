@@ -245,25 +245,16 @@
 
           <div style="height:12px"></div>
 
-          <div class="split">
-            <div class="col">
-              <label>Mode</label>
-              <select id="mode">
-                <option value="brief">Brief</option>
-                <option value="full">Full</option>
-              </select>
-            </div>
-            <div class="col">
-              <label>Max lines</label>
-              <input id="maxLines" type="number" min="6" max="240" value="28"/>
-            </div>
+          <div class="col">
+            <label>Story</label>
+            <div class="hint">Single record per run (Brief).</div>
           </div>
 
           <div style="height:12px"></div>
 
           <div class="col">
             <label>Seed override (optional)</label>
-            <input id="seedOverride" placeholder="Leave blank to use runId + player + mode"/>
+            <input id="seedOverride" placeholder="Leave blank to use runId + player + archetype"/>
             <div class="hint">Use this to “re-roll” deterministically across the same log.</div>
           </div>
 
@@ -291,28 +282,21 @@
           <div style="height:12px"></div>
 
           <div class="col">
-            <label>Min importance (pruning)</label>
-            <input id="minImp" type="range" min="0" max="100" value="70"/>
+            <label>Marginalia rate (per floor)</label>
+            <input id="margRate" type="range" min="0" max="100" value="25"/>
             <div class="row" style="justify-content:space-between">
-              <span class="hint">Lower = more lines</span>
-              <span class="chip" id="minImpVal">70</span>
+              <span class="hint">0–100%</span>
+              <span class="chip" id="margRateVal">25</span>
             </div>
           </div>
 
           <div style="height:12px"></div>
 
           <div class="col">
-            <label>Include categories</label>
+            <label>Diagnostics</label>
             <div class="row">
-              <label class="chip"><input type="checkbox" id="fMatch" checked/> Match</label>
-              <label class="chip"><input type="checkbox" id="fBoss" checked/> Boss</label>
-              <label class="chip"><input type="checkbox" id="fShops" checked/> Shops</label>
-              <label class="chip"><input type="checkbox" id="fDeck" checked/> Deck</label>
-              <label class="chip"><input type="checkbox" id="fBench" checked/> Bench</label>
-              <label class="chip"><input type="checkbox" id="fMeta" checked/> Meta</label>
-              <label class="chip"><input type="checkbox" id="includeDebug"/> Debug</label>
+              <label class="chip"><input type="checkbox" id="includeDebug"/> Include Debug Events</label>
             </div>
-            <div class="hint">Turn categories off to see how concise the record can get (e.g., Boss-only).</div>
           </div>
 
           <div style="height:14px"></div>
@@ -325,7 +309,7 @@
           </div>
 
           <div style="height:10px"></div>
-          <div class="hint">Tip: turn <span class="mono">Min importance</span> down to 50 in Full mode if you want more shop + bench beats.</div>
+          <div class="hint">Output is deterministic by run and seed. Same run + same seed = same archive record.</div>
         </div>
       </div>
 
@@ -344,10 +328,7 @@
               <span class="chip gold" id="pillCasino">Casino: Grand</span>
               <span class="chip" id="pillLines">Lines: —</span>
             </div>
-            <div class="row">
-              <button class="btn small" id="btnStoryBrief">Brief</button>
-              <button class="btn small" id="btnStoryFull">Full</button>
-            </div>
+            <div class="hint">Single Brief record</div>
           </div>
           <div style="height:12px"></div>
           <div class="card" style="border-radius:14px">
@@ -725,8 +706,96 @@ const BASE_PACK = {
     BOSS_FIGHT_FAILED: [
       "Boss engagement failed on Floor {payload.floor} ({payload.reason}).",
       "Final boss record: Floor {payload.floor} ended by {payload.reason}."
+    ]
+  },
+  marginalia: {
+    engineer: [
+      "The House accepts cleverness, never excuses.",
+      "Precision was visible. Mercy was not.",
+      "The table heard method before motive."
     ],
-}
+    politico: [
+      "Influence changed lanes; the ledger did not.",
+      "Consensus formed briefly, then dissolved.",
+      "Charm bought time, never immunity."
+    ],
+    generic: [
+      "Noise increased; intent stayed legible.",
+      "The House filed movement, not sentiment.",
+      "Momentum shifted twice before the seal."
+    ]
+  },
+  signature: {
+    engineer: {
+      low: [
+        "Subject attempted to impose a blueprint on noise.",
+        "Tools were applied without doctrine.",
+        "Efficiency rose; certainty did not.",
+        "Blueprints don't predict thunder.",
+        "The House recorded the blueprint, not the intent."
+      ],
+      mid: [
+        "Structure held where variance expected collapse.",
+        "Method carried the hand through static.",
+        "The plan bent, then resumed its line.",
+        "Precision stayed expensive and necessary.",
+        "The table respected repetition over flair."
+      ],
+      high: [
+        "Subject engineered pressure into sequence.",
+        "Variance was drafted into the blueprint.",
+        "The House noted discipline under acceleration.",
+        "Clean lines survived hostile arithmetic.",
+        "Execution arrived before doubt could settle."
+      ]
+    },
+    politico: {
+      low: [
+        "Influence was attempted, not secured.",
+        "Signals were sent into resistant air.",
+        "Timing argued louder than charisma.",
+        "The floor accepted terms only briefly.",
+        "Leverage appeared, then asked for payment."
+      ],
+      mid: [
+        "Consensus formed where leverage was thin.",
+        "Subject traded certainty for initiative.",
+        "Tempo became the working coalition.",
+        "Pressure was redirected, not removed.",
+        "The House observed negotiations with entropy."
+      ],
+      high: [
+        "Subject converted pressure into mandate.",
+        "Momentum voted and carried the floor.",
+        "Influence arrived before resistance organized.",
+        "Terms were set early and defended late.",
+        "The ledger called it control under fire."
+      ]
+    },
+    generic: {
+      low: [
+        "The House logged intent amid interference.",
+        "Progress was partial and still material.",
+        "The floor resisted, then yielded in fragments.",
+        "Risk remained louder than comfort.",
+        "The record favors endurance over explanation."
+      ],
+      mid: [
+        "Pressure and control alternated by hand.",
+        "Momentum changed owners without ceremony.",
+        "The subject kept shape through turbulence.",
+        "The floor rewarded discipline in pieces.",
+        "Noise stayed high; direction stayed clear."
+      ],
+      high: [
+        "Control was asserted and maintained.",
+        "The House marked conviction with receipts.",
+        "The floor moved on the subject's cadence.",
+        "Adversity shortened under sustained pressure.",
+        "Results arrived faster than resistance."
+      ]
+    }
+  }
 };
 
 let currentPack = JSON.parse(JSON.stringify(BASE_PACK));
@@ -1047,25 +1116,17 @@ function categoryOf(insertType){
 
 /* ---------- Render story ---------- */
 function renderStoryV2(runLog, analysisSummary, opts={}){
-  const mode = opts.mode || "brief";
-  const maxLines = Number(opts.maxLines ?? (mode==="brief" ? 24 : 140));
-  const minImportance = Number(opts.minImportance ?? (mode==="brief" ? 80 : 55));
-  const include = opts.include || { match:true,boss:true,shops:true,deck:true,bench:true,meta:true };
   const includeDebug = !!opts.includeDebug;
 
   const runId = runLog?.runId || runLog?.sessionId || "—";
   const casinoName = runLog?.app?.casinoName || "Grand Casino";
   const casinoId = runLog?.app?.casinoId || "grand_casino";
-  const narrator = runLog?.app?.narrator || "The Archivist";
-
   const playerName = runLog?.player?.name || runLog?.events?.[0]?.ctx?.playerName || "Unknown";
 
-  // Header truth: run log (unless override explicitly enabled)
   const overrideEnabled = !!analysisSummary?.__overrideEnabled;
   let archetypeRaw = (overrideEnabled && analysisSummary?.playstyle?.primary?.name)
     ? analysisSummary.playstyle.primary.name
     : (runLog?.player?.archetype || "Unknown");
-
   archetypeRaw = String(archetypeRaw || "Unknown").trim();
   let archetypeName = currentPack.archetypeAliases?.[archetypeRaw] || archetypeRaw.replace(/^The\s+/,"");
   archetypeName = String(archetypeName || "Unknown").trim();
@@ -1075,12 +1136,15 @@ function renderStoryV2(runLog, analysisSummary, opts={}){
     : (runLog?.player?.resonancePct != null ? Math.round(Number(runLog.player.resonancePct)) : null);
 
   const seedStr = (opts.seedOverride && String(opts.seedOverride).trim().length)
-    ? `${String(opts.seedOverride).trim()}|${mode}`
-    : `${runId}|${playerName}|${archetypeName}|${mode}`;
+    ? String(opts.seedOverride).trim()
+    : `${runId}|${playerName}|${archetypeName}`;
 
-  const rng = makeRng(seedStr);
+  const events = (runLog?.events || []).filter(ev=>{
+    const scope = (ev?.meta?.scope || "both").toLowerCase();
+    if(includeDebug) return true;
+    return scope==="story" || scope==="both";
+  });
 
-  // Always compute inserts (used for the table + full mode)
   const inserts = extractEventInsertsV2(runLog, { includeDebug });
 
   function fileCodeFromCasino(cid){
@@ -1088,7 +1152,6 @@ function renderStoryV2(runLog, analysisSummary, opts={}){
     if(c.includes("grand")) return "GC";
     if(c.includes("janus")) return "VJ";
     if(c.includes("archive")) return "AR";
-    // Fallback: initials
     return c.split(/[^a-z0-9]+/).filter(Boolean).map(x=>x[0]).join("").toUpperCase().slice(0,3) || "P63";
   }
 
@@ -1104,36 +1167,26 @@ function renderStoryV2(runLog, analysisSummary, opts={}){
   function fmtCard(card){
     if(!card) return "—";
     if(typeof card==="string") return card;
-    const r = card.rank ?? "?"; const s = card.suit ?? "?";
-    return `${r}${s}`;
+    return `${card.rank ?? "?"}${card.suit ?? "?"}`;
   }
 
-  function scopeEvents(){
-    const eventsAll = runLog?.events || [];
-    return eventsAll.filter(ev=>{
-      const scope = (ev?.meta?.scope || "both").toLowerCase();
-      if(includeDebug) return true;
-      return scope==="story" || scope==="both";
-    });
-  }
-
-  function groupByFloor(events){
+  function groupByFloor(evts){
     const floors = new Map();
-    for(const ev of events){
-      const f = ev?.ctx?.floor ?? ev?.floor ?? ev?.data?.floor;
-      if(f==null) continue;
+    for(const ev of evts){
+      const f = Number(ev?.ctx?.floor ?? ev?.floor ?? ev?.data?.floor);
+      if(!Number.isFinite(f)) continue;
       if(!floors.has(f)) floors.set(f, []);
       floors.get(f).push(ev);
     }
-    for(const [f, arr] of floors.entries()){
+    for(const [_, arr] of floors.entries()){
       arr.sort((a,b)=>Number(a.id||0)-Number(b.id||0));
     }
     return floors;
   }
 
-  function floorEndMap(events){
+  function floorEndMap(evts){
     const m = new Map();
-    for(const ev of events){
+    for(const ev of evts){
       if(ev.type==="FLOOR_END" && ev.data?.floor!=null){
         m.set(Number(ev.data.floor), ev.data);
       }
@@ -1141,228 +1194,191 @@ function renderStoryV2(runLog, analysisSummary, opts={}){
     return m;
   }
 
-  function runSummaryData(events){
-    for(let i=events.length-1;i>=0;i--){
-      const ev = events[i];
-      if(ev.type==="RUN_SUMMARY" && ev.data) return ev.data;
+  function runSummaryData(evts){
+    for(let i=evts.length-1;i>=0;i--){
+      if(evts[i].type==="RUN_SUMMARY" && evts[i].data) return evts[i].data;
     }
     return runLog?.runOutcome || null;
   }
 
-  function countBossClears(events){
-    let n=0;
-    for(const ev of events){
-      if(ev.type==="BOSS_CLEARED") n++;
-    }
-    return n;
+  function countBossClears(evts){
+    return evts.filter(ev=>ev.type==="BOSS_CLEARED").length;
   }
 
-  function floorBeatLine(floorNum, fEnd, fev, include){
-    const events = fev || [];
-    const matches = [];
-    const matchStartsBySeq = new Map();
-    const shopSpend = {collector:0, merchant:0, modify:0, total:0, count:0};
-    let rerolls=0, loans=[];
-    let highStakes = 0;
-    let maxTransfer = 1;
-    let first3 = [];
-    let maxKarmaGain = 0;
-    let callingProcs = 0;
-    let callingUps = 0;
+  function buildFloorDigest(floorNum, floorEvents, floorEndData){
+    const events = floorEvents || [];
+    const digest = {
+      floor: floorNum,
+      chipsStart: floorEndData?.chipsStart ?? null,
+      chipsEnd: floorEndData?.chipsEnd ?? null,
+      chipsLow: floorEndData?.chipsLow ?? null,
+      chipsHigh: floorEndData?.chipsHigh ?? null,
+      matches: floorEndData?.matches ?? 0,
+      wins: floorEndData?.wins ?? 0,
+      losses: floorEndData?.losses ?? 0,
+      ties: floorEndData?.ties ?? 0,
+      highStakesCount: 0,
+      maxTransferMult: 1,
+      shopSpendCount: 0,
+      shopSpendTotal: 0,
+      rerollCount: 0,
+      loanTaken: { taken:false, amount:0, repay:0 },
+      suitSweepCount: 0,
+      karmaGain: floorEndData?.karmaGain ?? 0,
+      peakKarmaGainEvent: 0,
+      callingLevelUps: 0,
+      boss: { cleared:false, rounds:null, countermeasures:0, failedByTimer:false },
+      endReason: String(floorEndData?.endReason || "").toUpperCase()
+    };
 
+    const chipsSeries = [];
     for(const ev of events){
-      if(ev.type==="MATCH_START" && ev.data?.matchSeq!=null){
-        matchStartsBySeq.set(ev.data.matchSeq, ev.data);
-      }
+      const chipsCtx = ev?.ctx?.chips;
+      if(Number.isFinite(Number(chipsCtx))) chipsSeries.push(Number(chipsCtx));
       if(ev.type==="MATCH_END"){
-        matches.push(ev.data || {});
+        digest.matches += floorEndData?.matches==null ? 1 : 0;
+        const outcome = normalizeOutcome(ev.data?.outcome);
+        if(floorEndData?.wins==null && outcome==="WIN") digest.wins++;
+        if(floorEndData?.losses==null && outcome==="LOSS") digest.losses++;
+        if(floorEndData?.ties==null && outcome==="TIE") digest.ties++;
+        if(String(ev.data?.type||"").toUpperCase()==="HIGH_STAKES") digest.highStakesCount++;
+        digest.maxTransferMult = Math.max(digest.maxTransferMult, Number(ev.data?.transferMultiplier||1));
       }
-      if(ev.type==="KARMA_GAIN"){
-        maxKarmaGain = Math.max(maxKarmaGain, Number(ev.data?.amount||0));
+      if(ev.type==="TRANSFER_BET"){
+        digest.maxTransferMult = Math.max(digest.maxTransferMult, Number(ev.data?.mult||1));
       }
-      if(String(ev.type||"").startsWith("CALLING_PROC_")) callingProcs++;
-      if(ev.type==="CALLING_CARD_LEVEL_UP") callingUps++;
-
-      if(ev.type==="COLLECTOR_BUY"){
-        const c = Number(ev.data?.cost||0);
-        shopSpend.collector += c; shopSpend.total += c; shopSpend.count += 1;
-      }
-      if(ev.type==="MERCHANT_BUY" || ev.type==="MERCHANT_REMOVE"){
-        const c = Number(ev.data?.cost||0);
-        shopSpend.merchant += c; shopSpend.total += c; shopSpend.count += 1;
+      if(ev.type==="COLLECTOR_BUY" || ev.type==="MERCHANT_BUY" || ev.type==="MERCHANT_REMOVE" || ev.type==="MODIFY_SERVICE_SELECT"){
+        digest.shopSpendCount++;
+        digest.shopSpendTotal += Number(ev.data?.cost||0);
       }
       if(ev.type==="MERCHANT_REROLL"){
-        const c = Number(ev.data?.cost||0);
-        rerolls++; shopSpend.merchant += c; shopSpend.total += c;
-      }
-      if(ev.type==="MODIFY_SERVICE_SELECT"){
-        const c = Number(ev.data?.cost||0);
-        shopSpend.modify += c; shopSpend.total += c; shopSpend.count += 1;
+        digest.rerollCount++;
+        digest.shopSpendTotal += Number(ev.data?.cost||0);
       }
       if(ev.type==="LOAN_TAKEN"){
-        loans.push(ev.data);
+        digest.loanTaken = { taken:true, amount:Number(ev.data?.amount||0), repay:Number(ev.data?.repay||0) };
+      }
+      const t = String(ev.type||"").toUpperCase();
+      if(t.includes("SUIT_SWEEP") || t.includes("SWEEP")) digest.suitSweepCount++;
+      if(ev.type==="KARMA_GAIN"){
+        const k = Number(ev.data?.amount||0);
+        digest.karmaGain += floorEndData?.karmaGain==null ? k : 0;
+        digest.peakKarmaGainEvent = Math.max(digest.peakKarmaGainEvent, k);
+      }
+      if(ev.type==="CALLING_CARD_LEVEL_UP") digest.callingLevelUps++;
+      if(ev.type==="BOSS_COUNTERMEASURE") digest.boss.countermeasures++;
+      if(ev.type==="BOSS_CLEARED"){
+        digest.boss.cleared = true;
+        digest.boss.rounds = Number(ev.data?.bossWins || ev.data?.round || 1);
+      }
+      if(ev.type==="BOSS_FIGHT_FAILED"){
+        digest.boss.failedByTimer = String(ev.data?.reason||"").toUpperCase()==="TIME";
       }
     }
 
-    matches.sort((a,b)=>Number(a.matchSeq||0)-Number(b.matchSeq||0));
-    first3 = matches.slice(0,3).map(m=>String(m.outcome||"").toUpperCase());
-    for(const m of matches){
-      const t = String(m.type||"").toUpperCase();
-      if(t==="HIGH_STAKES") highStakes++;
-      maxTransfer = Math.max(maxTransfer, Number(m.transferMultiplier||1));
-    }
-
-    const wins = (fEnd?.wins!=null) ? fEnd.wins : matches.filter(m=>String(m.outcome).toUpperCase()==="WIN").length;
-    const losses = (fEnd?.losses!=null) ? fEnd.losses : matches.filter(m=>String(m.outcome).toUpperCase()==="LOSS").length;
-    const ties = (fEnd?.ties!=null) ? fEnd.ties : matches.filter(m=>String(m.outcome).toUpperCase()==="TIE").length;
-    const mcount = (fEnd?.matches!=null) ? fEnd.matches : matches.length;
-
-    const chipsStart = (fEnd?.chipsStart!=null) ? fEnd.chipsStart : null;
-    const chipsEnd = (fEnd?.chipsEnd!=null) ? fEnd.chipsEnd : null;
-    const chipsLow = (fEnd?.chipsLow!=null) ? fEnd.chipsLow : null;
-    const chipsHigh = (fEnd?.chipsHigh!=null) ? fEnd.chipsHigh : null;
-    const karmaGain = (fEnd?.karmaGain!=null) ? fEnd.karmaGain : null;
-    const endReason = String(fEnd?.endReason || "").toUpperCase();
-
-    const clauses = [];
-
-    // Performance tone
-    const earlyWins = first3.filter(x=>x==="WIN").length;
-    const earlyLoss = first3.filter(x=>x==="LOSS").length;
-
-    if(mcount>=3 && earlyWins>=3){
-      clauses.push("Three early wins established bankroll stability.");
-    }else if(mcount>=3 && earlyWins>=2 && earlyLoss===0){
-      clauses.push("Early wins stabilized the bankroll.");
-    }else if(losses>=Math.max(2, Math.ceil(mcount*0.35))){
-      clauses.push("Volatility dominated the floor.");
-    }else if(wins>losses){
-      clauses.push("Advantage held across standard play.");
-    }else if(wins===losses && mcount>0){
-      clauses.push("Balance held; no edge retained.");
-    }else if(mcount>0){
-      clauses.push("Edge shifted to the House.");
-    }
-
-    // Chip trajectory
-    if(chipsStart!=null && chipsEnd!=null){
-      if(chipsEnd>chipsStart){
-        clauses.push(`Chips rose ${fmtNum(chipsStart)} → ${fmtNum(chipsEnd)}.`);
-      }else if(chipsEnd<chipsStart){
-        clauses.push(`Chips fell ${fmtNum(chipsStart)} → ${fmtNum(chipsEnd)}.`);
-      }else{
-        clauses.push(`Chips held at ${fmtNum(chipsEnd)}.`);
-      }
-    }
-    if(chipsLow!=null && chipsStart!=null && chipsLow < chipsStart*0.4){
-      clauses.push(`Notable dip recorded (${fmtNum(chipsLow)}).`);
-    }else if(chipsLow!=null && chipsEnd!=null && chipsLow<=0){
-      clauses.push(`Insolvency pressure recorded (${fmtNum(chipsLow)}).`);
-    }
-
-    // High stakes
-    if(include.match && highStakes>0){
-      clauses.push(`High Stakes pressed (${highStakes}). Max transfer x${fmtNum(maxTransfer)}.`);
-    }
-
-    // Shops (only when it becomes a beat)
-    if(include.shops && shopSpend.count>=4){
-      const where = (shopSpend.collector>=shopSpend.merchant && shopSpend.collector>=shopSpend.modify) ? "Collector" :
-                    (shopSpend.merchant>=shopSpend.modify) ? "Merchant" : "Modifier service";
-      clauses.push(`Subject invested heavily at ${where}.`);
-    }else if(include.shops && rerolls>=3){
-      clauses.push(`Merchant volatility: ${rerolls} rerolls.`);
-    }
-
-    if(include.meta && loans.length){
-      const l = loans[0];
-      clauses.push(`Loan accepted (+${fmtNum(l.amount)} / -${fmtNum(l.repay)}).`);
-    }
-
-    // Karma as a beat
-    if(include.match && maxKarmaGain>=300){
-      clauses.push(`Peak Karma event recorded (+${fmtNum(maxKarmaGain)}).`);
-    }else if(include.match && karmaGain!=null && karmaGain>=1500){
-      clauses.push(`Karma surge recorded (+${fmtNum(karmaGain)}).`);
-    }
-
-    // Calling movement
-    if(include.match && callingUps>=2){
-      clauses.push(`Calling advanced ${callingUps} times.`);
-    }else if(include.match && callingProcs>=12){
-      clauses.push(`Calling procs surged (${callingProcs}).`);
-    }
-
-    // Boss preface
-    if(include.boss && endReason==="BOSS_CLEARED"){
-      clauses.push("Boss cleared; floor sealed.");
-    }else if(include.boss && endReason && endReason!=="BOSS_CLEARED" && floorNum===Number(runLog?.finalState?.floor||floorNum)){
-      // floor ended by some failure
-      clauses.push("Boss engagement unresolved.");
-    }
-
-    // Clamp clauses for brevity
-    const maxClauses = 4;
-    const out = clauses.slice(0, maxClauses).join(" ");
-    return `Floor ${floorNum}: ${out}`;
+    if(digest.chipsStart==null && chipsSeries.length) digest.chipsStart = chipsSeries[0];
+    if(digest.chipsEnd==null && chipsSeries.length) digest.chipsEnd = chipsSeries[chipsSeries.length-1];
+    if(digest.chipsLow==null && chipsSeries.length) digest.chipsLow = Math.min(...chipsSeries);
+    if(digest.chipsHigh==null && chipsSeries.length) digest.chipsHigh = Math.max(...chipsSeries);
+    return digest;
   }
 
-  function bossLine(floorNum, events){
-    if(!include.boss) return null;
-    let cleared = null, failed = null, cm = 0;
-    for(const ev of events){
-      if(ev.type==="BOSS_CLEARED") cleared = ev.data;
-      if(ev.type==="BOSS_FIGHT_FAILED") failed = ev.data;
-      if(ev.type==="BOSS_COUNTERMEASURE") cm++;
+  const TAG_RULES = [
+    ["RECOVERY", d=>d.chipsLow!=null && d.chipsStart!=null && d.chipsLow<=25 && d.chipsEnd>d.chipsStart],
+    ["NEAR_ZERO", d=>d.chipsLow!=null && d.chipsLow<=25],
+    ["OVERLEVERAGED", d=>d.highStakesCount>=2 && d.chipsEnd<d.chipsStart],
+    ["TRANSFER_RELIANCE", d=>d.maxTransferMult>=4],
+    ["HIGH_STAKES_PRESS", d=>d.highStakesCount>=2],
+    ["THIN_STACK", d=>d.chipsLow!=null && d.chipsStart!=null && (d.chipsLow<=100 || d.chipsLow<=0.15*d.chipsStart)],
+    ["BANKROLL_SECURED", d=>d.chipsEnd>d.chipsStart && d.chipsLow>=0.40*d.chipsStart],
+    ["SLIDE", d=>d.chipsEnd<d.chipsStart && d.losses>=d.wins],
+    ["SHOP_HEAVY", d=>d.shopSpendCount>=4 || (d.chipsStart>0 && d.shopSpendTotal>=0.25*d.chipsStart)],
+    ["REROLL_SPIRAL", d=>d.rerollCount>=3],
+    ["DEBT_TAKEN", d=>d.loanTaken.taken],
+    ["SUIT_CONVERGENCE", d=>d.suitSweepCount>=4],
+    ["CALLING_SURGE", d=>d.callingLevelUps>=2],
+    ["KARMA_SPIKE", d=>d.karmaGain>=1500 || d.peakKarmaGainEvent>=300],
+    ["TIMER_PRESSURE", d=>d.boss.failedByTimer],
+    ["COUNTERMEASURES", d=>d.boss.countermeasures>=1],
+    ["BOSS_GRIND", d=>d.boss.cleared && Number(d.boss.rounds)>=2],
+    ["BOSS_CLEAN", d=>d.boss.cleared && Number(d.boss.rounds)===1]
+  ];
+
+  function getBeatTags(digest, prevDigest){
+    const picked = [];
+    for(const [tag,rule] of TAG_RULES){
+      if(rule(digest)) picked.push(tag);
+      if(picked.length>=4) break;
     }
-    if(cleared){
-      const r = Number(cleared.bossWins||0);
-      const cap = cleared.benchCapacity!=null ? `; bench capacity ${fmtNum(cleared.benchCapacity)}` : "";
-      const cmTxt = cm ? `; countermeasures ${fmtNum(cm)}` : "";
-      return `Boss ${floorNum}: Cleared in ${fmtNum(r)} round${r===1?"":"s"}${cmTxt}${cap}.`;
+    let selected = picked.slice(0,2);
+    if(prevDigest?.primaryTag && selected[0]===prevDigest.primaryTag && picked.length>1){
+      selected = [picked.find(t=>t!==prevDigest.primaryTag), ...selected.filter(t=>t!==picked.find(x=>x!==prevDigest.primaryTag))].filter(Boolean).slice(0,2);
     }
-    if(failed){
-      const reason = String(failed.reason||"").toUpperCase()==="TIME" ? "timer" : "failure";
-      const hp = (failed.hp!=null && failed.maxHp!=null) ? ` (HP ${fmtNum(failed.hp)}/${fmtNum(failed.maxHp)})` : "";
-      return `Boss ${floorNum}: Engagement ended by ${reason}${hp}.`;
+    if(!selected.length) selected = [digest.chipsEnd>=digest.chipsStart ? "BANKROLL_SECURED" : "SLIDE"];
+    return selected.slice(0,2);
+  }
+
+  function pressurePhrase(d){
+    if(d.chipsLow==null || d.chipsStart==null) return "";
+    if(d.chipsLow<=0) return "Insolvency recorded.";
+    if(d.chipsLow<=25) return `The stack went thin (${fmtNum(d.chipsLow)}).`;
+    if(d.chipsLow<=0.15*d.chipsStart) return `The floor tightened (${fmtNum(d.chipsLow)}).`;
+    if(d.chipsLow<=0.40*d.chipsStart) return `A dip tested discipline (${fmtNum(d.chipsLow)}).`;
+    return "";
+  }
+
+  function toBand(resPct){
+    if(resPct==null) return "mid";
+    if(resPct<35) return "low";
+    if(resPct>70) return "high";
+    return "mid";
+  }
+
+  function signatureLine(archetype, resonance, primaryTag, runId, floor){
+    const a = String(archetype||"").toLowerCase().includes("engineer") ? "engineer"
+      : (String(archetype||"").toLowerCase().includes("politico") ? "politico" : "generic");
+    const band = toBand(resonance);
+    const sig = currentPack?.signature || {};
+    const bank = sig?.[a]?.[band]?.[primaryTag] || sig?.[a]?.[band] || sig?.generic?.[band] || [];
+    const rngFloor = makeRng(`${runId}|${floor}|${primaryTag}|sig`);
+    return pickOne(bank, rngFloor) || "The House records outcomes, not wishes.";
+  }
+
+  function tagLabel(tag){
+    return String(tag||"").toLowerCase().split("_").map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join(" ");
+  }
+
+  function bossLine(floorNum, digest){
+    if(digest.boss.failedByTimer) return `Boss ${floorNum} — Timer Pressure: Engagement ended by timer.`;
+    if(digest.boss.cleared && Number(digest.boss.rounds)===1){
+      const cm = digest.boss.countermeasures ? `; countermeasures ${fmtNum(digest.boss.countermeasures)}` : "";
+      return `Boss ${floorNum} — Clean Clearance: Cleared in 1 round${cm}.`;
     }
+    if(digest.boss.cleared && Number(digest.boss.rounds)>=2){
+      const cm = digest.boss.countermeasures ? `; countermeasures ${fmtNum(digest.boss.countermeasures)}` : "";
+      return `Boss ${floorNum} — Grind: Cleared in ${fmtNum(digest.boss.rounds)} rounds${cm}.`;
+    }
+    if(digest.boss.countermeasures>=1) return `Boss ${floorNum} — Countermeasures: Pressure patterns altered (${fmtNum(digest.boss.countermeasures)}).`;
     return null;
   }
 
-  function deckDisposition(){
-    const d = runLog?.finalState?.deckSummary;
-    if(!d) return null;
-    const parts = [];
-    parts.push(`${fmtNum(d.deckSize)} cards`);
-    if(d.stampedCount) parts.push(`${fmtNum(d.stampedCount)} stamped`);
-    if(d.sleevedCount) parts.push(`${fmtNum(d.sleevedCount)} sleeved`);
-    if(d.fusedCount) parts.push(`${fmtNum(d.fusedCount)} fused`);
-    return parts.join(", ");
-  }
-
-  function marginaliaLine(archetype){
+  function marginaliaLine(archetype, floor, runId){
     const a = String(archetype||"").toLowerCase();
     const banks = currentPack.marginalia || {};
-    if(a.includes("engineer")){
-      return pickOne(banks.engineer || banks.generic || [], rng);
-    }
-    if(a.includes("politico")){
-      return pickOne(banks.politico || banks.generic || [], rng);
-    }
-    return pickOne(banks.generic || [], rng);
+    const rngFloor = makeRng(`${runId}|${floor}|marginalia`);
+    if(a.includes("engineer")) return pickOne(banks.engineer || banks.generic || [], rngFloor);
+    if(a.includes("politico")) return pickOne(banks.politico || banks.generic || [], rngFloor);
+    return pickOne(banks.generic || [], rngFloor);
   }
 
-  // ========= BRIEF MODE: record skeleton (preferred) =========
-  if(mode === "brief"){
-    const events = scopeEvents();
+  function renderBriefRecord(){
     const floorsEvents = groupByFloor(events);
     const fEnd = floorEndMap(events);
     const rs = runSummaryData(events);
-
-    const floorsReached = Number(rs?.floorsReached ?? runLog?.finalState?.floor ?? 1);
+    const floorsReached = Number(rs?.floorsReached ?? runLog?.finalState?.floor ?? Math.max(1, ...floorsEvents.keys()));
     const bossClears = countBossClears(events);
-
     const lines = [];
+
     lines.push(`ARCHIVE RECORD — ${String(casinoName||"").toUpperCase()}`);
     lines.push(`File: ${fileCodeFromCasino(casinoId)} / RUN ${runId}`);
     lines.push(`Player: ${playerName}`);
@@ -1371,21 +1387,42 @@ function renderStoryV2(runLog, analysisSummary, opts={}){
     lines.push(`Summary: Subject advanced to Floor ${fmtNum(floorsReached)}. Bosses cleared: ${fmtNum(bossClears)}. ${reasonPhrase(rs?.reasonCode || runLog?.runOutcome?.reasonCode)}`);
     lines.push("");
 
-    for(let f=1; f<=floorsReached; f++){
-      const line = floorBeatLine(f, fEnd.get(f), floorsEvents.get(f) || [], include);
-      lines.push(line);
+    let prev = null;
+    const marginaliaRate = Number(opts.marginaliaRate ?? 25) / 100;
 
-      const b = bossLine(f, floorsEvents.get(f) || []);
+    for(let f=1; f<=floorsReached; f++){
+      const digest = buildFloorDigest(f, floorsEvents.get(f) || [], fEnd.get(f));
+      const tags = getBeatTags(digest, prev);
+      const primaryTag = tags[0];
+      digest.primaryTag = primaryTag;
+
+      const clauses = [];
+      if(digest.chipsStart!=null && digest.chipsEnd!=null){
+        const trend = digest.chipsEnd>=digest.chipsStart ? "rose" : "fell";
+        clauses.push(`Chips ${trend} ${fmtNum(digest.chipsStart)} → ${fmtNum(digest.chipsEnd)}.`);
+      }
+      const pressure = pressurePhrase(digest);
+      if(pressure) clauses.push(pressure);
+      if(tags.some(t=>["HIGH_STAKES_PRESS","TRANSFER_RELIANCE","OVERLEVERAGED"].includes(t)) || digest.highStakesCount>=2){
+        const risk = [];
+        if(digest.highStakesCount>=2) risk.push(`High Stakes pressed (${fmtNum(digest.highStakesCount)})`);
+        if(digest.maxTransferMult>=4) risk.push(`transfers peaked at x${fmtNum(digest.maxTransferMult)}`);
+        if(risk.length) clauses.push(`${risk.join("; ")}.`);
+      }
+      const sig = signatureLine(archetypeName, resonancePct, primaryTag, runId, f);
+      clauses.push(sig);
+
+      lines.push(`Floor ${f} — ${tags.map(tagLabel).join(" • ")}: ${clauses.join(" ")}`);
+      const b = bossLine(f, digest);
       if(b) lines.push(b);
 
-      // Marginalia: 25% per floor (configurable via runLog.app)
-      const rate = Number(runLog?.app?.marginaliaRatePerFloor ?? 0.25);
-      if(rate>0 && rng() < rate){
-        const m = marginaliaLine(archetypeName);
+      const rollRng = makeRng(`${runId}|${f}|marginalia-roll`);
+      if(marginaliaRate>0 && rollRng() < marginaliaRate){
+        const m = marginaliaLine(archetypeName, f, runId);
         if(m) lines.push(`Archivist marginalia: “${m}”`);
       }
-
       lines.push("");
+      prev = digest;
     }
 
     const chipsStart = rs?.chipsStart ?? runLog?.initialState?.chips;
@@ -1396,62 +1433,12 @@ function renderStoryV2(runLog, analysisSummary, opts={}){
     disp.push(`Disposition: Chips ${fmtNum(chipsStart)} → ${fmtNum(chipsEnd)}.`);
     disp.push(`Karma ${fmtNum(karmaEnd)}.`);
     if(calling) disp.push(`Calling Card ${fmtCard(calling)}.`);
-    const deck = include.deck ? deckDisposition() : null;
-    if(deck) disp.push(`Deck state at seal: ${deck}.`);
     lines.push(disp.join(" "));
 
-    const story = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-    return { story, seedStr, inserts };
+    return { story: lines.join("\n").replace(/\n{3,}/g, "\n\n").trim(), seedStr, inserts };
   }
 
-  // ========= FULL MODE: storylets (event-driven) =========
-  const maxLinesHard = Math.max(10, maxLines);
-  const usedCooldown = new Set();
-  const lines = [];
-
-  lines.push(pickOne(currentPack.headers, rng));
-  lines.push(`SUBJECT: ${playerName} — ${archetypeName}${resonancePct!=null ? ` (Resonance of ${fmtNum(resonancePct)}%)` : ""}`);
-  lines.push(`RUN ID: ${runId} • START: ${runLog?.startedAt || runLog?.events?.[0]?.ts || "—"}`);
-  lines.push("");
-
-  function emit(ins){
-    const bank = currentPack.storylets?.[ins.insertType];
-    if(!bank || !bank.length) return false;
-
-    const cat = categoryOf(ins.insertType);
-    if(cat==="match" && !include.match) return false;
-    if(cat==="boss"  && !include.boss) return false;
-    if(cat==="shops" && !include.shops) return false;
-    if(cat==="deck"  && !include.deck) return false;
-    if(cat==="bench" && !include.bench) return false;
-    if(cat==="meta"  && !include.meta) return false;
-
-    if(ins.importance < minImportance) return false;
-    if(usedCooldown.has(ins.cooldownKey)) return false;
-
-    usedCooldown.add(ins.cooldownKey);
-
-    const template = pickOne(bank, rng);
-    lines.push(tpl(template, { payload: ins.payload, ctx: ins.ctx, narrator }));
-    return true;
-  }
-
-  const runOpen = inserts.find(x=>x.insertType==="RUN_OPEN");
-  const calling = inserts.find(x=>x.insertType==="CALLING_CARD_SET");
-  if(runOpen) emit(runOpen);
-  if(calling) emit(calling);
-
-  const closer = inserts.slice().reverse().find(x=>x.insertType==="RUN_CLOSE");
-  const lineCap = Math.max(8, maxLinesHard - (closer ? 1 : 0));
-
-  for(const ins of inserts){
-    if(lines.length >= lineCap) break;
-    if(ins.insertType==="RUN_OPEN" || ins.insertType==="CALLING_CARD_SET" || ins.insertType==="RUN_CLOSE") continue;
-    emit(ins);
-  }
-  if(closer && !usedCooldown.has(closer.cooldownKey)) emit(closer);
-
-  return { story: lines.join("\n").trim(), seedStr, inserts };
+  return renderBriefRecord();
 }
 
 /* =========================================================
@@ -1508,17 +1495,6 @@ function analysisFromInputs(){
   };
 }
 
-function includeFlags(){
-  return {
-    match: $("fMatch").checked,
-    boss: $("fBoss").checked,
-    shops: $("fShops").checked,
-    deck: $("fDeck").checked,
-    bench: $("fBench").checked,
-    meta: $("fMeta").checked
-  };
-}
-
 function refreshPackEditor(){
   $("packEditor").value = JSON.stringify(currentPack, null, 2);
 }
@@ -1564,16 +1540,14 @@ function render(){
     return;
   }
 
-  const mode = $("mode").value;
-  const maxLines = Number($("maxLines").value || (mode==="brief"?28:140));
-  const minImportance = Number($("minImp").value || 70);
   const seedOverride = $("seedOverride").value;
+  const marginaliaRate = Number($("margRate").value || 25);
 
   const playerName = run?.player?.name || run?.events?.[0]?.ctx?.playerName || "Unknown";
   $("pillPlayer").textContent = `Player: ${playerName}`;
 
   const res = renderStoryV2(run, analysisFromInputs(), {
-    mode, maxLines, minImportance, seedOverride, include: includeFlags(), includeDebug: $("includeDebug").checked
+    seedOverride, marginaliaRate, includeDebug: $("includeDebug").checked
   });
 
   $("storyOut").textContent = res.story;
@@ -1704,9 +1678,9 @@ $("runSelect").addEventListener("change", ()=>{
   render();
 });
 
-["mode","maxLines","seedOverride","hdrOverride","archName","archRes","minImp","fMatch","fBoss","fShops","fDeck","fBench","fMeta","includeDebug"].forEach(id=>{
+["seedOverride","hdrOverride","archName","archRes","margRate","includeDebug"].forEach(id=>{
   $(id).addEventListener("input", ()=>{
-    if(id==="minImp") $("minImpVal").textContent = String($("minImp").value);
+    if(id==="margRate") $("margRateVal").textContent = String($("margRate").value);
     render();
   });
 });
@@ -1743,7 +1717,7 @@ $("btnDownloadStory").addEventListener("click", ()=>{
   const run = getSelectedRun();
   if(!run) return;
   const runId = run?.runId || run?.sessionId || "run";
-  downloadText(`p63_story_${runId}.txt`, STATE.lastStory || "");
+  downloadText(`archive_record_${runId}.txt`, STATE.lastStory || "");
 });
 
 $("btnDownloadCSV").addEventListener("click", ()=>{
@@ -1757,19 +1731,6 @@ $("btnClear").addEventListener("click", ()=>{
   STATE.runs = [];
   STATE.selected = 0;
   updateRunSelect();
-  render();
-});
-
-$("btnStoryBrief").addEventListener("click", ()=>{
-  $("mode").value = "brief";
-  $("maxLines").value = 24;
-  render();
-});
-$("btnStoryFull").addEventListener("click", ()=>{
-  $("mode").value = "full";
-  $("maxLines").value = 140;
-  $("minImp").value = 55;
-  $("minImpVal").textContent = "55";
   render();
 });
 
@@ -1792,7 +1753,7 @@ $("btnPackDownload").addEventListener("click", ()=>{
 
 /* init */
 updateRunSelect();
-$("minImpVal").textContent = String($("minImp").value);
+$("margRateVal").textContent = String($("margRate").value);
 refreshPackEditor();
 render();
 </script>
