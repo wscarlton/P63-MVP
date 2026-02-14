@@ -1,0 +1,1800 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Project 63 — Story Lab (Deterministic Storylets)</title>
+  <style>
+    :root{
+      --bg0:#070a12;
+      --bg1:#0b1020;
+      --bg2:#111a2e;
+      --card:#0f172a;
+      --card2:#111c34;
+      --text:#e7eefc;
+      --muted:#9fb1d1;
+      --dim:#6d7fa3;
+      --gold:#f0c040;
+      --cyan:#52e0ff;
+      --red:#ff5470;
+      --green:#5dff9a;
+      --border:rgba(255,255,255,.08);
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:var(--sans);
+      color:var(--text);
+      background: radial-gradient(1200px 800px at 20% 0%, rgba(82,224,255,.12), transparent 60%),
+                  radial-gradient(900px 700px at 100% 20%, rgba(240,192,64,.10), transparent 55%),
+                  linear-gradient(180deg, var(--bg0), var(--bg1) 35%, var(--bg0));
+      min-height:100vh;
+    }
+    .topbar{
+      position:sticky; top:0; z-index:20;
+      background: linear-gradient(180deg, rgba(7,10,18,.92), rgba(7,10,18,.65));
+      backdrop-filter: blur(10px);
+      border-bottom:1px solid var(--border);
+    }
+    .wrap{max-width:1280px;margin:0 auto;padding:18px 18px 28px}
+    .titleRow{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    .brand{
+      display:flex;gap:12px;align-items:center
+    }
+    .badge{
+      width:38px;height:38px;border-radius:12px;
+      background: linear-gradient(135deg, rgba(240,192,64,.25), rgba(82,224,255,.20));
+      border:1px solid var(--border);
+      box-shadow: var(--shadow);
+      display:grid;place-items:center;
+      color:var(--gold);font-weight:800;
+      letter-spacing:.5px;
+    }
+    h1{margin:0;font-size:18px;letter-spacing:.2px}
+    .sub{color:var(--muted);font-size:12px;margin-top:2px}
+    .pill{
+      font-family:var(--mono);
+      font-size:11px;
+      color:rgba(231,238,252,.92);
+      border:1px solid var(--border);
+      background:rgba(17,26,46,.55);
+      padding:6px 10px;border-radius:999px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap:14px;
+      margin-top:14px;
+    }
+    @media (max-width: 1020px){
+      .grid{grid-template-columns:1fr}
+    }
+    .card{
+      background: linear-gradient(180deg, rgba(15,23,42,.85), rgba(11,16,32,.82));
+      border:1px solid var(--border);
+      border-radius:16px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .cardHeader{
+      padding:14px 14px 10px;
+      border-bottom:1px solid var(--border);
+      display:flex;justify-content:space-between;align-items:flex-start;gap:10px;
+    }
+    .cardTitle{font-weight:800;font-size:13px;letter-spacing:.2px}
+    .cardSub{color:var(--muted);font-size:11px;margin-top:2px}
+    .cardBody{padding:14px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .col{display:flex;flex-direction:column;gap:8px}
+    label{font-size:11px;color:var(--muted)}
+    input, select, textarea{
+      width:100%;
+      background: rgba(17,26,46,.7);
+      border:1px solid var(--border);
+      color:var(--text);
+      padding:10px 10px;
+      border-radius:12px;
+      outline:none;
+      font-size:12px;
+    }
+    textarea{min-height:120px; font-family: var(--mono); font-size: 11px; line-height:1.35}
+    input::placeholder{color:rgba(159,177,209,.55)}
+    .btn{
+      border:1px solid var(--border);
+      background: rgba(17,26,46,.65);
+      color:var(--text);
+      padding:9px 12px;
+      border-radius:12px;
+      font-weight:700;
+      font-size:12px;
+      cursor:pointer;
+      transition: transform .05s ease, background .15s ease, border-color .15s ease;
+      user-select:none;
+    }
+    .btn:hover{background: rgba(17,26,46,.85); border-color: rgba(240,192,64,.35)}
+    .btn:active{transform: translateY(1px)}
+    .btn.primary{
+      background: linear-gradient(135deg, rgba(240,192,64,.22), rgba(82,224,255,.16));
+      border-color: rgba(240,192,64,.35);
+    }
+    .btn.danger{border-color: rgba(255,84,112,.40); background: rgba(255,84,112,.10)}
+    .btn.small{padding:7px 10px; font-size:11px}
+    .hint{color:var(--dim); font-size:11px; line-height:1.35}
+    .mono{font-family:var(--mono)}
+    .drop{
+      border:1px dashed rgba(240,192,64,.35);
+      background: rgba(240,192,64,.06);
+      border-radius:14px;
+      padding:12px;
+    }
+    .drop strong{color:var(--gold)}
+    .tabs{
+      display:flex;gap:8px;flex-wrap:wrap;
+      padding:10px 14px;
+      border-bottom:1px solid var(--border);
+      background: rgba(11,16,32,.55);
+    }
+    .tab{
+      font-size:11px;font-weight:800;
+      padding:8px 10px;border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(17,26,46,.45);
+      cursor:pointer;
+    }
+    .tab.active{
+      border-color: rgba(82,224,255,.40);
+      background: rgba(82,224,255,.10);
+      color: var(--text);
+    }
+    pre{
+      margin:0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+      color: rgba(231,238,252,.93);
+    }
+    table{
+      width:100%;
+      border-collapse: collapse;
+      font-size:11px;
+    }
+    th, td{
+      border-bottom:1px solid rgba(255,255,255,.07);
+      padding:8px 8px;
+      vertical-align: top;
+    }
+    th{color:rgba(159,177,209,.95);text-align:left;font-weight:800}
+    td{color:rgba(231,238,252,.92)}
+    .chip{
+      display:inline-block;
+      padding:3px 8px;border-radius:999px;
+      background: rgba(17,26,46,.55);
+      border:1px solid rgba(255,255,255,.08);
+      font-family: var(--mono);
+      font-size: 10px;
+      color: rgba(231,238,252,.92);
+    }
+    .chip.gold{border-color: rgba(240,192,64,.35); background: rgba(240,192,64,.10)}
+    .chip.cyan{border-color: rgba(82,224,255,.35); background: rgba(82,224,255,.10)}
+    .chip.red{border-color: rgba(255,84,112,.35); background: rgba(255,84,112,.10)}
+    .chip.green{border-color: rgba(93,255,154,.35); background: rgba(93,255,154,.10)}
+    .split{
+      display:grid; grid-template-columns:1fr 1fr; gap:10px;
+    }
+    @media (max-width: 520px){ .split{grid-template-columns:1fr} }
+    .rightHeaderRow{
+      display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="wrap">
+      <div class="titleRow">
+        <div class="brand">
+          <div class="badge">63</div>
+          <div>
+            <h1>Project 63 — Story Lab</h1>
+            <div class="sub">Deterministic storylets • Grand Casino pack • Archivist record tone</div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="pill" id="runMetaPill">No run loaded</div>
+          <div class="pill mono" id="seedPill">Seed: —</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="grid">
+      <!-- LEFT: Controls -->
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Inputs</div>
+            <div class="cardSub">Load run logs and generate a record-style story.</div>
+          </div>
+          <div class="row">
+            <button class="btn small danger" id="btnClear">Clear</button>
+          </div>
+        </div>
+
+        <div class="cardBody">
+          <div class="drop" id="dropZone">
+            <div class="hint"><strong>Drop</strong> one or more run log JSON files here, or use the picker.</div>
+            <div class="row" style="margin-top:10px">
+              <input type="file" id="filePicker" accept=".json,application/json" multiple />
+            </div>
+          </div>
+
+          <div style="height:12px"></div>
+
+          <div class="col">
+            <div class="row" style="justify-content:space-between">
+              <label>Run</label>
+              <span class="hint" id="loadedCount">0 loaded</span>
+            </div>
+            <select id="runSelect"></select>
+          </div>
+
+          <div style="height:12px"></div>
+
+          <div class="split">
+            <div class="col">
+              <label>Mode</label>
+              <select id="mode">
+                <option value="brief">Brief</option>
+                <option value="full">Full</option>
+              </select>
+            </div>
+            <div class="col">
+              <label>Max lines</label>
+              <input id="maxLines" type="number" min="6" max="240" value="28"/>
+            </div>
+          </div>
+
+          <div style="height:12px"></div>
+
+          <div class="col">
+            <label>Seed override (optional)</label>
+            <input id="seedOverride" placeholder="Leave blank to use runId + player + mode"/>
+            <div class="hint">Use this to “re-roll” deterministically across the same log.</div>
+          </div>
+
+          <div style="height:12px"></div>
+
+          <div class="row" style="align-items:center;gap:10px">
+            <label class="chip" style="cursor:pointer"><input type="checkbox" id="hdrOverride"/> Override header (use fields below)</label>
+            <div class="hint" style="margin:0">Default is to trust the run log header (player/archetype/resonance).</div>
+          </div>
+
+          <div style="height:10px"></div>
+
+          <div class="split">
+            <div class="col">
+              <label>Archetype (override)</label>
+              <input id="archName" placeholder="e.g., Engineer, Politico, …" disabled/>
+            </div>
+            <div class="col">
+              <label>Resonance % (override)</label>
+              <input id="archRes" type="number" min="0" max="100" placeholder="e.g., 82" disabled/>
+            </div>
+          </div>
+          <div class="hint">If the log includes playstyle in the future, this can auto-fill. For now, these inputs are used for the header only.</div>
+
+          <div style="height:12px"></div>
+
+          <div class="col">
+            <label>Min importance (pruning)</label>
+            <input id="minImp" type="range" min="0" max="100" value="70"/>
+            <div class="row" style="justify-content:space-between">
+              <span class="hint">Lower = more lines</span>
+              <span class="chip" id="minImpVal">70</span>
+            </div>
+          </div>
+
+          <div style="height:12px"></div>
+
+          <div class="col">
+            <label>Include categories</label>
+            <div class="row">
+              <label class="chip"><input type="checkbox" id="fMatch" checked/> Match</label>
+              <label class="chip"><input type="checkbox" id="fBoss" checked/> Boss</label>
+              <label class="chip"><input type="checkbox" id="fShops" checked/> Shops</label>
+              <label class="chip"><input type="checkbox" id="fDeck" checked/> Deck</label>
+              <label class="chip"><input type="checkbox" id="fBench" checked/> Bench</label>
+              <label class="chip"><input type="checkbox" id="fMeta" checked/> Meta</label>
+              <label class="chip"><input type="checkbox" id="includeDebug"/> Debug</label>
+            </div>
+            <div class="hint">Turn categories off to see how concise the record can get (e.g., Boss-only).</div>
+          </div>
+
+          <div style="height:14px"></div>
+
+          <div class="row">
+            <button class="btn primary" id="btnGenerate">Generate</button>
+            <button class="btn" id="btnCopy">Copy</button>
+            <button class="btn" id="btnDownloadStory">Download .txt</button>
+            <button class="btn" id="btnDownloadCSV">Inserts .csv</button>
+          </div>
+
+          <div style="height:10px"></div>
+          <div class="hint">Tip: turn <span class="mono">Min importance</span> down to 50 in Full mode if you want more shop + bench beats.</div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Output -->
+      <div class="card">
+        <div class="tabs">
+          <div class="tab active" data-tab="story">Story</div>
+          <div class="tab" data-tab="inserts">Inserts</div>
+          <div class="tab" data-tab="pack">Story Pack</div>
+        </div>
+
+        <div class="cardBody" id="tab_story">
+          <div class="rightHeaderRow">
+            <div class="row" style="gap:8px;flex-wrap:wrap">
+              <span class="chip cyan" id="pillPlayer">Player: —</span>
+              <span class="chip gold" id="pillCasino">Casino: Grand</span>
+              <span class="chip" id="pillLines">Lines: —</span>
+            </div>
+            <div class="row">
+              <button class="btn small" id="btnStoryBrief">Brief</button>
+              <button class="btn small" id="btnStoryFull">Full</button>
+            </div>
+          </div>
+          <div style="height:12px"></div>
+          <div class="card" style="border-radius:14px">
+            <div class="cardBody">
+              <pre id="storyOut">Load a run log to begin.</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="cardBody" id="tab_inserts" style="display:none">
+          <div class="row" style="justify-content:space-between;align-items:flex-end">
+            <div class="col" style="flex:1">
+              <label>Filter by type (contains)</label>
+              <input id="typeFilter" placeholder="e.g., BOSS, MODIFY, MATCH_OUTCOME"/>
+            </div>
+            <div class="col" style="width:160px">
+              <label>Max rows</label>
+              <input id="maxRows" type="number" min="50" max="5000" value="500"/>
+            </div>
+          </div>
+          <div style="height:12px"></div>
+          <div class="hint">This table shows extracted inserts (after extraction, before storylet selection). Use it to confirm coverage and prune spam.</div>
+          <div style="height:12px"></div>
+          <div style="overflow:auto; max-height: 62vh; border:1px solid var(--border); border-radius:14px">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>ts</th>
+                  <th>floor</th>
+                  <th>match</th>
+                  <th>insertType</th>
+                  <th>imp</th>
+                  <th>cooldownKey</th>
+                  <th>payload</th>
+                </tr>
+              </thead>
+              <tbody id="insertRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="cardBody" id="tab_pack" style="display:none">
+          <div class="row" style="justify-content:space-between;align-items:flex-end">
+            <div class="col" style="flex:1">
+              <div class="cardTitle">Grand Casino Pack (editable)</div>
+              <div class="cardSub">Export/edit the storylet library. This is still deterministic.</div>
+            </div>
+            <div class="row">
+              <button class="btn small" id="btnPackReset">Reset</button>
+              <button class="btn small" id="btnPackApply">Apply</button>
+              <button class="btn small" id="btnPackDownload">Download .json</button>
+            </div>
+          </div>
+          <div style="height:12px"></div>
+          <textarea id="packEditor"></textarea>
+          <div class="hint">Edits apply immediately to generation. Keep templates short and “ledger-like.” Use placeholders like <span class="mono">{payload.card}</span>, <span class="mono">{ctx.floor}</span>.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* =========================================================
+   Story Engine V2 (expanded to include loans + collector buys)
+   ========================================================= */
+
+/* ---------- Seeded RNG ---------- */
+function xmur3(str){
+  let h = 1779033703 ^ str.length;
+  for (let i=0;i<str.length;i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= (h >>> 16);
+    return h >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    let t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeRng(seedStr){
+  const seed = xmur3(seedStr)();
+  return mulberry32(seed);
+}
+function pickOne(arr, rng){
+  if(!arr || !arr.length) return "";
+  return arr[Math.floor(rng() * arr.length)];
+}
+
+/* ---------- Helpers ---------- */
+function getPath(obj, path){
+  const parts = String(path||"").split(".");
+  let cur = obj;
+  for(const p of parts){
+    if(cur == null) return "";
+    cur = cur[p];
+  }
+  return (cur == null) ? "" : cur;
+}
+function tpl(str, data){
+  return String(str).replace(/\\{([a-zA-Z0-9_.]+)\\}/g, (_,path)=>String(getPath(data, path)));
+}
+function fmtNum(n){
+  if(n==null || n==="") return "—";
+  const x = Number(n);
+  if(Number.isNaN(x)) return String(n);
+  return x.toLocaleString("en-US");
+}
+function cardLabelFromRef(ref){
+  if(!ref) return "—";
+  if(typeof ref === "string") return ref;
+  if(ref.kind==="MOD") return (ref.delta>=0?`+${ref.delta}`:`${ref.delta}`);
+  const r = ref.rank ?? "?";
+  const s = ref.suit ?? "?";
+  return `${r}${s}`;
+}
+function listCards(arr, limit=3){
+  if(!arr || !arr.length) return "—";
+  const shown = arr.slice(0, limit).map(cardLabelFromRef);
+  return arr.length > limit ? `${shown.join(", ")}, …` : shown.join(", ");
+}
+function normalizeOutcome(x){
+  const s = String(x||"").toUpperCase();
+  if(s==="WIN") return "WIN";
+  if(s==="LOSS") return "LOSS";
+  if(s==="TIE") return "TIE";
+  return s || "UNKNOWN";
+}
+function computeNetChipsFromMatchEnd(d){
+  const payout = Number(d?.payout || 0);
+  const buyIn = Number(d?.buyIn || 0);
+  const rake  = Number(d?.rake || 0);
+  const bonus = Number(d?.bonusChips || 0);
+  const tnet  = Number(d?.transferNet || 0);
+  return payout - buyIn - rake + bonus + tnet;
+}
+
+/* ---------- Grand Casino pack (editable) ---------- */
+const BASE_PACK = {
+  narrator: "The Archivist",
+  archetypeAliases: {
+    "The Engine Builder": "Engineer",
+    "The Karma Chaser": "Politico"
+  },
+  headers: [
+    "ARCHIVE RECORD — GRAND CASINO",
+    "LEDGER ENTRY — GRAND CASINO (VERIFIED)",
+    "PERMANENT RECORD — GRAND CASINO"
+  ],
+  storylets: {
+    RUN_OPEN: [
+      "Filed by {narrator}. The Grand Casino received the subject without ceremony.",
+      "Filed by {narrator}. House lights held steady; the subject entered."
+    ],
+    CALLING_CARD_SET: [
+      "Calling registered: {payload.card}. The table network acknowledged it.",
+      "Calling declared: {payload.card}. The record notes the selection without interpretation."
+    ],
+    FLOOR_START: [
+      "Floor {ctx.floor} opened. Chips: {ctx.chips}.",
+      "Floor {ctx.floor}. Chips ledger: {ctx.chips}. Footsteps carried cleanly."
+    ],
+
+    TILE_ENTER: [
+      "Encounter logged: {ctx.tileType}.",
+      "Tile entered: {ctx.tileType}."
+    ],
+
+    /* Shops / services */
+    COLLECTOR_SHOP_GENERATED: [
+      "Collector inventory recorded ({payload.count} items): {payload.items}.",
+      "The Stamp Collector presented {payload.count} offerings: {payload.items}."
+    ],
+    COLLECTOR_BUY: [
+      "Acquisition from Collector: {payload.itemId} for {payload.cost}.",
+      "Collector sale recorded: {payload.itemId} (cost {payload.cost})."
+    ],
+    STAMP_CANDIDATES_SHOWN: [
+      "Stamp {payload.stampId} offered against: {payload.candidates}.",
+      "Stamp candidates posted ({payload.stampId}): {payload.candidates}."
+    ],
+    SLEEVE_CANDIDATES_SHOWN: [
+      "Sleeve {payload.sleeveId} offered against: {payload.candidates}.",
+      "Sleeve candidates posted ({payload.sleeveId}): {payload.candidates}."
+    ],
+    MERCHANT_ENTER: [
+      "Merchant stock logged (x{payload.priceMult}): {payload.offers}.",
+      "Merchant opened inventory at price mult x{payload.priceMult}: {payload.offers}."
+    ],
+    MERCHANT_REROLL: [
+      "Merchant rotated stock ({payload.which}): {payload.offers}.",
+      "Merchant reroll executed ({payload.which}). New offers: {payload.offers}."
+    ],
+    MERCHANT_BUY: [
+      "Merchant sale: {payload.card} for {payload.cost}.",
+      "Purchase recorded: {payload.card} (cost {payload.cost})."
+    ],
+    MODIFY_ENTER: [
+      "Modify counter active. Services offered: {payload.services}.",
+      "Modify service opened. Eligible: {payload.eligibleCount}. Services: {payload.services}."
+    ],
+    MODIFY_SERVICE_SELECT: [
+      "Modify selection logged: {payload.serviceId} — {payload.cost} chips.",
+      "Service selected: {payload.serviceId} (tier {payload.tier}) cost {payload.cost}."
+    ],
+    MODIFY_APPLY: [
+      "Service executed: {payload.serviceId} on {payload.count} card(s).",
+      "Modify applied: {payload.serviceId} affecting {payload.count} card(s)."
+    ],
+    LOAN_TAKEN: [
+      "Debt opened: +{payload.amount}. Repayment due: {payload.repay}.",
+      "Loan recorded. Principal {payload.amount}; repayment {payload.repay}."
+    ],
+    LOAN_REPAID: [
+      "Debt closed. Paid {payload.amount}.",
+      "Loan repaid in full: {payload.amount}."
+    ],
+    BARTENDER_TAKE: [
+      "Bartender transaction: {payload.chips} chips.",
+      "Bartender took {payload.chips} chips. Tokens were set aside."
+    ],
+    COCKTAIL_BOUGHT: [
+      "Action acquired: {payload.actionName}. Cost {payload.cost}.",
+      "Cocktail purchased: {payload.actionName} ({payload.cost})."
+    ],
+    ACTION_USED: [
+      "Action used: {payload.actionName} (tokens remaining {payload.tokensRemaining}).",
+      "Action invoked: {payload.actionName}. Tokens remaining: {payload.tokensRemaining}."
+    ],
+
+    /* Deck edits / artifacts */
+    STAMP_APPLY: [
+      "Stamped: {payload.card} marked {payload.stampId}.",
+      "Stamp applied: {payload.stampId} → {payload.card}."
+    ],
+    SLEEVE_APPLY: [
+      "Sleeved: {payload.card} under {payload.sleeveId}.",
+      "Sleeve fitted: {payload.sleeveId} → {payload.card}."
+    ],
+    REST_CHOICE: [
+      "Rest stop logged: {payload.choice}.",
+      "Rest stop decision recorded: {payload.choice}."
+    ],
+    FREE_REMOVAL: [
+      "Free removal executed: {payload.card}.",
+      "Removed from deck: {payload.card}."
+    ],
+    MINIGAME: [
+      "Minigame result posted: chips +{payload.chips}, tokens +{payload.tokens}.",
+      "Side-table settled: +{payload.chips} chips; +{payload.tokens} token(s)."
+    ],
+    BURN_AFTER_READING: [
+      "BURN AFTER READING executed: {payload.cards}.",
+      "Burned after reading: {payload.cards}."
+    ],
+    KEYCARD_OBTAINED: [
+      "Keycard logged: {payload.card}. The record flags a door, not a prize.",
+      "Keycard obtained: {payload.card}. Access classified."
+    ],
+    WINNER_REWARD_MODE: [
+      "Winner reward mode set: {payload.mode}.",
+      "Reward mode logged: {payload.mode}."
+    ],
+    WINNER_REWARD_APPLY: [
+      "Reward executed: {payload.mode} → {payload.card}.",
+      "Winner reward applied ({payload.mode}): {payload.card}."
+    ],
+    WINNER_REWARD_FUSE: [
+      "Cards fused: {payload.fused}.",
+      "Fusion executed: {payload.fused}."
+    ],
+
+    /* Bench drama */
+    BENCH_OVERFLOW: [
+      "Bench forced a decision: {payload.removed} displaced by {payload.added} (cap {payload.cap}).",
+      "Bench overflow (cap {payload.cap}): removed {payload.removed}, added {payload.added}."
+    ],
+    BENCH_PLACE: [
+      "Card benched: {payload.card} placed to lane {payload.lane}.",
+      "Bench placement recorded: {payload.card} → lane {payload.lane}."
+    ],
+    BENCH_APPLY: [
+      "Bench effect: {payload.card} ({payload.delta}) applied to lane {payload.lane}.",
+      "Bench modifier applied: {payload.card} {payload.delta} → lane {payload.lane}."
+    ],
+    DEALER_BENCH_GAIN: [
+      "Dealer gained a bench modifier: {payload.card}.",
+      "Dealer benched {payload.card} (source {payload.source})."
+    ],
+    DEALER_BENCH_APPLY: [
+      "Dealer bench used: lane {payload.lane} adjusted by {payload.delta}.",
+      "Dealer applied {payload.delta} to lane {payload.lane} ({payload.reason})."
+    ],
+
+    /* Calling / karma */
+    CALLING_CARD_LEVEL_UP: [
+      "Calling level-up logged: {payload.from} → {payload.to}.",
+      "Calling rank advanced: {payload.from} → {payload.to} (karma {payload.karmaAt})."
+    ],
+    KARMA_GAIN: [
+      "Karma accrual recorded: +{payload.amount} (Total {payload.total}).",
+      "Karma posted: +{payload.amount}. Total now {payload.total}."
+    ],
+
+    /* Match blocks */
+    MATCH_OPEN: [
+      "{payload.tableLabel} engaged: opponent {payload.npcName}. Buy-in {payload.buyIn}.",
+      "{payload.tableLabel} opened vs {payload.npcName} ({payload.npcCalling}). Buy-in {payload.buyIn}."
+    ],
+    TRANSFER_BET: [
+      "Transfer set: x{payload.mult}.",
+      "Transfer wager recorded at x{payload.mult}."
+    ],
+    MATCH_OUTCOME: [
+      "{payload.tableLabel} closed: {payload.result}. Ledger change {payload.netChips}; rake {payload.rake}.",
+      "{payload.tableLabel} resolved: {payload.result}. Net {payload.netChips} (rake {payload.rake})."
+    ],
+    MATCH_HIGHLIGHTS: [
+      "Highlights recorded: {payload.notes}.",
+      "Match notes: {payload.notes}."
+    ],
+
+    /* Boss turning points */
+    BOSS_TARGET_SET: [
+      "Boss attention shifted to lane {payload.laneIdx}.",
+      "Boss target fixed: lane {payload.laneIdx} ({payload.reason})."
+    ],
+    BOSS_PHASE2_START: [
+      "Boss entered Phase II. HP {payload.hp}/{payload.maxHp}.",
+      "Boss phase shift recorded (Round {payload.round}): HP {payload.hp}/{payload.maxHp}."
+    ],
+    BOSS_COUNTERMEASURE: [
+      "Boss countermeasure logged on lane {payload.lane}: {payload.appliedDelta}.",
+      "Countermeasure: lane {payload.lane} adjusted by {payload.appliedDelta} (state {payload.targetState})."
+    ],
+    BOSS_DAMAGE: [
+      "Damage registered: {payload.totalDamage} (lanes won {payload.lanesWon}).",
+      "Boss damage posted: {payload.totalDamage}. HP {payload.hpBefore}→{payload.hpAfter}."
+    ],
+
+    /* Meta */
+    FEEDBACK_UPDATED: [
+      "Post-run annotation appended (comments {payload.commentsLen}, bugs {payload.bugsLen}).",
+      "Operator note attached to record."
+    ],
+    RUN_CLOSE: [
+      "Ledger closed. Result: {payload.result}. Final chips: {payload.endChips}.",
+      "Record sealed. Outcome: {payload.result}. Floors reached: {payload.floors}. Final chips: {payload.endChips}."
+    ],
+
+    FLOOR_END: [
+      "Floor {payload.floor} sealed. Chips {payload.chipsStart} → {payload.chipsEnd}. Karma +{payload.karmaGain}.",
+      "End of Floor {payload.floor}: W{payload.wins}-L{payload.losses}-T{payload.ties} across {payload.matches} matches."
+    ],
+
+    RUN_SUMMARY: [
+      "Summary filed: Floors {payload.floorsReached}; bosses cleared {payload.bossesCleared}. Outcome {payload.result}.",
+      "Run summary: chips {payload.chipsStart} → {payload.chipsEnd}; karma {payload.karmaStart} → {payload.karmaEnd}."
+    ],
+
+    BOSS_CLEARED: [
+      "Boss cleared on Floor {payload.floor} in {payload.bossWins} rounds. Bench capacity now {payload.benchCapacity}.",
+      "Floor {payload.floor} boss neutralized. Rounds required: {payload.bossWins}."
+    ],
+
+    BOSS_FIGHT_FAILED: [
+      "Boss engagement failed on Floor {payload.floor} ({payload.reason}).",
+      "Final boss record: Floor {payload.floor} ended by {payload.reason}."
+    ],
+}
+};
+
+let currentPack = JSON.parse(JSON.stringify(BASE_PACK));
+
+/* ---------- Match highlights (derived) ---------- */
+function deriveMatchHighlights(events){
+  const bySeq = new Map();
+  function getSeq(ev){ return ev?.ctx?.matchSeq ?? ev?.data?.matchSeq ?? null; }
+  function getOrInit(seq){
+    if(!bySeq.has(seq)){
+      bySeq.set(seq, {
+        matchSeq: seq,
+        bonus21: 0,
+        callingProcs: 0,
+        laneCloseAttacks: 0,
+        goldBonusTotal: 0,
+        goldBonusCount: 0,
+        actionsUsed: new Map(),
+        benchOverflows: 0,
+        burns: [],
+        bossDamageTotal: 0,
+        bossPhase2: 0,
+        dealerBenchUses: 0
+      });
+    }
+    return bySeq.get(seq);
+  }
+
+  for(const ev of (events||[])){
+    const seq = getSeq(ev);
+    if(!seq) continue;
+    const m = getOrInit(seq);
+
+    switch(ev.type){
+      case "BONUS_21": m.bonus21 += 1; break;
+      case "CALLING_PROC_SPADES":
+      case "CALLING_PROC_DIAMOND": m.callingProcs += 1; break;
+      case "LANE_CLOSE_ATTACK": m.laneCloseAttacks += 1; break;
+      case "GOLD_SLEEVE_BONUS":
+        m.goldBonusTotal += Number(ev.data?.amount || 0);
+        m.goldBonusCount += Number(ev.data?.count || 0);
+        break;
+      case "ACTION_USED":{
+        const name = ev.data?.actionName || ev.data?.actionId || "Action";
+        m.actionsUsed.set(name, (m.actionsUsed.get(name)||0) + 1);
+        break;
+      }
+      case "BENCH_OVERFLOW": m.benchOverflows += 1; break;
+      case "BURN_AFTER_READING":{
+        const cards = ev.data?.cards || [];
+        cards.forEach(c=>m.burns.push(c));
+        break;
+      }
+      case "BOSS_DAMAGE": m.bossDamageTotal += Number(ev.data?.totalDamage || 0); break;
+      case "BOSS_PHASE2_START": m.bossPhase2 += 1; break;
+      case "DEALER_BENCH_APPLY": m.dealerBenchUses += 1; break;
+    }
+  }
+
+  const out = [];
+  for(const m of bySeq.values()){
+    const notes = [];
+    if(m.bonus21) notes.push(`21-bonus x${m.bonus21}`);
+    if(m.callingProcs) notes.push(`Calling proc x${m.callingProcs}`);
+    if(m.laneCloseAttacks) notes.push(`lane-close attacks x${m.laneCloseAttacks}`);
+    if(m.goldBonusTotal) notes.push(`Gold +${fmtNum(m.goldBonusTotal)} (x${fmtNum(m.goldBonusCount)})`);
+    if(m.actionsUsed.size){
+      const top = [...m.actionsUsed.entries()].slice(0,2).map(([k,v])=>`${k} x${v}`).join(", ");
+      notes.push(`actions: ${top}${m.actionsUsed.size>2 ? ", …" : ""}`);
+    }
+    if(m.benchOverflows) notes.push(`bench overflow x${m.benchOverflows}`);
+    if(m.burns.length) notes.push(`burned: ${listCards(m.burns, 3)}`);
+    if(m.bossPhase2) notes.push(`boss phase shift`);
+    if(m.bossDamageTotal) notes.push(`boss dmg ${fmtNum(m.bossDamageTotal)}`);
+    if(m.dealerBenchUses) notes.push(`dealer bench x${m.dealerBenchUses}`);
+
+    out.push({ matchSeq: m.matchSeq, notes: notes.join("; "), hasNotes: notes.length>0 });
+  }
+  return out;
+}
+
+/* ---------- Insert extraction (V2) ---------- */
+function extractEventInsertsV2(runLog, opts={}){
+  const eventsAll = runLog?.events || [];
+  const includeDebug = !!opts.includeDebug;
+
+  // Prefer run-log meta.scope to avoid flooding the story with debug traces.
+  const events = eventsAll.filter(ev=>{
+    const scope = (ev?.meta?.scope || "both").toLowerCase();
+    if(includeDebug) return true;
+    return scope === "story" || scope === "both";
+  });
+
+  const inserts = [];
+  const matchNotesBySeq = new Map(deriveMatchHighlights(events).map(x=>[x.matchSeq, x]));
+
+  function add(ev, insertType, fallbackImportance, payload={}, cooldownKey=null){
+    const ctx = ev.ctx || {};
+    const imp = (ev?.meta?.importance != null) ? Number(ev.meta.importance) : Number(fallbackImportance || 50);
+    inserts.push({
+      insertType,
+      ts: ev.ts,
+      order: ev.id ?? 0,
+      floor: ctx.floor ?? ev.floor ?? ev.data?.floor ?? null,
+      matchSeq: ctx.matchSeq ?? ev.data?.matchSeq ?? null,
+      tileType: ctx.tileType ?? null,
+      importance: imp,
+      cooldownKey: cooldownKey || `${insertType}@${ctx.floor ?? ev.floor ?? "?"}:${ctx.matchSeq ?? ev.data?.matchSeq ?? "-"}`,
+      payload,
+      ctx
+    });
+  }
+
+  for(const ev of events){
+    const ctx = ev.ctx || {};
+
+    switch(ev.type){
+      case "GAME_START":
+        add(ev, "RUN_OPEN", 95, {
+          narrator: runLog?.app?.narrator || "The Archivist",
+          casinoName: runLog?.app?.casinoName || "Grand Casino"
+        }, "RUN_OPEN");
+        break;
+
+      case "CALLING_CARD_SET":
+        add(ev, "CALLING_CARD_SET", 90, {
+          card: cardLabelFromRef(ev.data?.card || ctx.callingCard || runLog?.finalState?.callingCard || null)
+        }, "CALLING_CARD_SET");
+        break;
+
+      case "FLOOR_START":
+        add(ev, "FLOOR_START", 70, {
+          floor: ctx.floor ?? ev.data?.floor,
+          chips: ctx.chips ?? ev.chips
+        }, `FLOOR_START@${ctx.floor ?? ev.data?.floor}`);
+        break;
+
+      case "FLOOR_END":
+        // Not currently used by default pack, but useful for diagnostics.
+        add(ev, "FLOOR_END", 85, ev.data || {}, `FLOOR_END@${ev.data?.floor}`);
+        break;
+
+      case "RUN_SUMMARY":
+        add(ev, "RUN_SUMMARY", 98, ev.data || {}, "RUN_SUMMARY");
+        // Mirror as closer so older packs can end cleanly.
+        add(ev, "RUN_CLOSE", 98, ev.data || {}, "RUN_CLOSE");
+        break;
+
+      case "TILE_ENTER":
+        add(ev, "TILE_ENTER", 55, {
+          tileType: ctx.tileType || ev.data?.tileType || null,
+          tileId: ctx.tileId || ev.data?.tileId || null
+        });
+        break;
+
+      case "ACTION_PURCHASED":
+        add(ev, "ACTION_PURCHASED", 75, {
+          actionName: ev.data?.actionName,
+          cost: ev.data?.cost
+        });
+        break;
+
+      case "TRANSFER_SET":
+        add(ev, "TRANSFER_SET", 70, { mult: ev.data?.mult });
+        break;
+
+      case "CALLING_CARD_LEVEL_UP":
+        add(ev, "CALLING_CARD_LEVEL_UP", 85, {
+          from: ev.data?.fromRank,
+          to: ev.data?.toRank,
+          karmaAt: ev.data?.karmaAtLevelUp
+        }, `CALLING_CARD_LEVEL_UP@${ctx.floor ?? ev.floor}:${ev.data?.toRank ?? ""}`);
+        break;
+
+      case "MATCH_START": {
+        const d = ev.data || {};
+        const label = (String(d.type||"").toUpperCase()==="HIGH_STAKES") ? "High-stakes table" : "Standard table";
+        add(ev, "MATCH_OPEN", 70, {
+          tableLabel: label,
+          npcName: d.npcName,
+          npcCalling: cardLabelFromRef(d.npcCallingCard),
+          buyIn: d.buyIn
+        }, `MATCH_OPEN@${d.matchSeq}`);
+        break;
+      }
+
+      case "TRANSFER_BET":
+        add(ev, "TRANSFER_BET", 72, { mult: ev.data?.mult || ev.data?.transferMultiplier || ev.data?.multiplier });
+        break;
+
+      case "MATCH_END": {
+        const d = ev.data || {};
+        const out = normalizeOutcome(d.outcome);
+        const net = computeNetChipsFromMatchEnd(d);
+        const label = (String(d.type||"").toUpperCase()==="HIGH_STAKES") ? "High-stakes table" : "Standard table";
+
+        add(ev, "MATCH_OUTCOME", 78, {
+          tableLabel: label,
+          result: out,
+          netChips: net,
+          rake: d.rake
+        }, `MATCH_OUTCOME@${d.matchSeq}`);
+
+        const note = matchNotesBySeq.get(d.matchSeq)?.notes || "";
+        if(note){
+          add(ev, "MATCH_HIGHLIGHTS", 77, { notes: note }, `MATCH_HIGHLIGHTS@${d.matchSeq}`);
+        }
+        break;
+      }
+
+      case "KARMA_GAIN":
+        add(ev, "KARMA_GAIN", 80, { amount: ev.data?.amount, total: ev.data?.total });
+        break;
+
+      case "WINNER_REWARD_MODE":
+        add(ev, "WINNER_REWARD_MODE", 75, { mode: ev.data?.mode });
+        break;
+
+      case "WINNER_REWARD_APPLY":
+        add(ev, "WINNER_REWARD_APPLY", 78, { mode: ev.data?.mode, card: cardLabelFromRef(ev.data?.card) });
+        break;
+
+      case "DEALER_BENCH_GAIN":
+        add(ev, "DEALER_BENCH_GAIN", 72, { card: cardLabelFromRef(ev.data?.card) });
+        break;
+
+      case "DEALER_BENCH_APPLY":
+        add(ev, "DEALER_BENCH_APPLY", 74, { lane: ev.data?.lane, delta: ev.data?.delta });
+        break;
+
+      case "PLAYER_DRAW_BENCH":
+        add(ev, "PLAYER_DRAW_BENCH", 60, { card: cardLabelFromRef(ev.data?.card), source: ev.data?.source });
+        break;
+
+      case "BENCH_PLACE":
+        add(ev, "BENCH_PLACE", 62, { lane: ev.data?.lane, card: cardLabelFromRef(ev.data?.card) });
+        break;
+
+      case "BENCH_APPLY":
+        add(ev, "BENCH_APPLY", 68, { lane: ev.data?.lane, delta: ev.data?.delta });
+        break;
+
+      case "COLLECTOR_BUY":
+        add(ev, "COLLECTOR_BUY", 66, { itemId: ev.data?.itemId, cost: ev.data?.cost });
+        break;
+
+      case "MERCHANT_BUY":
+        add(ev, "MERCHANT_BUY", 66, { card: cardLabelFromRef(ev.data?.card), cost: ev.data?.cost, kind: ev.data?.kind });
+        break;
+
+      case "MERCHANT_REROLL":
+        add(ev, "MERCHANT_REROLL", 58, { which: ev.data?.which, cost: ev.data?.cost, offers: (ev.data?.offers||[]).map(cardLabelFromRef) });
+        break;
+
+      case "MERCHANT_REMOVE":
+        // No dedicated storylet in the default pack; keep as meta insert so it can still appear in the table.
+        add(ev, "MERCHANT_REMOVE", 70, { card: cardLabelFromRef(ev.data?.card), cost: ev.data?.cost });
+        break;
+
+      case "MODIFY_SERVICE_SELECT":
+        add(ev, "MODIFY_SERVICE_SELECT", 66, { serviceId: ev.data?.serviceId, tier: ev.data?.tier, cost: ev.data?.cost });
+        break;
+
+      case "LOAN_TAKEN":
+        add(ev, "LOAN_TAKEN", 86, { amount: ev.data?.amount, repay: ev.data?.repay });
+        break;
+
+      case "BOSS_COUNTERMEASURE":
+        add(ev, "BOSS_COUNTERMEASURE", 84, { card: cardLabelFromRef(ev.data?.card), delta: ev.data?.delta });
+        break;
+
+      case "BOSS_CLEARED":
+        add(ev, "BOSS_CLEARED", 92, { floor: ev.data?.floor, bossWins: ev.data?.bossWins, benchCapacity: ev.data?.benchCapacity }, `BOSS_CLEARED@${ev.data?.floor}`);
+        break;
+
+      case "BOSS_FIGHT_FAILED":
+        add(ev, "BOSS_FIGHT_FAILED", 95, { floor: ev.data?.floor, reason: ev.data?.reason, hp: ev.data?.boss?.hp, maxHp: ev.data?.boss?.maxHp, round: ev.data?.boss?.round, roundsRemaining: ev.data?.boss?.roundsRemaining }, `BOSS_FIGHT_FAILED@${ev.data?.floor}`);
+        break;
+
+      case "FEEDBACK_UPDATED":
+        add(ev, "FEEDBACK_UPDATED", 55, { text: ev.data?.text || ev.data?.feedback });
+        break;
+    }
+  }
+
+  // Stable sort by (order, ts)
+  inserts.sort((a,b)=>{
+    const ao = Number(a.order||0), bo = Number(b.order||0);
+    if(ao!==bo) return ao-bo;
+    return String(a.ts||"").localeCompare(String(b.ts||""));
+  });
+
+  return inserts;
+}
+
+/* ---------- Category mapping (filters) ---------- */
+function categoryOf(insertType){
+  const t = String(insertType||"");
+  const SHOPS = new Set([
+    "TILE_ENTER","COLLECTOR_SHOP_GENERATED","COLLECTOR_BUY","STAMP_CANDIDATES_SHOWN","SLEEVE_CANDIDATES_SHOWN",
+    "MERCHANT_ENTER","MERCHANT_REROLL","MERCHANT_BUY","MODIFY_ENTER","MODIFY_SERVICE_SELECT","MODIFY_APPLY",
+    "LOAN_TAKEN","LOAN_REPAID","BARTENDER_TAKE","COCKTAIL_BOUGHT","ACTION_USED"
+  ]);
+  const DECK = new Set(["STAMP_APPLY","SLEEVE_APPLY","REST_CHOICE","FREE_REMOVAL","MINIGAME","BURN_AFTER_READING","KEYCARD_OBTAINED","WINNER_REWARD_MODE","WINNER_REWARD_APPLY","WINNER_REWARD_FUSE"]);
+  const BENCH = new Set(["BENCH_OVERFLOW","BENCH_PLACE","BENCH_APPLY","DEALER_BENCH_GAIN","DEALER_BENCH_APPLY"]);
+  const BOSS  = new Set(["BOSS_TARGET_SET","BOSS_PHASE2_START","BOSS_COUNTERMEASURE","BOSS_DAMAGE"]);
+  const MATCH = new Set(["MATCH_OPEN","TRANSFER_BET","MATCH_OUTCOME","MATCH_HIGHLIGHTS","KARMA_GAIN","CALLING_CARD_LEVEL_UP"]);
+  const META  = new Set(["RUN_OPEN","CALLING_CARD_SET","FLOOR_START","FEEDBACK_UPDATED","RUN_CLOSE","FLOOR_END","RUN_SUMMARY"]);
+
+  if(SHOPS.has(t)) return "shops";
+  if(DECK.has(t)) return "deck";
+  if(BENCH.has(t)) return "bench";
+  if(BOSS.has(t)) return "boss";
+  if(MATCH.has(t)) return "match";
+  if(META.has(t)) return "meta";
+  return "other";
+}
+
+/* ---------- Render story ---------- */
+function renderStoryV2(runLog, analysisSummary, opts={}){
+  const mode = opts.mode || "brief";
+  const maxLines = Number(opts.maxLines ?? (mode==="brief" ? 24 : 140));
+  const minImportance = Number(opts.minImportance ?? (mode==="brief" ? 80 : 55));
+  const include = opts.include || { match:true,boss:true,shops:true,deck:true,bench:true,meta:true };
+  const includeDebug = !!opts.includeDebug;
+
+  const runId = runLog?.runId || runLog?.sessionId || "—";
+  const casinoName = runLog?.app?.casinoName || "Grand Casino";
+  const casinoId = runLog?.app?.casinoId || "grand_casino";
+  const narrator = runLog?.app?.narrator || "The Archivist";
+
+  const playerName = runLog?.player?.name || runLog?.events?.[0]?.ctx?.playerName || "Unknown";
+
+  // Header truth: run log (unless override explicitly enabled)
+  const overrideEnabled = !!analysisSummary?.__overrideEnabled;
+  let archetypeRaw = (overrideEnabled && analysisSummary?.playstyle?.primary?.name)
+    ? analysisSummary.playstyle.primary.name
+    : (runLog?.player?.archetype || "Unknown");
+
+  archetypeRaw = String(archetypeRaw || "Unknown").trim();
+  let archetypeName = currentPack.archetypeAliases?.[archetypeRaw] || archetypeRaw.replace(/^The\s+/,"");
+  archetypeName = String(archetypeName || "Unknown").trim();
+
+  const resonancePct = (overrideEnabled && analysisSummary?.playstyle?.primary?.score != null)
+    ? Math.round(Number(analysisSummary.playstyle.primary.score) * 100)
+    : (runLog?.player?.resonancePct != null ? Math.round(Number(runLog.player.resonancePct)) : null);
+
+  const seedStr = (opts.seedOverride && String(opts.seedOverride).trim().length)
+    ? `${String(opts.seedOverride).trim()}|${mode}`
+    : `${runId}|${playerName}|${archetypeName}|${mode}`;
+
+  const rng = makeRng(seedStr);
+
+  // Always compute inserts (used for the table + full mode)
+  const inserts = extractEventInsertsV2(runLog, { includeDebug });
+
+  function fileCodeFromCasino(cid){
+    const c = String(cid||"").toLowerCase();
+    if(c.includes("grand")) return "GC";
+    if(c.includes("janus")) return "VJ";
+    if(c.includes("archive")) return "AR";
+    // Fallback: initials
+    return c.split(/[^a-z0-9]+/).filter(Boolean).map(x=>x[0]).join("").toUpperCase().slice(0,3) || "P63";
+  }
+
+  function reasonPhrase(code){
+    const c = String(code||"").toUpperCase();
+    if(c==="BOSS_TIMER_EXPIRED" || c==="TIME" || c==="TIMER") return "Termination by time limit at the boss table.";
+    if(c==="CHIPS_NEGATIVE") return "Termination by insolvency (chips below zero).";
+    if(c==="DEFEAT" || c==="BOSS_DEFEAT") return "Termination by defeat at the boss table.";
+    if(c==="PLAYER_QUIT" || c==="QUIT") return "Termination by withdrawal.";
+    return c ? `Termination logged: ${c}.` : "Termination logged.";
+  }
+
+  function fmtCard(card){
+    if(!card) return "—";
+    if(typeof card==="string") return card;
+    const r = card.rank ?? "?"; const s = card.suit ?? "?";
+    return `${r}${s}`;
+  }
+
+  function scopeEvents(){
+    const eventsAll = runLog?.events || [];
+    return eventsAll.filter(ev=>{
+      const scope = (ev?.meta?.scope || "both").toLowerCase();
+      if(includeDebug) return true;
+      return scope==="story" || scope==="both";
+    });
+  }
+
+  function groupByFloor(events){
+    const floors = new Map();
+    for(const ev of events){
+      const f = ev?.ctx?.floor ?? ev?.floor ?? ev?.data?.floor;
+      if(f==null) continue;
+      if(!floors.has(f)) floors.set(f, []);
+      floors.get(f).push(ev);
+    }
+    for(const [f, arr] of floors.entries()){
+      arr.sort((a,b)=>Number(a.id||0)-Number(b.id||0));
+    }
+    return floors;
+  }
+
+  function floorEndMap(events){
+    const m = new Map();
+    for(const ev of events){
+      if(ev.type==="FLOOR_END" && ev.data?.floor!=null){
+        m.set(Number(ev.data.floor), ev.data);
+      }
+    }
+    return m;
+  }
+
+  function runSummaryData(events){
+    for(let i=events.length-1;i>=0;i--){
+      const ev = events[i];
+      if(ev.type==="RUN_SUMMARY" && ev.data) return ev.data;
+    }
+    return runLog?.runOutcome || null;
+  }
+
+  function countBossClears(events){
+    let n=0;
+    for(const ev of events){
+      if(ev.type==="BOSS_CLEARED") n++;
+    }
+    return n;
+  }
+
+  function floorBeatLine(floorNum, fEnd, fev, include){
+    const events = fev || [];
+    const matches = [];
+    const matchStartsBySeq = new Map();
+    const shopSpend = {collector:0, merchant:0, modify:0, total:0, count:0};
+    let rerolls=0, loans=[];
+    let highStakes = 0;
+    let maxTransfer = 1;
+    let first3 = [];
+    let maxKarmaGain = 0;
+    let callingProcs = 0;
+    let callingUps = 0;
+
+    for(const ev of events){
+      if(ev.type==="MATCH_START" && ev.data?.matchSeq!=null){
+        matchStartsBySeq.set(ev.data.matchSeq, ev.data);
+      }
+      if(ev.type==="MATCH_END"){
+        matches.push(ev.data || {});
+      }
+      if(ev.type==="KARMA_GAIN"){
+        maxKarmaGain = Math.max(maxKarmaGain, Number(ev.data?.amount||0));
+      }
+      if(String(ev.type||"").startsWith("CALLING_PROC_")) callingProcs++;
+      if(ev.type==="CALLING_CARD_LEVEL_UP") callingUps++;
+
+      if(ev.type==="COLLECTOR_BUY"){
+        const c = Number(ev.data?.cost||0);
+        shopSpend.collector += c; shopSpend.total += c; shopSpend.count += 1;
+      }
+      if(ev.type==="MERCHANT_BUY" || ev.type==="MERCHANT_REMOVE"){
+        const c = Number(ev.data?.cost||0);
+        shopSpend.merchant += c; shopSpend.total += c; shopSpend.count += 1;
+      }
+      if(ev.type==="MERCHANT_REROLL"){
+        const c = Number(ev.data?.cost||0);
+        rerolls++; shopSpend.merchant += c; shopSpend.total += c;
+      }
+      if(ev.type==="MODIFY_SERVICE_SELECT"){
+        const c = Number(ev.data?.cost||0);
+        shopSpend.modify += c; shopSpend.total += c; shopSpend.count += 1;
+      }
+      if(ev.type==="LOAN_TAKEN"){
+        loans.push(ev.data);
+      }
+    }
+
+    matches.sort((a,b)=>Number(a.matchSeq||0)-Number(b.matchSeq||0));
+    first3 = matches.slice(0,3).map(m=>String(m.outcome||"").toUpperCase());
+    for(const m of matches){
+      const t = String(m.type||"").toUpperCase();
+      if(t==="HIGH_STAKES") highStakes++;
+      maxTransfer = Math.max(maxTransfer, Number(m.transferMultiplier||1));
+    }
+
+    const wins = (fEnd?.wins!=null) ? fEnd.wins : matches.filter(m=>String(m.outcome).toUpperCase()==="WIN").length;
+    const losses = (fEnd?.losses!=null) ? fEnd.losses : matches.filter(m=>String(m.outcome).toUpperCase()==="LOSS").length;
+    const ties = (fEnd?.ties!=null) ? fEnd.ties : matches.filter(m=>String(m.outcome).toUpperCase()==="TIE").length;
+    const mcount = (fEnd?.matches!=null) ? fEnd.matches : matches.length;
+
+    const chipsStart = (fEnd?.chipsStart!=null) ? fEnd.chipsStart : null;
+    const chipsEnd = (fEnd?.chipsEnd!=null) ? fEnd.chipsEnd : null;
+    const chipsLow = (fEnd?.chipsLow!=null) ? fEnd.chipsLow : null;
+    const chipsHigh = (fEnd?.chipsHigh!=null) ? fEnd.chipsHigh : null;
+    const karmaGain = (fEnd?.karmaGain!=null) ? fEnd.karmaGain : null;
+    const endReason = String(fEnd?.endReason || "").toUpperCase();
+
+    const clauses = [];
+
+    // Performance tone
+    const earlyWins = first3.filter(x=>x==="WIN").length;
+    const earlyLoss = first3.filter(x=>x==="LOSS").length;
+
+    if(mcount>=3 && earlyWins>=3){
+      clauses.push("Three early wins established bankroll stability.");
+    }else if(mcount>=3 && earlyWins>=2 && earlyLoss===0){
+      clauses.push("Early wins stabilized the bankroll.");
+    }else if(losses>=Math.max(2, Math.ceil(mcount*0.35))){
+      clauses.push("Volatility dominated the floor.");
+    }else if(wins>losses){
+      clauses.push("Advantage held across standard play.");
+    }else if(wins===losses && mcount>0){
+      clauses.push("Balance held; no edge retained.");
+    }else if(mcount>0){
+      clauses.push("Edge shifted to the House.");
+    }
+
+    // Chip trajectory
+    if(chipsStart!=null && chipsEnd!=null){
+      if(chipsEnd>chipsStart){
+        clauses.push(`Chips rose ${fmtNum(chipsStart)} → ${fmtNum(chipsEnd)}.`);
+      }else if(chipsEnd<chipsStart){
+        clauses.push(`Chips fell ${fmtNum(chipsStart)} → ${fmtNum(chipsEnd)}.`);
+      }else{
+        clauses.push(`Chips held at ${fmtNum(chipsEnd)}.`);
+      }
+    }
+    if(chipsLow!=null && chipsStart!=null && chipsLow < chipsStart*0.4){
+      clauses.push(`Notable dip recorded (${fmtNum(chipsLow)}).`);
+    }else if(chipsLow!=null && chipsEnd!=null && chipsLow<=0){
+      clauses.push(`Insolvency pressure recorded (${fmtNum(chipsLow)}).`);
+    }
+
+    // High stakes
+    if(include.match && highStakes>0){
+      clauses.push(`High Stakes pressed (${highStakes}). Max transfer x${fmtNum(maxTransfer)}.`);
+    }
+
+    // Shops (only when it becomes a beat)
+    if(include.shops && shopSpend.count>=4){
+      const where = (shopSpend.collector>=shopSpend.merchant && shopSpend.collector>=shopSpend.modify) ? "Collector" :
+                    (shopSpend.merchant>=shopSpend.modify) ? "Merchant" : "Modifier service";
+      clauses.push(`Subject invested heavily at ${where}.`);
+    }else if(include.shops && rerolls>=3){
+      clauses.push(`Merchant volatility: ${rerolls} rerolls.`);
+    }
+
+    if(include.meta && loans.length){
+      const l = loans[0];
+      clauses.push(`Loan accepted (+${fmtNum(l.amount)} / -${fmtNum(l.repay)}).`);
+    }
+
+    // Karma as a beat
+    if(include.match && maxKarmaGain>=300){
+      clauses.push(`Peak Karma event recorded (+${fmtNum(maxKarmaGain)}).`);
+    }else if(include.match && karmaGain!=null && karmaGain>=1500){
+      clauses.push(`Karma surge recorded (+${fmtNum(karmaGain)}).`);
+    }
+
+    // Calling movement
+    if(include.match && callingUps>=2){
+      clauses.push(`Calling advanced ${callingUps} times.`);
+    }else if(include.match && callingProcs>=12){
+      clauses.push(`Calling procs surged (${callingProcs}).`);
+    }
+
+    // Boss preface
+    if(include.boss && endReason==="BOSS_CLEARED"){
+      clauses.push("Boss cleared; floor sealed.");
+    }else if(include.boss && endReason && endReason!=="BOSS_CLEARED" && floorNum===Number(runLog?.finalState?.floor||floorNum)){
+      // floor ended by some failure
+      clauses.push("Boss engagement unresolved.");
+    }
+
+    // Clamp clauses for brevity
+    const maxClauses = 4;
+    const out = clauses.slice(0, maxClauses).join(" ");
+    return `Floor ${floorNum}: ${out}`;
+  }
+
+  function bossLine(floorNum, events){
+    if(!include.boss) return null;
+    let cleared = null, failed = null, cm = 0;
+    for(const ev of events){
+      if(ev.type==="BOSS_CLEARED") cleared = ev.data;
+      if(ev.type==="BOSS_FIGHT_FAILED") failed = ev.data;
+      if(ev.type==="BOSS_COUNTERMEASURE") cm++;
+    }
+    if(cleared){
+      const r = Number(cleared.bossWins||0);
+      const cap = cleared.benchCapacity!=null ? `; bench capacity ${fmtNum(cleared.benchCapacity)}` : "";
+      const cmTxt = cm ? `; countermeasures ${fmtNum(cm)}` : "";
+      return `Boss ${floorNum}: Cleared in ${fmtNum(r)} round${r===1?"":"s"}${cmTxt}${cap}.`;
+    }
+    if(failed){
+      const reason = String(failed.reason||"").toUpperCase()==="TIME" ? "timer" : "failure";
+      const hp = (failed.hp!=null && failed.maxHp!=null) ? ` (HP ${fmtNum(failed.hp)}/${fmtNum(failed.maxHp)})` : "";
+      return `Boss ${floorNum}: Engagement ended by ${reason}${hp}.`;
+    }
+    return null;
+  }
+
+  function deckDisposition(){
+    const d = runLog?.finalState?.deckSummary;
+    if(!d) return null;
+    const parts = [];
+    parts.push(`${fmtNum(d.deckSize)} cards`);
+    if(d.stampedCount) parts.push(`${fmtNum(d.stampedCount)} stamped`);
+    if(d.sleevedCount) parts.push(`${fmtNum(d.sleevedCount)} sleeved`);
+    if(d.fusedCount) parts.push(`${fmtNum(d.fusedCount)} fused`);
+    return parts.join(", ");
+  }
+
+  function marginaliaLine(archetype){
+    const a = String(archetype||"").toLowerCase();
+    const banks = currentPack.marginalia || {};
+    if(a.includes("engineer")){
+      return pickOne(banks.engineer || banks.generic || [], rng);
+    }
+    if(a.includes("politico")){
+      return pickOne(banks.politico || banks.generic || [], rng);
+    }
+    return pickOne(banks.generic || [], rng);
+  }
+
+  // ========= BRIEF MODE: record skeleton (preferred) =========
+  if(mode === "brief"){
+    const events = scopeEvents();
+    const floorsEvents = groupByFloor(events);
+    const fEnd = floorEndMap(events);
+    const rs = runSummaryData(events);
+
+    const floorsReached = Number(rs?.floorsReached ?? runLog?.finalState?.floor ?? 1);
+    const bossClears = countBossClears(events);
+
+    const lines = [];
+    lines.push(`ARCHIVE RECORD — ${String(casinoName||"").toUpperCase()}`);
+    lines.push(`File: ${fileCodeFromCasino(casinoId)} / RUN ${runId}`);
+    lines.push(`Player: ${playerName}`);
+    lines.push(`Classification: ${archetypeName}${resonancePct!=null ? ` — Resonance ${fmtNum(resonancePct)}%` : ""}`);
+    lines.push("");
+    lines.push(`Summary: Subject advanced to Floor ${fmtNum(floorsReached)}. Bosses cleared: ${fmtNum(bossClears)}. ${reasonPhrase(rs?.reasonCode || runLog?.runOutcome?.reasonCode)}`);
+    lines.push("");
+
+    for(let f=1; f<=floorsReached; f++){
+      const line = floorBeatLine(f, fEnd.get(f), floorsEvents.get(f) || [], include);
+      lines.push(line);
+
+      const b = bossLine(f, floorsEvents.get(f) || []);
+      if(b) lines.push(b);
+
+      // Marginalia: 25% per floor (configurable via runLog.app)
+      const rate = Number(runLog?.app?.marginaliaRatePerFloor ?? 0.25);
+      if(rate>0 && rng() < rate){
+        const m = marginaliaLine(archetypeName);
+        if(m) lines.push(`Archivist marginalia: “${m}”`);
+      }
+
+      lines.push("");
+    }
+
+    const chipsStart = rs?.chipsStart ?? runLog?.initialState?.chips;
+    const chipsEnd = rs?.chipsEnd ?? runLog?.finalState?.chips;
+    const karmaEnd = rs?.karmaEnd ?? runLog?.finalState?.karma;
+    const calling = runLog?.finalState?.callingCard || runLog?.initialState?.callingCard;
+    const disp = [];
+    disp.push(`Disposition: Chips ${fmtNum(chipsStart)} → ${fmtNum(chipsEnd)}.`);
+    disp.push(`Karma ${fmtNum(karmaEnd)}.`);
+    if(calling) disp.push(`Calling Card ${fmtCard(calling)}.`);
+    const deck = include.deck ? deckDisposition() : null;
+    if(deck) disp.push(`Deck state at seal: ${deck}.`);
+    lines.push(disp.join(" "));
+
+    const story = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    return { story, seedStr, inserts };
+  }
+
+  // ========= FULL MODE: storylets (event-driven) =========
+  const maxLinesHard = Math.max(10, maxLines);
+  const usedCooldown = new Set();
+  const lines = [];
+
+  lines.push(pickOne(currentPack.headers, rng));
+  lines.push(`SUBJECT: ${playerName} — ${archetypeName}${resonancePct!=null ? ` (Resonance of ${fmtNum(resonancePct)}%)` : ""}`);
+  lines.push(`RUN ID: ${runId} • START: ${runLog?.startedAt || runLog?.events?.[0]?.ts || "—"}`);
+  lines.push("");
+
+  function emit(ins){
+    const bank = currentPack.storylets?.[ins.insertType];
+    if(!bank || !bank.length) return false;
+
+    const cat = categoryOf(ins.insertType);
+    if(cat==="match" && !include.match) return false;
+    if(cat==="boss"  && !include.boss) return false;
+    if(cat==="shops" && !include.shops) return false;
+    if(cat==="deck"  && !include.deck) return false;
+    if(cat==="bench" && !include.bench) return false;
+    if(cat==="meta"  && !include.meta) return false;
+
+    if(ins.importance < minImportance) return false;
+    if(usedCooldown.has(ins.cooldownKey)) return false;
+
+    usedCooldown.add(ins.cooldownKey);
+
+    const template = pickOne(bank, rng);
+    lines.push(tpl(template, { payload: ins.payload, ctx: ins.ctx, narrator }));
+    return true;
+  }
+
+  const runOpen = inserts.find(x=>x.insertType==="RUN_OPEN");
+  const calling = inserts.find(x=>x.insertType==="CALLING_CARD_SET");
+  if(runOpen) emit(runOpen);
+  if(calling) emit(calling);
+
+  const closer = inserts.slice().reverse().find(x=>x.insertType==="RUN_CLOSE");
+  const lineCap = Math.max(8, maxLinesHard - (closer ? 1 : 0));
+
+  for(const ins of inserts){
+    if(lines.length >= lineCap) break;
+    if(ins.insertType==="RUN_OPEN" || ins.insertType==="CALLING_CARD_SET" || ins.insertType==="RUN_CLOSE") continue;
+    emit(ins);
+  }
+  if(closer && !usedCooldown.has(closer.cooldownKey)) emit(closer);
+
+  return { story: lines.join("\n").trim(), seedStr, inserts };
+}
+
+/* =========================================================
+   UI Logic
+   ========================================================= */
+const $ = (id)=>document.getElementById(id);
+const STATE = { runs: [], selected: 0, lastInserts: [], lastStory: "" };
+
+function setTab(tab){
+  document.querySelectorAll(".tab").forEach(el=>{
+    el.classList.toggle("active", el.dataset.tab === tab);
+  });
+  $("tab_story").style.display = tab==="story" ? "" : "none";
+  $("tab_inserts").style.display = tab==="inserts" ? "" : "none";
+  $("tab_pack").style.display = tab==="pack" ? "" : "none";
+}
+
+document.querySelectorAll(".tab").forEach(el=>{
+  el.addEventListener("click", ()=>setTab(el.dataset.tab));
+});
+
+function updateRunSelect(){
+  $("runSelect").innerHTML = "";
+  STATE.runs.forEach((r, idx)=>{
+    const opt = document.createElement("option");
+    opt.value = String(idx);
+    opt.textContent = r.label;
+    $("runSelect").appendChild(opt);
+  });
+  $("loadedCount").textContent = `${STATE.runs.length} loaded`;
+  if(STATE.runs.length){
+    $("runSelect").value = String(STATE.selected);
+  }
+}
+
+function getSelectedRun(){
+  if(!STATE.runs.length) return null;
+  return STATE.runs[STATE.selected]?.log || null;
+}
+
+function analysisFromInputs(){
+  const enabled = $("hdrOverride").checked;
+  const name = String($("archName").value||"").trim();
+  const res = $("archRes").value;
+  const score = (res!=="" && !Number.isNaN(Number(res))) ? (Number(res)/100) : null;
+  return {
+    __overrideEnabled: enabled,
+    playstyle: {
+      primary: {
+        name: name || "Unknown",
+        score: score
+      }
+    }
+  };
+}
+
+function includeFlags(){
+  return {
+    match: $("fMatch").checked,
+    boss: $("fBoss").checked,
+    shops: $("fShops").checked,
+    deck: $("fDeck").checked,
+    bench: $("fBench").checked,
+    meta: $("fMeta").checked
+  };
+}
+
+function refreshPackEditor(){
+  $("packEditor").value = JSON.stringify(currentPack, null, 2);
+}
+
+function applyPackFromEditor(){
+  try{
+    const parsed = JSON.parse($("packEditor").value);
+    // minimal validation
+    if(!parsed || typeof parsed !== "object") throw new Error("Pack is not an object.");
+    if(!parsed.storylets || typeof parsed.storylets !== "object") throw new Error("Missing storylets object.");
+    if(!parsed.headers || !Array.isArray(parsed.headers)) throw new Error("Missing headers array.");
+    currentPack = parsed;
+    toast("Pack applied.");
+  }catch(err){
+    alert("Pack JSON error:\\n" + err.message);
+  }
+}
+
+function toast(msg){
+  const pill = $("runMetaPill");
+  const old = pill.textContent;
+  pill.textContent = msg;
+  pill.style.borderColor = "rgba(93,255,154,.35)";
+  pill.style.background = "rgba(93,255,154,.10)";
+  setTimeout(()=>{
+    pill.textContent = old;
+    pill.style.borderColor = "";
+    pill.style.background = "";
+  }, 1400);
+}
+
+function render(){
+  const run = getSelectedRun();
+  if(!run){
+    $("storyOut").textContent = "Load a run log to begin.";
+    $("runMetaPill").textContent = "No run loaded";
+    $("seedPill").textContent = "Seed: —";
+    $("pillPlayer").textContent = "Player: —";
+    $("pillLines").textContent = "Lines: —";
+    $("insertRows").innerHTML = "";
+    STATE.lastInserts = [];
+    STATE.lastStory = "";
+    return;
+  }
+
+  const mode = $("mode").value;
+  const maxLines = Number($("maxLines").value || (mode==="brief"?28:140));
+  const minImportance = Number($("minImp").value || 70);
+  const seedOverride = $("seedOverride").value;
+
+  const playerName = run?.player?.name || run?.events?.[0]?.ctx?.playerName || "Unknown";
+  $("pillPlayer").textContent = `Player: ${playerName}`;
+
+  const res = renderStoryV2(run, analysisFromInputs(), {
+    mode, maxLines, minImportance, seedOverride, include: includeFlags(), includeDebug: $("includeDebug").checked
+  });
+
+  $("storyOut").textContent = res.story;
+  $("pillLines").textContent = `Lines: ${res.story.split("\\n").filter(Boolean).length}`;
+  $("seedPill").textContent = `Seed: ${res.seedStr}`;
+
+  const runId = run?.runId || run?.sessionId || "—";
+  $("runMetaPill").textContent = `${runId} • events: ${fmtNum(run?.events?.length || 0)}`;
+
+  STATE.lastInserts = res.inserts;
+  STATE.lastStory = res.story;
+
+  // inserts table
+  renderInsertTable();
+}
+
+function renderInsertTable(){
+  const tf = String($("typeFilter").value || "").trim().toUpperCase();
+  const maxRows = Number($("maxRows").value || 500);
+  const rows = [];
+
+  for(const ins of (STATE.lastInserts || [])){
+    if(tf && !String(ins.insertType).toUpperCase().includes(tf)) continue;
+    rows.push(ins);
+    if(rows.length >= maxRows) break;
+  }
+
+  $("insertRows").innerHTML = rows.map(ins=>{
+    const p = JSON.stringify(ins.payload || {});
+    return `<tr>
+      <td class="mono">${ins.order ?? ""}</td>
+      <td class="mono">${String(ins.ts||"").slice(11,19)}</td>
+      <td class="mono">${ins.floor ?? ""}</td>
+      <td class="mono">${ins.matchSeq ?? ""}</td>
+      <td><span class="chip cyan">${ins.insertType}</span></td>
+      <td class="mono">${ins.importance ?? ""}</td>
+      <td class="mono">${ins.cooldownKey || ""}</td>
+      <td class="mono" style="max-width:480px">${p}</td>
+    </tr>`;
+  }).join("");
+}
+
+/* ---------- File loading ---------- */
+async function loadFiles(fileList){
+  const files = Array.from(fileList || []);
+  if(!files.length) return;
+
+  for(const f of files){
+    try{
+      const txt = await f.text();
+      const log = JSON.parse(txt);
+      const label = (log?.runId || log?.sessionId || f.name || "run").toString();
+      STATE.runs.push({ label, fileName: f.name, log });
+    }catch(err){
+      console.warn("Failed to load", f?.name, err);
+      alert(`Failed to parse ${f?.name}: ${err.message}`);
+    }
+  }
+
+  // sort by label for convenience
+  STATE.runs.sort((a,b)=>String(a.label).localeCompare(String(b.label)));
+  STATE.selected = Math.min(STATE.selected, Math.max(0, STATE.runs.length-1));
+  updateRunSelect();
+  if(STATE.runs.length) $("runSelect").value = String(STATE.selected);
+
+  // auto-fill player name into archetype inputs? (no)
+  render();
+}
+
+/* ---------- Downloads ---------- */
+function downloadText(filename, text){
+  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function downloadJSON(filename, obj){
+  downloadText(filename, JSON.stringify(obj, null, 2));
+}
+function toCSV(inserts){
+  const cols = ["order","ts","floor","matchSeq","insertType","importance","cooldownKey","payload"];
+  const esc = (v)=>{
+    const s = (v==null) ? "" : String(v);
+    if(/[",\\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+    return s;
+  };
+  const lines = [cols.join(",")];
+  for(const ins of (inserts||[])){
+    const row = [
+      ins.order ?? "",
+      ins.ts ?? "",
+      ins.floor ?? "",
+      ins.matchSeq ?? "",
+      ins.insertType ?? "",
+      ins.importance ?? "",
+      ins.cooldownKey ?? "",
+      JSON.stringify(ins.payload || {})
+    ].map(esc);
+    lines.push(row.join(","));
+  }
+  return lines.join("\\n");
+}
+
+/* ---------- Event wiring ---------- */
+$("filePicker").addEventListener("change", (e)=>loadFiles(e.target.files));
+
+$("dropZone").addEventListener("dragover", (e)=>{
+  e.preventDefault();
+  $("dropZone").style.borderColor = "rgba(82,224,255,.55)";
+});
+$("dropZone").addEventListener("dragleave", (e)=>{
+  e.preventDefault();
+  $("dropZone").style.borderColor = "";
+});
+$("dropZone").addEventListener("drop", (e)=>{
+  e.preventDefault();
+  $("dropZone").style.borderColor = "";
+  loadFiles(e.dataTransfer.files);
+});
+
+$("runSelect").addEventListener("change", ()=>{
+  STATE.selected = Number($("runSelect").value || 0);
+  render();
+});
+
+["mode","maxLines","seedOverride","hdrOverride","archName","archRes","minImp","fMatch","fBoss","fShops","fDeck","fBench","fMeta","includeDebug"].forEach(id=>{
+  $(id).addEventListener("input", ()=>{
+    if(id==="minImp") $("minImpVal").textContent = String($("minImp").value);
+    render();
+  });
+});
+
+// Header override toggle
+function syncHeaderOverrideUI(){
+  const on = $("hdrOverride").checked;
+  $("archName").disabled = !on;
+  $("archRes").disabled = !on;
+  if(!on){
+    $("archName").value = "";
+    $("archRes").value = "";
+  }
+}
+$("hdrOverride").addEventListener("change", ()=>{
+  syncHeaderOverrideUI();
+  render();
+});
+syncHeaderOverrideUI();
+
+
+$("btnGenerate").addEventListener("click", render);
+
+$("btnCopy").addEventListener("click", async ()=>{
+  try{
+    await navigator.clipboard.writeText(STATE.lastStory || "");
+    toast("Copied story.");
+  }catch{
+    alert("Clipboard copy failed (browser permissions).");
+  }
+});
+
+$("btnDownloadStory").addEventListener("click", ()=>{
+  const run = getSelectedRun();
+  if(!run) return;
+  const runId = run?.runId || run?.sessionId || "run";
+  downloadText(`p63_story_${runId}.txt`, STATE.lastStory || "");
+});
+
+$("btnDownloadCSV").addEventListener("click", ()=>{
+  const run = getSelectedRun();
+  if(!run) return;
+  const runId = run?.runId || run?.sessionId || "run";
+  downloadText(`p63_inserts_${runId}.csv`, toCSV(STATE.lastInserts || []));
+});
+
+$("btnClear").addEventListener("click", ()=>{
+  STATE.runs = [];
+  STATE.selected = 0;
+  updateRunSelect();
+  render();
+});
+
+$("btnStoryBrief").addEventListener("click", ()=>{
+  $("mode").value = "brief";
+  $("maxLines").value = 24;
+  render();
+});
+$("btnStoryFull").addEventListener("click", ()=>{
+  $("mode").value = "full";
+  $("maxLines").value = 140;
+  $("minImp").value = 55;
+  $("minImpVal").textContent = "55";
+  render();
+});
+
+$("typeFilter").addEventListener("input", renderInsertTable);
+$("maxRows").addEventListener("input", renderInsertTable);
+
+/* Pack editor */
+$("btnPackReset").addEventListener("click", ()=>{
+  currentPack = JSON.parse(JSON.stringify(BASE_PACK));
+  refreshPackEditor();
+  toast("Pack reset.");
+});
+$("btnPackApply").addEventListener("click", ()=>{
+  applyPackFromEditor();
+  render();
+});
+$("btnPackDownload").addEventListener("click", ()=>{
+  downloadJSON("p63_story_pack_grand.json", currentPack);
+});
+
+/* init */
+updateRunSelect();
+$("minImpVal").textContent = String($("minImp").value);
+refreshPackEditor();
+render();
+</script>
+</body>
+</html>
