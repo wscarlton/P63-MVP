@@ -324,7 +324,40 @@
         <div id="dashOverview"></div>
         <div class="divider"></div>
         <div id="dashHeader"></div>
+        <details id="settingsSnapshot" style="margin-top:10px">
+          <summary class="tiny muted" style="cursor:pointer">Settings Snapshot</summary>
+          <div id="settingsSnapshotBody" class="hint" style="margin-top:8px"></div>
+        </details>
         <div id="dashWarnings" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <div class="grid cols2" style="margin-top:14px">
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Playstyle Fingerprint</div>
+            <div class="cardSub">Radar + archetype classification with transparent drivers.</div>
+          </div>
+        </div>
+        <div class="cardBody">
+          <canvas id="chartFingerprint"></canvas>
+          <div id="fingerprintMeta" style="margin-top:10px"></div>
+          <div id="fingerprintNotes" class="tiny muted" style="margin-top:8px"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Progression: Karma / Calling / Tokens</div>
+            <div class="cardSub">Karma + calling rank + tokens at match start (chips overlay optional).</div>
+          </div>
+        </div>
+        <div class="cardBody">
+          <canvas id="chartProgression"></canvas>
+          <div class="tiny muted" id="progressionCaption" style="margin-top:8px"></div>
+        </div>
       </div>
     </div>
 
@@ -381,6 +414,20 @@
         <div class="cardBody">
           <canvas id="chartDeck"></canvas>
           <div class="tiny muted" style="margin-top:8px">Solid: deckSize • Dashed: modCount</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardHeader">
+          <div>
+            <div class="cardTitle">Deck Identity (End-of-run)</div>
+            <div class="cardSub">Suit and rank distribution + modifier density.</div>
+          </div>
+        </div>
+        <div class="cardBody">
+          <canvas id="chartDeckSuit"></canvas>
+          <canvas id="chartDeckRank" style="margin-top:10px"></canvas>
+          <div class="tiny muted" id="deckIdentityMeta" style="margin-top:8px"></div>
         </div>
       </div>
 
@@ -448,28 +495,40 @@
       <div class="card">
         <div class="cardHeader">
           <div>
-            <div class="cardTitle">Drilldown Tables</div>
-            <div class="cardSub">Spot-check correctness and edge cases quickly.</div>
-          </div>
-          <div class="row">
-            <button class="btn small" id="btnExportMatchesCSV">Export Matches CSV</button>
-            <button class="btn small" id="btnExportLanesCSV">Export Lanes CSV</button>
+            <div class="cardTitle">Key Moments</div>
+            <div class="cardSub">Notable swings, firsts, and boss outcomes.</div>
           </div>
         </div>
         <div class="cardBody">
-          <details open>
-            <summary class="tiny muted" style="cursor:pointer">Match table</summary>
-            <div class="tableWrap" style="margin-top:10px">
-              <table id="matchTable"></table>
-            </div>
-          </details>
-          <details style="margin-top:10px">
-            <summary class="tiny muted" style="cursor:pointer">Lane table</summary>
-            <div class="tableWrap" style="margin-top:10px">
-              <table id="laneTable"></table>
-            </div>
-          </details>
+          <div id="keyMomentsList" class="tiny"></div>
         </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="cardHeader">
+        <div>
+          <div class="cardTitle">Drilldown Tables</div>
+          <div class="cardSub">Spot-check correctness and edge cases quickly.</div>
+        </div>
+        <div class="row">
+          <button class="btn small" id="btnExportMatchesCSV">Export Matches CSV</button>
+          <button class="btn small" id="btnExportLanesCSV">Export Lanes CSV</button>
+        </div>
+      </div>
+      <div class="cardBody">
+        <details open>
+          <summary class="tiny muted" style="cursor:pointer">Match table</summary>
+          <div class="tableWrap" style="margin-top:10px">
+            <table id="matchTable"></table>
+          </div>
+        </details>
+        <details style="margin-top:10px">
+          <summary class="tiny muted" style="cursor:pointer">Lane table</summary>
+          <div class="tableWrap" style="margin-top:10px">
+            <table id="laneTable"></table>
+          </div>
+        </details>
       </div>
     </div>
   </section>
@@ -496,6 +555,12 @@
           <div class="field">
             <label>Search (notes / filename / session)</label>
             <input id="filterSearch" placeholder="type to filter..." />
+          </div>
+          <div class="field">
+            <label>Archetype</label>
+            <select id="filterArchetype">
+              <option value="all">All archetypes</option>
+            </select>
           </div>
         </div>
 
@@ -931,15 +996,23 @@ function deriveRunId(log, filename){
    Analysis core
    ========================= */
 
-function categorizeSink(type){
+function categorizeSink(type, row){
   const t = String(type||"").toUpperCase();
   if(t.includes("MERCHANT_REMOVE")) return "Merchant removals";
   if(t.includes("MERCHANT_BUY")) return "Merchant buys";
   if(t.includes("MERCHANT_REROLL")) return "Merchant rerolls";
   if(t.includes("COCKTAIL")) return "Cocktails";
   if(t.includes("LOAN")) return "Loans/interest";
-  if(t.includes("BUYIN")) return "Buy-ins";
+  if(t.includes("COLLECTOR_BUY")) return "Collector";
+  if(t.includes("MODIFY_SERVICE_SELECT") || t.includes("MODIFY_APPLY")) return "Modify";
+  if(t.includes("AUCTION_BID")) return "Auctions";
   if(t.includes("REST")) return "Rest/Heals";
+  if(t.includes("MATCH_START")) return "Buy-ins";
+  if(t.includes("MATCH_END")){
+    const rake = row?.data?.rake;
+    if(typeof rake==="number" && row?.deltaChips<0) return "Rake/House";
+  }
+  if(t.includes("BUYIN")) return "Buy-ins";
   return "Other";
 }
 function aggregateSinks(sinks){
@@ -963,6 +1036,29 @@ function grabDeckSnapshot(d){
   if(d.deckSnapshot && typeof d.deckSnapshot==="object") return d.deckSnapshot;
   return null;
 }
+function buildDeckTimeline(deckHistory){
+  if(!Array.isArray(deckHistory) || !deckHistory.length) return [];
+  return deckHistory.map((entry, idx)=>{
+    const s = (entry && typeof entry.summary==="object") ? entry.summary : {};
+    return {
+      idx,
+      ts: entry.ts ?? null,
+      floor: entry.floor ?? null,
+      chips: entry.chips ?? null,
+      karma: entry.karma ?? null,
+      callingRankValue: entry.callingRankValue ?? null,
+      reason: entry.reason ?? null,
+      deckSize: s.deckSize ?? entry.deckSize ?? null,
+      modCount: s.modCount ?? entry.modCount ?? null,
+      fusedCount: s.fusedCount ?? entry.fusedCount ?? null,
+      sleevedCount: s.sleevedCount ?? entry.sleevedCount ?? null,
+      bySuit: s.bySuit ?? null,
+      byRank: s.byRank ?? null,
+      stampsByRank: s.stampsByRank ?? null,
+      summary: s
+    };
+  });
+}
 function findRunEnd(eventRows){
   // authoritative: last event matching an end-ish type
   for(let i=eventRows.length-1;i>=0;i--){
@@ -984,6 +1080,23 @@ function findRunEnd(eventRows){
     }
   }
   return null;
+}
+function getRunOutcomeFromTopLevel(log){
+  const ro = log?.runOutcome;
+  if(!ro || typeof ro!=="object") return null;
+  const result = normalizeOutcome(ro.result || ro.outcome || ro.status);
+  if(!result) return null;
+  return {
+    source:"LOG",
+    eventType: ro.eventType || ro.type || null,
+    result,
+    reason: ro.reason || ro.cause || null,
+    floor: ro.floor ?? null,
+    chips: ro.chips ?? null,
+    tableType: ro.tableType || ro.tileType || ro.type || null,
+    matchIndex: ro.matchSeq ?? ro.matchIndex ?? null,
+    message: ro.message || null
+  };
 }
 function inferRunOutcome(summary, matches){
   // fallback inference when no RUN_END
@@ -1099,6 +1212,7 @@ function analyzeLog(log){
   const matches = [];
   const lanes = [];
   const deckPoints = [];
+  const deckTimeline = buildDeckTimeline(log.deckHistory);
   const sinks = [];
   const actionsByMatch = new Map();
 
@@ -1119,7 +1233,7 @@ function analyzeLog(log){
       });
     }
     if(r.deltaChips < 0){
-      const cat = categorizeSink(r.type);
+      const cat = categorizeSink(r.type, r);
       sinks.push({eventId:r.id, idx:r.idx, floor:r.floor, type:r.type, category:cat, delta:r.deltaChips});
     }
     if(r.type==="ACTION_USED" && r.matchIndex){
@@ -1166,7 +1280,18 @@ function analyzeLog(log){
         buyIn: d.buyIn ?? null,
         chipsAfterBuyIn: r.chips ?? null,
         deckSizeStart: ds.deckSize ?? null,
-        modCountStart: ds.modCount ?? null
+        modCountStart: ds.modCount ?? null,
+        tokensTotal: d.tokensTotal ?? d.tokens ?? null,
+        baseTokens: d.baseTokens ?? null,
+        bankedTokensUsed: d.bankedTokensUsed ?? null,
+        bankedTokensRemaining: d.bankedTokensRemaining ?? null,
+        dealerExtraMods: d.dealerExtraMods ?? null,
+        transferMultiplierMin: d.transferMultiplierMin ?? null,
+        transferMultiplierMax: d.transferMultiplierMax ?? null,
+        callingProcChance: d.callingProcChance ?? null,
+        edgeDelta: d.edgeDelta ?? null,
+        affinity: d.affinity ?? null,
+        npcCallingCard: d.npcCallingCard ?? null
       };
     } else if(r.type==="MATCH_END" && current && r.matchIndex===current.matchIndex){
       const d = r.data||{};
@@ -1191,6 +1316,11 @@ function analyzeLog(log){
         payout: payout,
         bonusChips: bonusChips,
         transferNet: transferNet,
+        transferMultiplier: d.transferMultiplier ?? null,
+        rake: d.rake ?? null,
+        rakeRate: d.rakeRate ?? null,
+        karmaGained: d.karmaGained ?? null,
+        exhaustion: d.exhaustion ?? null,
         matchProfit: matchProfit,
         chipsAfter: r.chips ?? null,
         playerWins: d.playerWins ?? null,
@@ -1203,7 +1333,18 @@ function analyzeLog(log){
         modCountStart: current.modCountStart,
         deckSizeEnd: ds.deckSize ?? null,
         modCountEnd: ds.modCount ?? null,
-        actionsUsed: actionsUsed
+        actionsUsed: actionsUsed,
+        tokensTotal: current.tokensTotal,
+        baseTokens: current.baseTokens,
+        bankedTokensUsed: current.bankedTokensUsed,
+        bankedTokensRemaining: current.bankedTokensRemaining,
+        dealerExtraMods: current.dealerExtraMods,
+        transferMultiplierMin: current.transferMultiplierMin,
+        transferMultiplierMax: current.transferMultiplierMax,
+        callingProcChance: current.callingProcChance,
+        edgeDelta: current.edgeDelta,
+        affinity: current.affinity,
+        npcCallingCard: current.npcCallingCard
       };
 
       matches.push(matchRow);
@@ -1288,18 +1429,21 @@ function analyzeLog(log){
   const dealer21Rate = laneN ? (lanes.filter(l=>l.dealerTotal===21).length / laneN) : null;
   const avgPlayerTotal = avg(lanes.map(l=>numOrNull(l.playerTotal)));
   const avgDealerTotal = avg(lanes.map(l=>numOrNull(l.dealerTotal)));
+  const avgPlayerTotalNoBust = avg(lanes.filter(l=>!l.playerBust).map(l=>numOrNull(l.playerTotal)));
+  const avgDealerTotalNoBust = avg(lanes.filter(l=>!l.dealerBust).map(l=>numOrNull(l.dealerTotal)));
 
-  const deckStart = deckPoints.length ? deckPoints[0] : null;
-  const deckEnd = deckPoints.length ? deckPoints[deckPoints.length-1] : null;
+  const deckSeries = deckTimeline.length ? deckTimeline : deckPoints;
+  const deckStart = deckSeries.length ? deckSeries[0] : null;
+  const deckEnd = deckSeries.length ? deckSeries[deckSeries.length-1] : null;
   const modDensityEnd = (deckEnd && typeof deckEnd.modCount==="number" && typeof deckEnd.deckSize==="number" && deckEnd.deckSize>0)
     ? deckEnd.modCount / deckEnd.deckSize : null;
 
   // Run end semantics
   const runEndEvent = findRunEnd(eventRows);
-  const runOutcome = runEndEvent ? runEndEvent : inferRunOutcome({endChips, floorsReached}, matches);
+  const runOutcome = getRunOutcomeFromTopLevel(log) ?? runEndEvent ?? inferRunOutcome({endChips, floorsReached}, matches);
 
   // Per-floor summary
-  const floorSummary = buildFloorSummary(matches, lanes, deckPoints, sinks);
+  const floorSummary = buildFloorSummary(matches, lanes, deckSeries, sinks);
 
   // Keep marker ids for charts
   const runMarkers = {
@@ -1307,6 +1451,22 @@ function analyzeLog(log){
     merchantEnterId: firstMerchantEnterId,
     bossMatchStartIds
   };
+
+  const settingsSnapshot = {
+    revealTotalsOnClose: log?.settingsLatest?.revealTotalsOnClose ?? log?.settingsAtStart?.revealTotalsOnClose ?? null,
+    opponentDifficulty: log?.settingsLatest?.opponentDifficulty ?? log?.settingsAtStart?.opponentDifficulty ?? null,
+    rakeMode: log?.settingsLatest?.rakeMode ?? log?.settingsAtStart?.rakeMode ?? null,
+    benchHardCap: log?.settingsLatest?.benchHardCap ?? log?.settingsAtStart?.benchHardCap ?? null,
+    rulesContext: log?.rulesContext ?? null
+  };
+  const startState = log?.initialState ?? {};
+  const endState = log?.finalState ?? {};
+  const startKarma = startState.karma ?? deckSeries[0]?.karma ?? null;
+  const endKarma = endState.karma ?? deckSeries[deckSeries.length-1]?.karma ?? null;
+  const startCallingSuit = startState.callingCardSuit ?? startState.callingSuit ?? null;
+  const endCallingSuit = endState.callingCardSuit ?? endState.callingSuit ?? null;
+  const startCallingRank = startState.callingCardRank ?? startState.callingRank ?? null;
+  const endCallingRank = endState.callingCardRank ?? endState.callingRank ?? null;
 
   const summary = {
     runId: deriveRunId(log, ""),
@@ -1332,6 +1492,8 @@ function analyzeLog(log){
     dealer21Rate,
     avgPlayerTotal,
     avgDealerTotal,
+    avgPlayerTotalNoBust,
+    avgDealerTotalNoBust,
     deckSizeStart: deckStart?.deckSize ?? null,
     deckSizeEnd: deckEnd?.deckSize ?? null,
     modCountEnd: deckEnd?.modCount ?? null,
@@ -1339,6 +1501,13 @@ function analyzeLog(log){
     runOutcome,
     biggestDrop,
     markers: runMarkers,
+    settings: settingsSnapshot,
+    startKarma,
+    endKarma,
+    startCallingSuit,
+    startCallingRank,
+    endCallingSuit,
+    endCallingRank,
     warnings
   };
 
@@ -1351,10 +1520,13 @@ function analyzeLog(log){
     })),
     matches,
     lanes,
-    deck: deckPoints,
+    deck: deckSeries,
+    deckTimeline,
     sinks,
     floorSummary
   };
+
+  summary.playstyle = computePlaystyle(summary, derived);
 
   return {summary, derived};
 }
@@ -1403,6 +1575,10 @@ function buildFloorSummary(matches, lanes, deckPoints, sinks){
     const rate21 = lanesN ? (lF.filter(l=>l.playerTotal===21).length / lanesN) : null;
     const avgPT = avg(lF.map(l=>numOrNull(l.playerTotal)));
     const avgDT = avg(lF.map(l=>numOrNull(l.dealerTotal)));
+    const avgPTNoBust = avg(lF.filter(l=>!l.playerBust).map(l=>numOrNull(l.playerTotal)));
+    const avgDTNoBust = avg(lF.filter(l=>!l.dealerBust).map(l=>numOrNull(l.dealerTotal)));
+    const bustTotals = lF.filter(l=>l.playerBust && typeof l.playerTotal==="number").map(l=>l.playerTotal);
+    const bustTotalAvg = avg(bustTotals);
     const swings = lF
       .filter(l=>typeof l.playerTotal==="number" && typeof l.dealerTotal==="number" && !l.playerBust && !l.dealerBust)
       .map(l=>l.playerTotal - l.dealerTotal);
@@ -1445,6 +1621,9 @@ function buildFloorSummary(matches, lanes, deckPoints, sinks){
       rate21,
       avgPlayerTotal: avgPT,
       avgDealerTotal: avgDT,
+      avgPlayerTotalNoBust: avgPTNoBust,
+      avgDealerTotalNoBust: avgDTNoBust,
+      bustTotalAvg,
       avgSwing,
       deckStart,
       deckEnd,
@@ -1457,6 +1636,253 @@ function buildFloorSummary(matches, lanes, deckPoints, sinks){
   }
 
   return rows;
+}
+
+function clamp01(v){ return Math.max(0, Math.min(1, v)); }
+function normRange(v, lo, hi){
+  if(v===null || v===undefined || Number.isNaN(v)) return 0;
+  if(hi===lo) return 0;
+  return clamp01((v - lo) / (hi - lo));
+}
+function countEvents(events, matcher){
+  if(!events || !events.length) return 0;
+  if(typeof matcher === "function") return events.filter(matcher).length;
+  const m = String(matcher||"");
+  return events.filter(e=>String(e.type||"").toUpperCase().includes(m)).length;
+}
+function herfindahl(obj){
+  if(!obj || typeof obj!=="object") return null;
+  const values = Object.values(obj).map(v=>Number(v)).filter(v=>!Number.isNaN(v));
+  const total = values.reduce((a,b)=>a+b,0);
+  if(!total) return null;
+  return values.reduce((a,v)=> a + Math.pow(v/total,2), 0);
+}
+
+function computePlaystyle(summary, derived){
+  const matches = derived.matches || [];
+  const events = derived.events || [];
+  const lanes = derived.lanes || [];
+  const sinks = derived.sinks || [];
+  const deckTimeline = derived.deckTimeline || [];
+
+  const matchesN = Math.max(1, summary.matches || matches.length || 1);
+
+  const highTables = matches.filter(m=>String(m.tableType||"").toUpperCase()==="HIGH_STAKES").length;
+  const bossTables = matches.filter(m=>String(m.tableType||"").toUpperCase()==="BOSS").length;
+  const tableIntensity = (0.65*highTables + 1.0*bossTables) / matchesN;
+
+  const avgTransferMult = avg(matches.map(m=>numOrNull(m.transferMultiplier)));
+  const highMultRate = matches.length ? matches.filter(m=>num(m.transferMultiplier)>=4).length / matches.length : 0;
+
+  const tempoApplied = countEvents(events, "TEMPO_STRIKE_APPLIED");
+  const tempoBlocked = countEvents(events, "TEMPO_STRIKE_BLOCKED");
+  const tempoApplyRate = (tempoApplied + tempoBlocked) ? tempoApplied / (tempoApplied + tempoBlocked) : 0;
+
+  const tokensSpent = countEvents(events, "TOKEN_SPENT");
+  const actionsUsed = countEvents(events, "ACTION_USED");
+  const tokensPerMatch = tokensSpent / matchesN;
+  const actionsPerMatch = actionsUsed / matchesN;
+
+  const callingProcs = events.filter(e=>String(e.type||"").startsWith("CALLING_PROC_")).length;
+  const karmaGainEvents = countEvents(events, "KARMA_GAIN");
+  const callingPerMatch = callingProcs / matchesN;
+
+  const deckEdits = deckTimeline.length ? Math.max(0, deckTimeline.length-1) : 0;
+  const deckEditsPerMatch = deckEdits / matchesN;
+  const editReasons = deckTimeline.map(d=>String(d.reason||"").toUpperCase());
+  const stampCount = editReasons.filter(r=>r==="STAMP_APPLY").length;
+  const sleeveCount = editReasons.filter(r=>r==="SLEEVE_APPLY").length;
+  const fuseCount = editReasons.filter(r=>r==="REWARD_FUSE").length;
+  const duplicateCount = editReasons.filter(r=>r==="REWARD_DUPLICATE").length;
+
+  const sinkAgg = summary.sinkAgg || {};
+  const totalSpend = summary.totalSpend || 0;
+  const merchantSpend = Math.abs((sinkAgg["Merchant removals"]||0) + (sinkAgg["Merchant buys"]||0) + (sinkAgg["Merchant rerolls"]||0));
+  const collectorSpend = Math.abs(sinkAgg["Collector"]||0);
+  const modifySpend = Math.abs(sinkAgg["Modify"]||0);
+  const surgerySpendShare = totalSpend ? (merchantSpend + collectorSpend + modifySpend) / totalSpend : 0;
+
+  const bustRate = summary.playerBustRate ?? (lanes.length ? lanes.filter(l=>l.playerBust).length / lanes.length : 0);
+  const controlTotals = summary.avgPlayerTotalNoBust ?? summary.avgPlayerTotal ?? null;
+
+  const deckEnd = deckTimeline.length ? deckTimeline[deckTimeline.length-1] : null;
+  const suitHhi = herfindahl(deckEnd?.bySuit ?? deckEnd?.summary?.bySuit);
+  const modDensity = summary.modDensityEnd ?? null;
+
+  const risk = 100 * (
+    0.45*clamp01(tableIntensity) +
+    0.35*normRange(avgTransferMult, 1, 5) +
+    0.20*normRange(summary.profitStdDev, 0, 200)
+  );
+  const pressure = 100 * (
+    0.55*normRange(tempoApplied / matchesN, 0, 6) +
+    0.25*normRange(actionsPerMatch, 0, 2) +
+    0.20*normRange(tempoApplyRate, 0.2, 0.6)
+  );
+  const control = 100 * (
+    0.5*(1 - normRange(bustRate, 0, 0.35)) +
+    0.25*normRange(controlTotals, 17, 20) +
+    0.25*normRange(modDensity, 0, 0.25)
+  );
+  const surgery = 100 * (
+    0.5*normRange(deckEditsPerMatch, 0, 1.5) +
+    0.25*normRange(surgerySpendShare, 0, 0.6) +
+    0.25*normRange(merchantSpend / Math.max(1, totalSpend), 0, 0.6)
+  );
+  const engine = 100 * (
+    0.45*normRange(stampCount + sleeveCount, 0, 6) +
+    0.35*normRange(fuseCount + duplicateCount, 0, 6) +
+    0.20*normRange(summary.player21Rate, 0.15, 0.65)
+  );
+  const karma = 100 * (
+    0.6*normRange(callingPerMatch, 0, 3) +
+    0.4*normRange(karmaGainEvents / matchesN, 0, 4)
+  );
+  const actions = 100 * (
+    0.55*normRange(tokensPerMatch, 0, 2) +
+    0.45*normRange(actionsPerMatch, 0, 1.5)
+  );
+  const economy = 100 * (
+    0.6*normRange((summary.chipsLow||0) / Math.max(1, summary.startChips||1), 0.2, 0.8) +
+    0.4*(1 - normRange(totalSpend / Math.max(1, Math.abs(summary.matchProfitTotal)||1), 0.5, 2))
+  );
+
+  const axes = { risk, pressure, control, surgery, engine, karma, actions, economy };
+  const axes01 = Object.fromEntries(Object.entries(axes).map(([k,v])=>[k, clamp01(v/100)]));
+
+  const archetypes = [
+    {name:"The Surgeon", vec:{surgery:0.85, control:0.65, engine:0.4, economy:0.4}},
+    {name:"The Saboteur", vec:{pressure:0.85, actions:0.7, risk:0.5}},
+    {name:"The High Roller", vec:{risk:0.9, economy:0.2, control:0.2}},
+    {name:"The Engine Builder", vec:{engine:0.9, control:0.45, surgery:0.35}},
+    {name:"The Karma Chaser", vec:{karma:0.9, engine:0.5, control:0.35}},
+    {name:"The Banker", vec:{economy:0.9, control:0.7, risk:0.1}}
+  ];
+
+  function cosineScore(vec){
+    const keys = Object.keys(axes01);
+    const a = keys.map(k=>axes01[k] ?? 0);
+    const b = keys.map(k=>vec[k] ?? 0);
+    const dot = a.reduce((s,v,i)=>s + v*b[i], 0);
+    const magA = Math.sqrt(a.reduce((s,v)=>s+v*v, 0)) || 1;
+    const magB = Math.sqrt(b.reduce((s,v)=>s+v*v, 0)) || 1;
+    return dot / (magA * magB);
+  }
+
+  const scored = archetypes.map(a=>({name:a.name, score: cosineScore(a.vec)})).sort((a,b)=>b.score-a.score);
+  const primary = scored[0] || {name:"Unknown", score:0};
+  const secondary = scored[1] || {name:"None", score:0};
+  const confidence = clamp01((primary.score - secondary.score) / 0.2);
+
+  const drivers = [];
+  if(callingProcs){
+    drivers.push(`Calling procs: ${callingProcs} (~${(callingPerMatch).toFixed(2)}/match).`);
+  }
+  if(deckEdits){
+    drivers.push(`Deck edits: ${deckEdits} (~${deckEditsPerMatch.toFixed(2)}/match).`);
+  }
+  if(typeof bustRate==="number"){
+    drivers.push(`Bust rate: ${pct(bustRate)} • 21 rate: ${pct(summary.player21Rate)}.`);
+  }
+  if(highTables + bossTables){
+    drivers.push(`High-stakes + boss share: ${Math.round(((highTables+bossTables)/matchesN)*100)}%.`);
+  }
+  if(tokensSpent){
+    drivers.push(`Tokens spent: ${tokensSpent} (~${tokensPerMatch.toFixed(2)}/match).`);
+  }
+
+  const notes = generatePlayNotes({
+    matchesN,
+    tableIntensity,
+    avgTransferMult,
+    highMultRate,
+    bustRate,
+    deckEditsPerMatch,
+    suitHhi,
+    modDensity,
+    tokensPerMatch,
+    callingPerMatch,
+    tempoAppliedPerMatch: tempoApplied / matchesN,
+    tempoApplyRate
+  });
+
+  const features = {
+    tableIntensity,
+    nonStandardTableRate: (highTables + bossTables) / matchesN,
+    bossRate: bossTables / matchesN,
+    avgTransferMult,
+    highMultRate,
+    bustRate,
+    tokensPerMatch,
+    actionsPerMatch,
+    deckEditsPerMatch,
+    modDensityEnd: modDensity,
+    suitHerfindahlEnd: suitHhi,
+    callingPerMatch,
+    tempoAppliedPerMatch: tempoApplied / matchesN,
+    tempoApplyRate
+  };
+
+  const vector = [
+    features.tableIntensity,
+    features.nonStandardTableRate,
+    features.bossRate,
+    features.avgTransferMult,
+    features.highMultRate,
+    features.bustRate,
+    features.tokensPerMatch,
+    features.actionsPerMatch,
+    features.deckEditsPerMatch,
+    features.modDensityEnd,
+    features.suitHerfindahlEnd,
+    features.callingPerMatch,
+    features.tempoAppliedPerMatch,
+    features.tempoApplyRate
+  ];
+
+  return {
+    axes,
+    primary,
+    secondary: secondary.score >= 0.55 ? secondary : {name:"None", score: secondary.score},
+    confidence,
+    drivers,
+    notes,
+    features,
+    vector,
+    archetypeScores: scored
+  };
+}
+
+function generatePlayNotes(metrics){
+  const notes = [];
+  if(metrics.tableIntensity >= 0.55){
+    notes.push({kind:"obs", text:"Preferred high-stakes routing (non-standard tables were frequent)."});
+  }
+  if(metrics.avgTransferMult >= 3.8 || metrics.highMultRate >= 0.4){
+    notes.push({kind:"obs", text:"Leaned into big transfer bets; expects to win by margin."});
+  }
+  if(metrics.bustRate !== null && metrics.bustRate <= 0.06){
+    notes.push({kind:"good", text:"Low bust profile; closes lanes conservatively."});
+  }
+  if(metrics.bustRate !== null && metrics.bustRate >= 0.18){
+    notes.push({kind:"warn", text:"High bust profile; likely pushing totals or overextending."});
+  }
+  if(metrics.deckEditsPerMatch >= 1.0){
+    notes.push({kind:"obs", text:"Heavy deck sculpting; run identity shaped by frequent edits."});
+  }
+  if(metrics.suitHhi !== null && metrics.suitHhi >= 0.30){
+    notes.push({kind:"obs", text:"Deck concentrated into a suit plan (cohesion increased by endgame)."});
+  }
+  if(metrics.tokensPerMatch >= 1.3){
+    notes.push({kind:"obs", text:"Resource-forward play: tokens used frequently to stabilize outcomes."});
+  }
+  if(metrics.callingPerMatch >= 1.2){
+    notes.push({kind:"obs", text:"Calling procs were a frequent part of match wins."});
+  }
+  if(metrics.tempoAppliedPerMatch >= 3.0 && metrics.tempoApplyRate >= 0.45){
+    notes.push({kind:"obs", text:"Tempo pressure was a meaningful part of match wins."});
+  }
+  return notes.slice(0,7);
 }
 
 /* =========================
@@ -1759,6 +2185,9 @@ function renderDashboard(runId){
 
   const s = analysis.summary;
   const derived = analysis.derived;
+  if(derived && !s.playstyle){
+    s.playstyle = computePlaystyle(s, derived);
+  }
 
   document.getElementById("dashSub").textContent =
     `${runRec.meta.sourceFilename || runId} • ${runRec.meta.sessionId || runId} • ${runRec.meta.startedAtISO || s.startedAtISO || ""}`;
@@ -1812,6 +2241,21 @@ function renderDashboard(runId){
     </div>
   `;
 
+  const settingsBody = document.getElementById("settingsSnapshotBody");
+  const settings = s.settings || {};
+  const rulesCtx = settings.rulesContext ? `<div class="mono tiny">${escapeHTML(JSON.stringify(settings.rulesContext))}</div>` : "<span class=\"muted\">—</span>";
+  settingsBody.innerHTML = `
+    <div class="grid cols3">
+      <div><b>revealTotalsOnClose:</b> ${escapeHTML(fmt(settings.revealTotalsOnClose))}</div>
+      <div><b>opponentDifficulty:</b> ${escapeHTML(fmt(settings.opponentDifficulty))}</div>
+      <div><b>rakeMode:</b> ${escapeHTML(fmt(settings.rakeMode))}</div>
+      <div><b>benchHardCap:</b> ${escapeHTML(fmt(settings.benchHardCap))}</div>
+      <div><b>start/end karma:</b> ${escapeHTML(fmt(s.startKarma))} → ${escapeHTML(fmt(s.endKarma))}</div>
+      <div><b>calling:</b> ${escapeHTML(fmt(s.startCallingSuit))} ${escapeHTML(fmt(s.startCallingRank))} → ${escapeHTML(fmt(s.endCallingSuit))} ${escapeHTML(fmt(s.endCallingRank))}</div>
+    </div>
+    <div style="margin-top:8px"><b>rulesContext:</b> ${rulesCtx}</div>
+  `;
+
   // Warnings
   const warnBox = document.getElementById("dashWarnings");
   warnBox.innerHTML = "";
@@ -1823,15 +2267,19 @@ function renderDashboard(runId){
   renderFloorTable(derived.floorSummary || []);
 
   // Charts
+  renderFingerprint(analysis);
+  renderProgressionChart(derived, s);
   renderChipsChart(derived, s);
   renderProfitChart(derived);
   renderDeckChart(derived);
+  renderDeckIdentity(derived, s);
   renderRatesChart(derived, document.getElementById("segmentMode").value, document.getElementById("outcomeBasis").value);
   renderTotalsChart(derived);
   renderSinksChart(derived);
 
   // Insights
   renderInsights(analysis, runRec);
+  renderKeyMoments(analysis);
 
   // Tables
   renderMatchTable(derived.matches || []);
@@ -1875,6 +2323,9 @@ function renderFloorTable(rows){
     ["rate21","21"],
     ["avgPlayerTotal","P.Avg"],
     ["avgDealerTotal","D.Avg"],
+    ["avgPlayerTotalNoBust","P.Avg (NoBust)"],
+    ["avgDealerTotalNoBust","D.Avg (NoBust)"],
+    ["bustTotalAvg","Bust Avg"],
     ["avgSwing","Swing"],
     ["deckStart","Deck S"],
     ["deckEnd","Deck E"],
@@ -1889,7 +2340,7 @@ function renderFloorTable(rows){
       ${rows.map(r=>`<tr>${cols.map(c=>{
         const k=c[0];
         const v=r[k];
-        if(k.endsWith("Rate") || k==="bustRate" || k==="rate21" || k==="modDensityEnd") return `<td>${escapeHTML(pct(v))}</td>`;
+        if(k.endsWith("Rate") || k==="bustRate" || k==="rate21" || k.startsWith("modDensity")) return `<td>${escapeHTML(pct(v))}</td>`;
         return `<td>${escapeHTML(fmt(v))}</td>`;
       }).join("")}</tr>`).join("")}
     </tbody>
@@ -1988,6 +2439,216 @@ function renderDeckChart(derived){
     const ysR = deck.map(d=> (typeof d.modCount==="number"?d.modCount:yMinR));
     drawLineScaled(ctx,w,h,pad,xs,ysR,yMinR,yMaxR,"rgba(251,191,36,0.85)",[6,4]);
   }
+}
+
+function drawRadarChart(ctx, w, h, pad, labels, values){
+  const cx = w/2;
+  const cy = h/2;
+  const radius = Math.min(w, h)/2 - pad;
+  const n = labels.length;
+  if(!n) return;
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.15)";
+  ctx.fillStyle = "rgba(125,211,252,0.18)";
+  ctx.lineWidth = 1;
+
+  // grid rings
+  for(let r=0;r<=4;r++){
+    const rr = radius * (r/4);
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      const a = (Math.PI*2*i/n) - Math.PI/2;
+      const x = cx + rr * Math.cos(a);
+      const y = cy + rr * Math.sin(a);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // axes + labels
+  ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+  ctx.fillStyle = "rgba(255,255,255,0.75)";
+  for(let i=0;i<n;i++){
+    const a = (Math.PI*2*i/n) - Math.PI/2;
+    const x = cx + radius * Math.cos(a);
+    const y = cy + radius * Math.sin(a);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    const lx = cx + (radius + 10) * Math.cos(a);
+    const ly = cy + (radius + 10) * Math.sin(a);
+    ctx.fillText(labels[i], lx - 14, ly + 4);
+  }
+
+  // value polygon
+  ctx.beginPath();
+  for(let i=0;i<n;i++){
+    const a = (Math.PI*2*i/n) - Math.PI/2;
+    const v = clamp01(values[i] ?? 0);
+    const x = cx + (radius * v) * Math.cos(a);
+    const y = cy + (radius * v) * Math.sin(a);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(125,211,252,0.85)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function renderFingerprint(analysis){
+  const canvas = document.getElementById("chartFingerprint");
+  if(!canvas) return;
+  const ctx = setupCanvas(canvas);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const pad = 32;
+
+  const ps = analysis.summary.playstyle;
+  if(!ps){ clearChart(ctx,w,h); return; }
+  const labels = ["Risk","Pressure","Control","Surgery","Engine","Karma","Actions","Economy"];
+  const values = [
+    ps.axes.risk, ps.axes.pressure, ps.axes.control, ps.axes.surgery,
+    ps.axes.engine, ps.axes.karma, ps.axes.actions, ps.axes.economy
+  ].map(v=>num(v)/100);
+
+  clearChart(ctx,w,h);
+  drawRadarChart(ctx,w,h,pad,labels,values);
+
+  const meta = document.getElementById("fingerprintMeta");
+  const notes = document.getElementById("fingerprintNotes");
+  const confidence = Math.round((ps.confidence||0)*100);
+  const secondary = ps.secondary && ps.secondary.name !== "None" ? ` • Secondary: ${ps.secondary.name}` : "";
+  meta.innerHTML = `
+    <div class="goodBox">
+      <div style="font-weight:700">Primary: ${escapeHTML(ps.primary?.name || "Unknown")}${secondary}</div>
+      <div class="tiny">Confidence: ${confidence}%</div>
+      <ul style="margin:6px 0 0 16px">${ps.drivers.map(d=>`<li>${escapeHTML(d)}</li>`).join("")}</ul>
+    </div>
+  `;
+  notes.innerHTML = ps.notes.map(n=>`• ${escapeHTML(n.text)}`).join("<br/>");
+}
+
+function renderProgressionChart(derived, summary){
+  const canvas = document.getElementById("chartProgression");
+  if(!canvas) return;
+  const ctx = setupCanvas(canvas);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const pad = 42;
+
+  const matches = derived.matches || [];
+  if(!matches.length){ clearChart(ctx,w,h); return; }
+
+  const xs = matches.map((m,i)=> i/(Math.max(1, matches.length-1)));
+  const karmaSeries = matches.map(m=>numOrNull(m.karmaGained));
+  let karmaAccum = 0;
+  const karmaTotal = karmaSeries.map(v=>{
+    if(typeof v==="number") karmaAccum += v;
+    return karmaAccum || summary.startKarma || 0;
+  });
+  const callingSeries = derived.deckTimeline && derived.deckTimeline.length
+    ? derived.deckTimeline.map(d=>numOrNull(d.callingRankValue)).filter(v=>v!==null)
+    : [];
+  const tokensSeries = matches.map(m=>typeof m.tokensTotal==="number" ? m.tokensTotal : null);
+
+  const yVals = [...karmaTotal, ...callingSeries, ...tokensSeries].filter(v=>typeof v==="number");
+  if(!yVals.length){ clearChart(ctx,w,h); return; }
+  const yMin = Math.min(0, ...yVals);
+  const yMax = Math.max(1, ...yVals);
+
+  clearChart(ctx,w,h);
+  drawAxes(ctx,w,h,pad,"Match","Value",yMin,yMax);
+  drawLineScaled(ctx,w,h,pad,xs,karmaTotal,yMin,yMax,"rgba(52,211,153,0.9)");
+  drawLineScaled(ctx,w,h,pad,xs,tokensSeries.map(v=>typeof v==="number"?v:yMin),yMin,yMax,"rgba(125,211,252,0.85)");
+
+  if(callingSeries.length){
+    const callXs = callingSeries.map((_,i)=> i/(Math.max(1, callingSeries.length-1)));
+    drawLineScaled(ctx,w,h,pad,callXs,callingSeries,yMin,yMax,"rgba(251,191,36,0.85)",[6,4]);
+  }
+
+  document.getElementById("progressionCaption").textContent =
+    `matches=${matches.length} • karma points from ${fmt(summary.startKarma)} → ${fmt(summary.endKarma)} • tokens shown at match start`;
+}
+
+function renderDeckIdentity(derived, summary){
+  const deckTimeline = derived.deckTimeline || [];
+  const deckEnd = deckTimeline.length ? deckTimeline[deckTimeline.length-1] : null;
+  if(!deckEnd || !deckEnd.bySuit || !deckEnd.byRank){
+    const suitCanvas = document.getElementById("chartDeckSuit");
+    const rankCanvas = document.getElementById("chartDeckRank");
+    if(suitCanvas) clearChart(setupCanvas(suitCanvas), suitCanvas.clientWidth, suitCanvas.clientHeight);
+    if(rankCanvas) clearChart(setupCanvas(rankCanvas), rankCanvas.clientWidth, rankCanvas.clientHeight);
+    return;
+  }
+  const suitCanvas = document.getElementById("chartDeckSuit");
+  const rankCanvas = document.getElementById("chartDeckRank");
+  const suitCtx = setupCanvas(suitCanvas);
+  const rankCtx = setupCanvas(rankCanvas);
+  const pad = 36;
+
+  const suitLabels = Object.keys(deckEnd.bySuit);
+  const suitValues = suitLabels.map(k=>deckEnd.bySuit[k]);
+  const suitMax = Math.max(...suitValues, 1);
+  clearChart(suitCtx, suitCanvas.clientWidth, suitCanvas.clientHeight);
+  drawAxes(suitCtx, suitCanvas.clientWidth, suitCanvas.clientHeight, pad, "", "Count", 0, suitMax);
+  drawBarChart(suitCtx, suitCanvas.clientWidth, suitCanvas.clientHeight, pad, suitValues, suitLabels, 0, suitMax);
+
+  const rankLabels = Object.keys(deckEnd.byRank);
+  const rankValues = rankLabels.map(k=>deckEnd.byRank[k]);
+  const rankMax = Math.max(...rankValues, 1);
+  clearChart(rankCtx, rankCanvas.clientWidth, rankCanvas.clientHeight);
+  drawAxes(rankCtx, rankCanvas.clientWidth, rankCanvas.clientHeight, pad, "", "Count", 0, rankMax);
+  drawBarChart(rankCtx, rankCanvas.clientWidth, rankCanvas.clientHeight, pad, rankValues, rankLabels, 0, rankMax);
+
+  const suitHhi = herfindahl(deckEnd.bySuit);
+  const domSuit = suitValues.length ? Math.max(...suitValues) / Math.max(1, suitValues.reduce((a,b)=>a+b,0)) : null;
+  const modDensity = summary.modDensityEnd ?? null;
+  const fused = deckEnd.fusedCount ?? deckEnd.summary?.fusedCount ?? null;
+  const sleeved = deckEnd.sleevedCount ?? deckEnd.summary?.sleevedCount ?? null;
+  const stamps = deckEnd.summary?.stampsByRank ? Object.keys(deckEnd.summary.stampsByRank).length : null;
+  document.getElementById("deckIdentityMeta").textContent =
+    `Suit HHI ${fmt(suitHhi)} • Dominant suit ${pct(domSuit)} • Mod density ${pct(modDensity)} • Stamps ${fmt(stamps)} • Sleeves ${fmt(sleeved)} • Fuses ${fmt(fused)}`;
+}
+
+function renderKeyMoments(analysis){
+  const events = analysis.derived.events || [];
+  const matches = analysis.derived.matches || [];
+  const deckTimeline = analysis.derived.deckTimeline || [];
+  const items = [];
+
+  const biggest = analysis.summary.biggestDrop;
+  if(biggest && biggest.delta < 0){
+    items.push(`Biggest drop: ${fmt(biggest.delta)} on floor ${fmt(biggest.floor)} (event ${escapeHTML(biggest.eventId)})`);
+  }
+
+  const firstOf = (type)=> events.find(e=>e.type===type);
+  const firstLoan = firstOf("LOAN_TAKEN");
+  const firstMerchant = firstOf("MERCHANT_ENTER");
+  const firstCollector = firstOf("COLLECTOR_BUY");
+  const firstModify = firstOf("MODIFY_APPLY") || firstOf("MODIFY_SERVICE_SELECT");
+  const firstBoss = events.find(e=>e.type==="MATCH_START" && String(e.tableType||"").toUpperCase()==="BOSS");
+
+  if(firstLoan) items.push(`First loan: floor ${fmt(firstLoan.floor)} (event ${escapeHTML(firstLoan.id)})`);
+  if(firstMerchant) items.push(`First merchant: floor ${fmt(firstMerchant.floor)} (event ${escapeHTML(firstMerchant.id)})`);
+  if(firstCollector) items.push(`First collector: floor ${fmt(firstCollector.floor)} (event ${escapeHTML(firstCollector.id)})`);
+  if(firstModify) items.push(`First modify: floor ${fmt(firstModify.floor)} (event ${escapeHTML(firstModify.id)})`);
+  if(firstBoss) items.push(`First boss table: floor ${fmt(firstBoss.floor)} (match ${fmt(firstBoss.matchIndex)})`);
+
+  deckTimeline.slice(1).forEach(d=>{
+    if(d.reason){
+      items.push(`Deck change: ${escapeHTML(d.reason)} on floor ${fmt(d.floor)}`);
+    }
+  });
+
+  matches.filter(m=>String(m.tableType||"").toUpperCase()==="BOSS").forEach(m=>{
+    items.push(`Boss outcome: floor ${fmt(m.floor)} match ${fmt(m.matchIndex)} → ${escapeHTML(m.outcome||"—")}`);
+  });
+
+  const box = document.getElementById("keyMomentsList");
+  box.innerHTML = items.length ? `<ul style="margin:0 0 0 18px">${items.slice(0,12).map(i=>`<li>${i}</li>`).join("")}</ul>` : `<div class="muted">No key moments detected.</div>`;
 }
 
 function renderRatesChart(derived, mode, basis){
@@ -2210,6 +2871,16 @@ function renderInsights(analysis, runRec){
     });
   }
 
+  if(s.playstyle && s.playstyle.notes && s.playstyle.notes.length){
+    s.playstyle.notes.slice(0,3).forEach(n=>{
+      insights.push({
+        kind: n.kind==="warn" ? "warn" : "good",
+        title:`Playstyle note`,
+        body:n.text
+      });
+    });
+  }
+
   if(!insights.length){
     insights.push({kind:"good", title:"No strong heuristic flags triggered.", body:"Use per-floor table + match/lane drilldowns to spot-check anomalies."});
   }
@@ -2242,7 +2913,11 @@ function renderMatchTable(rows){
     ["payout","Payout"],
     ["bonusChips","Bonus"],
     ["transferNet","Transfer"],
+    ["transferMultiplier","Xfer Mult"],
+    ["rake","Rake"],
+    ["karmaGained","Karma +"],
     ["matchProfit","Profit"],
+    ["tokensTotal","Tokens"],
     ["turns","Turns"],
     ["deckSizeStart","DeckS"],
     ["deckSizeEnd","DeckE"]
@@ -2323,7 +2998,16 @@ document.getElementById("btnExportMatchesCSV").addEventListener("click", ()=>{
     ["payout","payout"],
     ["bonusChips","bonusChips"],
     ["transferNet","transferNet"],
+    ["transferMultiplier","transferMultiplier"],
+    ["rake","rake"],
+    ["rakeRate","rakeRate"],
+    ["karmaGained","karmaGained"],
+    ["exhaustion","exhaustion"],
     ["matchProfit","matchProfit"],
+    ["tokensTotal","tokensTotal"],
+    ["baseTokens","baseTokens"],
+    ["bankedTokensUsed","bankedTokensUsed"],
+    ["bankedTokensRemaining","bankedTokensRemaining"],
     ["turns","turns"],
     ["playerBustsFinal","playerBustsFinal"],
     ["dealerBustsFinal","dealerBustsFinal"],
@@ -2375,6 +3059,9 @@ document.getElementById("btnExportFloorCSV").addEventListener("click", ()=>{
     ["rate21","rate21"],
     ["avgPlayerTotal","avgPlayerTotal"],
     ["avgDealerTotal","avgDealerTotal"],
+    ["avgPlayerTotalNoBust","avgPlayerTotalNoBust"],
+    ["avgDealerTotalNoBust","avgDealerTotalNoBust"],
+    ["bustTotalAvg","bustTotalAvg"],
     ["avgSwing","avgSwing"],
     ["deckStart","deckStart"],
     ["deckEnd","deckEnd"],
@@ -2393,6 +3080,7 @@ document.getElementById("btnExportFloorCSV").addEventListener("click", ()=>{
 document.getElementById("filterConfig").addEventListener("change", renderRunsTable);
 document.getElementById("filterTag").addEventListener("input", renderRunsTable);
 document.getElementById("filterSearch").addEventListener("input", renderRunsTable);
+document.getElementById("filterArchetype").addEventListener("change", renderRunsTable);
 document.getElementById("btnRecomputeAll").addEventListener("click", ()=>{
   Object.keys(DB.runs).forEach(runId=>{
     const rr = DB.runs[runId];
@@ -2449,6 +3137,7 @@ document.getElementById("btnSwapCompare").addEventListener("click", ()=>{
 
 function compareRuns(A, B){
   const rows = [
+    ["Archetype", A?.playstyle?.primary?.name || "—", B?.playstyle?.primary?.name || "—"],
     ["Outcome", A?.runOutcome?.result, B?.runOutcome?.result],
     ["Floors", A?.floorsReached, B?.floorsReached],
     ["Matches", A?.matches, B?.matches],
@@ -2462,6 +3151,15 @@ function compareRuns(A, B){
     ["Profit total", A?.matchProfitTotal, B?.matchProfitTotal],
     ["Profit sd", A?.profitStdDev, B?.profitStdDev]
   ];
+  const axesA = A?.playstyle?.axes || {};
+  const axesB = B?.playstyle?.axes || {};
+  const axisKeys = ["risk","pressure","control","surgery","engine","karma","actions","economy"];
+  const axisRows = axisKeys.map(k=>{
+    const aV = axesA[k];
+    const bV = axesB[k];
+    const delta = (typeof aV==="number" && typeof bV==="number") ? (aV - bV) : null;
+    return [k, aV, bV, delta];
+  });
   return `
     <div class="tableWrap">
       <table>
@@ -2471,7 +3169,25 @@ function compareRuns(A, B){
         </tbody>
       </table>
     </div>
+    <div class="tableWrap" style="margin-top:10px">
+      <table>
+        <thead><tr><th>Axis</th><th>A</th><th>B</th><th>Δ (A−B)</th></tr></thead>
+        <tbody>
+          ${axisRows.map(r=>`<tr><td>${escapeHTML(r[0])}</td><td>${escapeHTML(fmt(r[1]))}</td><td>${escapeHTML(fmt(r[2]))}</td><td>${escapeHTML(fmt(r[3]))}</td></tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
   `;
+}
+
+function refreshArchetypeFilter(runs){
+  const sel = document.getElementById("filterArchetype");
+  if(!sel) return;
+  const current = sel.value || "all";
+  const names = [...new Set(runs.map(r=>r.summary?.playstyle?.primary?.name).filter(Boolean))].sort();
+  sel.innerHTML = `<option value="all">All archetypes</option>` +
+    names.map(n=>`<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join("");
+  if(names.includes(current)) sel.value = current;
 }
 
 function renderRunsTable(){
@@ -2480,14 +3196,20 @@ function renderRunsTable(){
   const cfgFilter = document.getElementById("filterConfig").value || "all";
   const tagFilter = (document.getElementById("filterTag").value || "").toLowerCase().trim();
   const search = (document.getElementById("filterSearch").value || "").toLowerCase().trim();
+  const archetypeFilter = (document.getElementById("filterArchetype").value || "all");
 
   const runs = Object.values(DB.runs);
+  refreshArchetypeFilter(runs);
 
   const filtered = runs.filter(r=>{
     if(cfgFilter!=="all" && String(r.meta.configId)!==String(cfgFilter)) return false;
     if(tagFilter){
       const tags = (r.meta.tags||[]).join(",").toLowerCase();
       if(!tags.includes(tagFilter)) return false;
+    }
+    if(archetypeFilter!=="all"){
+      const aName = r.summary?.playstyle?.primary?.name || "";
+      if(aName !== archetypeFilter) return false;
     }
     if(search){
       const hay = [
@@ -2520,6 +3242,7 @@ function renderRunsTable(){
     ["meta.startedAtISO","Started"],
     ["meta.sourceFilename","File"],
     ["meta.configId","Config"],
+    ["summary.playstyle.primary.name","Archetype"],
     ["summary.runOutcome.result","Outcome"],
     ["summary.floorsReached","Floors"],
     ["summary.matches","Matches"],
@@ -2542,6 +3265,7 @@ function renderRunsTable(){
           <td>${escapeHTML(fmt(r.meta.startedAtISO || r.summary?.startedAtISO || ""))}</td>
           <td title="${escapeHTML(r.meta.runId)}">${escapeHTML(r.meta.sourceFilename || "—")}</td>
           <td>${escapeHTML(cfgName)}</td>
+          <td>${escapeHTML(r.summary?.playstyle?.primary?.name || "—")}</td>
           <td>${escapeHTML(r.summary?.runOutcome?.result || "—")}</td>
           <td>${escapeHTML(fmt(r.summary?.floorsReached))}</td>
           <td>${escapeHTML(fmt(r.summary?.matches))}</td>
