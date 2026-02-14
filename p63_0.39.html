@@ -118,7 +118,7 @@
     .run-end-cols { display:grid; grid-template-columns: repeat(2,minmax(220px,1fr)); gap:10px; margin:10px 0; }
     .run-end-block { border: 1px solid var(--border-color); border-radius:10px; padding:8px 10px; background: rgba(0,0,0,0.15); }
     .run-end-block div { margin:2px 0; }
-    #chartEndSummary { width:100%; height:260px; display:block; border:1px solid var(--border-color); border-radius:10px; background: rgba(0,0,0,0.12); }
+    #chartEndChips, #chartEndKarma { width:100%; height:220px; display:block; border:1px solid var(--border-color); border-radius:10px; background: rgba(0,0,0,0.12); }
     @media (max-width: 760px){ .run-end-cols { grid-template-columns: 1fr; } }
     .bar-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap:8px; }
     .bar-item { text-align:center; }
@@ -357,15 +357,19 @@
     }
 
     .hex-tile.key-roller .hex-bg {
-      stroke: rgba(240, 192, 64, 0.9);
+      stroke: rgba(168, 85, 247, 0.95);
       stroke-width: 4;
       animation: key-roller-glow 1.6s ease-in-out infinite;
-      filter: drop-shadow(0 0 10px rgba(240, 192, 64, 0.25));
+      filter: drop-shadow(0 0 12px rgba(168, 85, 247, 0.30));
+    }
+
+    .hex-tile.key-roller .hex-label::after {
+      content: "🔑";
     }
 
     @keyframes key-roller-glow {
-      0%, 100% { filter: drop-shadow(0 0 6px rgba(240, 192, 64, 0.18)); }
-      50% { filter: drop-shadow(0 0 18px rgba(240, 192, 64, 0.42)); }
+      0%, 100% { filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.20)); }
+      50% { filter: drop-shadow(0 0 22px rgba(168, 85, 247, 0.46)); }
     }
 
     @keyframes pulse-glow {
@@ -632,6 +636,8 @@
     }
 
     .bj-position {
+      position: relative;
+      overflow: visible;
       background: var(--bg-card);
       border: 2px solid var(--border-color);
       border-radius: 14px;
@@ -1003,15 +1009,35 @@
       width: 100%;
       display: flex;
       gap: 12px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       justify-content: center;
       align-items: stretch;
+      margin-top: 14px;
+    }
+
+    .controls-row > .action-bar,
+    .controls-row > .bench-bar {
+      flex: 1 1 0;
+      width: auto;
+      max-width: 420px;
+      min-width: 0;
     }
 
     .bench-bar {
       max-width: 380px;
       min-width: 260px;
       flex: 1;
+    }
+
+    @media (max-width: 820px){
+      .controls-row{
+        flex-wrap: wrap;
+      }
+      .controls-row > .action-bar,
+      .controls-row > .bench-bar{
+        flex: 1 1 260px;
+        max-width: none;
+      }
     }
 
     .bench-cards {
@@ -1543,6 +1569,15 @@
   transform: translateZ(0);
 }
 
+:root{
+  --cc-reveal-scale: 0.6;
+}
+
+.cc-scale{
+  transform: scale(var(--cc-reveal-scale));
+  transform-origin: center;
+}
+
 .cc-tilt{
   width: min(460px, 88vw);
   aspect-ratio: 300 / 420;
@@ -1710,22 +1745,35 @@
     }
 
     .karma-float {
-      position: absolute;
+      position:absolute;
       left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      font-family: 'Fira Code', monospace;
-      font-size: 12px;
+      bottom: -10px;
+      transform: translateX(-50%);
       font-weight: 900;
+      font-size: 18px;
       color: var(--accent-gold);
-      text-shadow: 0 0 8px rgba(240, 192, 64, 0.45);
-      animation: karmaFloatUp 1s ease-out forwards;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.6);
       pointer-events: none;
+      animation: karmaFloatUp 900ms ease-out forwards;
+      z-index: 10;
     }
-    @keyframes karmaFloatUp {
-      0% { opacity: 0; transform: translate(-50%, -40%); }
-      20% { opacity: 1; transform: translate(-50%, -52%); }
-      100% { opacity: 0; transform: translate(-50%, -78%); }
+    @keyframes karmaFloatUp{
+      0%{ opacity:0; transform: translate(-50%, 10px) scale(0.95); }
+      15%{ opacity:1; }
+      100%{ opacity:0; transform: translate(-50%, -18px) scale(1.05); }
+    }
+
+    .lane-summary{
+      margin-top: 8px;
+      display:flex;
+      justify-content: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .lane-summary b{
+      color: var(--text-primary);
+      font-weight: 800;
     }
 
     .scoring-mode .bj-position { opacity: 0.55; }
@@ -2099,6 +2147,14 @@ const CALLING_RANK_THRESHOLDS = [
     // =============================================
     // UI SETTINGS + LOGGING (Option B)
     // =============================================
+    // --- Story/Record context (used by run logs + story generator)
+    const APP_BUILD = '0.41';
+    const APP_VARIANT = 'p63_0.41.html';
+    const CASINO_ID = 'grand_casino';
+    const CASINO_NAME = 'Grand Casino';
+    const DEFAULT_NARRATOR = 'The Archivist';
+    const MARGINALIA_RATE_PER_FLOOR = 0.25;
+
     const LOG_STORAGE_KEY = 'p63_runlog_latest';
     const PLAYER_NAME_KEY = 'p63_player_name';
     let uiSettings = {
@@ -2298,20 +2354,26 @@ const CALLING_RANK_THRESHOLDS = [
       };
 
       gameLog = {
-        logVersion: "C",
+        logVersion: 'D',
         sessionId,
         runId: sessionId,
         startedAt: new Date().toISOString(),
         endedAt: null,
         exportedAt: null,
         app: {
-          name: "Project 63",
-          build: "0.39",
-          variant: "p63_0.39.html",
+          name: 'Project 63',
+          build: APP_BUILD,
+          variant: APP_VARIANT,
+          casinoId: CASINO_ID,
+          casinoName: CASINO_NAME,
+          narrator: DEFAULT_NARRATOR,
+          marginaliaRatePerFloor: MARGINALIA_RATE_PER_FLOOR,
           userAgent: navigator.userAgent
         },
         player: {
-          name: run && run.playerName ? run.playerName : ''
+          name: run && run.playerName ? run.playerName : '',
+          archetype: null,
+          resonancePct: null
         },
         settingsAtStart: getSettingsSnapshot(),
         settingsLatest: getSettingsSnapshot(),
@@ -2323,6 +2385,7 @@ const CALLING_RANK_THRESHOLDS = [
         deckHistory: [],
         currentDeckId: null,
         events: [],
+        floorTracker: null,
         stats: {
           floorsReached: 1,
           tilesEntered: 0,
@@ -2336,29 +2399,32 @@ const CALLING_RANK_THRESHOLDS = [
           transferNet: 0,
           bonusChips: 0,
           merchantBuys: 0,
+          merchantBuyChips: 0,
           merchantRemoves: 0,
+          merchantRemoveChips: 0,
           merchantRerolls: 0,
+          merchantRerollChips: 0,
           cocktailsBought: 0,
+          cocktailSpendChips: 0,
+          collectorOffersShown: 0,
+          collectorPurchases: 0,
+          collectorBuyChips: 0,
+          modifyCandidateSetsShown: 0,
+          modifyApplies: 0,
+          modifySpendChips: 0,
           loansTaken: 0,
           loansRepaid: 0,
           tokensGained: 0,
           tokensSpent: 0,
           actionsUsed: 0,
-          collectorOffersShown: 0,
-          collectorPurchases: 0,
-          modifyCandidateSetsShown: 0,
-          modifyApplies: 0,
           deckSnapshots: 0,
           feedbackUpdates: 0,
-
           chipsPeak: chipsNow,
           chipsLow: chipsNow,
-
           deckSizeMin: snap.deckSize,
           deckSizeMax: snap.deckSize,
           modCountMin: snap.modCount,
           modCountMax: snap.modCount,
-
           matchDurationMsTotal: 0,
           rakePaidTotal: 0,
           bossClears: 0
@@ -2369,96 +2435,115 @@ const CALLING_RANK_THRESHOLDS = [
 
     function updateLogStats(evt) {
       if (!gameLog || !gameLog.stats) return;
-      const s = gameLog.stats;
+      const st = gameLog.stats;
 
       if (evt && typeof evt.chips === 'number') {
-        s.chipsPeak = Math.max(s.chipsPeak, evt.chips);
-        s.chipsLow = Math.min(s.chipsLow, evt.chips);
+        st.chipsPeak = Math.max(st.chipsPeak, evt.chips);
+        st.chipsLow = Math.min(st.chipsLow, evt.chips);
       }
-
       if (evt && evt.data && evt.data.deckSnapshot) {
         const ds = evt.data.deckSnapshot;
         if (typeof ds.deckSize === 'number') {
-          s.deckSizeMin = Math.min(s.deckSizeMin, ds.deckSize);
-          s.deckSizeMax = Math.max(s.deckSizeMax, ds.deckSize);
+          st.deckSizeMin = Math.min(st.deckSizeMin, ds.deckSize);
+          st.deckSizeMax = Math.max(st.deckSizeMax, ds.deckSize);
         }
         if (typeof ds.modCount === 'number') {
-          s.modCountMin = Math.min(s.modCountMin, ds.modCount);
-          s.modCountMax = Math.max(s.modCountMax, ds.modCount);
+          st.modCountMin = Math.min(st.modCountMin, ds.modCount);
+          st.modCountMax = Math.max(st.modCountMax, ds.modCount);
         }
       }
 
       switch (evt.type) {
-        case 'FLOOR_START':
-          s.floorsReached = Math.max(s.floorsReached, evt.floor || 1);
-          break;
-        case 'TILE_ENTER':
-          s.tilesEntered += 1;
-          s.tilesByType[evt.data.tileType] = (s.tilesByType[evt.data.tileType] || 0) + 1;
-          break;
-        case 'MATCH_START':
-          s.matches += 1;
-          s.buyinSpent += safeNumber(evt.data.buyIn, 0);
-          break;
+        case 'FLOOR_START': st.floorsReached = Math.max(st.floorsReached, evt.floor || 1); break;
+        case 'TILE_ENTER': st.tilesEntered += 1; st.tilesByType[evt.data.tileType] = (st.tilesByType[evt.data.tileType] || 0) + 1; break;
+        case 'MATCH_START': st.matches += 1; st.buyinSpent += safeNumber(evt.data.buyIn, 0); break;
         case 'MATCH_END':
-          if (evt.data.outcome === 'WIN') s.wins += 1;
-          else if (evt.data.outcome === 'LOSS') s.losses += 1;
-          else s.ties += 1;
-          s.payoutReceived += safeNumber(evt.data.payout, 0);
-          s.transferNet += safeNumber(evt.data.transferNet, 0);
-          s.bonusChips += safeNumber(evt.data.bonusChips, 0);
-          s.rakePaidTotal += safeNumber(evt.data.rake, 0);
-          s.matchDurationMsTotal += safeNumber(evt.data.durationMs, 0);
+          if (evt.data.outcome === 'WIN') st.wins += 1; else if (evt.data.outcome === 'LOSS') st.losses += 1; else st.ties += 1;
+          st.payoutReceived += safeNumber(evt.data.payout, 0);
+          st.transferNet += safeNumber(evt.data.transferNet, 0);
+          st.bonusChips += safeNumber(evt.data.bonusChips, 0);
+          st.rakePaidTotal += safeNumber(evt.data.rake, 0);
+          st.matchDurationMsTotal += safeNumber(evt.data.durationMs, 0);
           break;
-        case 'BOSS_CLEARED':
-          s.bossClears += 1;
-          break;
-        case 'TOKEN_GAIN':
-          s.tokensGained += safeNumber(evt.data.amount, 0);
-          break;
-        case 'TOKEN_SPENT':
-          s.tokensSpent += safeNumber(evt.data.amount, 0);
-          break;
-        case 'ACTION_USED':
-          s.actionsUsed += 1;
-          break;
-        case 'MERCHANT_BUY':
-          s.merchantBuys += 1;
-          break;
-        case 'MERCHANT_REMOVE_CONFIRM':
-          s.merchantRemoves += 1;
-          break;
-        case 'MERCHANT_REROLL':
-          s.merchantRerolls += 1;
-          break;
-        case 'COCKTAIL_BOUGHT':
-          s.cocktailsBought += 1;
-          break;
-        case 'LOAN_TAKEN':
-          s.loansTaken += 1;
-          break;
-        case 'LOAN_REPAID':
-          s.loansRepaid += 1;
-          break;
-        case 'COLLECTOR_SHOP_GENERATED':
-          s.collectorOffersShown += 1;
-          break;
-        case 'COLLECTOR_BUY':
-          s.collectorPurchases += 1;
-          break;
-        case 'MODIFY_CANDIDATES_SHOWN':
-          s.modifyCandidateSetsShown += 1;
-          break;
-        case 'MODIFY_APPLY':
-          s.modifyApplies += 1;
-          break;
-        case 'FEEDBACK_UPDATED':
-          s.feedbackUpdates += 1;
-          break;
-        case 'DECK_SNAPSHOT':
-          s.deckSnapshots += 1;
-          break;
+        case 'BOSS_CLEARED': st.bossClears += 1; break;
+        case 'TOKEN_GAIN': st.tokensGained += safeNumber(evt.data.amount, 0); break;
+        case 'TOKEN_SPENT': st.tokensSpent += safeNumber(evt.data.amount, 0); break;
+        case 'ACTION_USED': st.actionsUsed += 1; break;
+        case 'MERCHANT_BUY': st.merchantBuys += 1; st.merchantBuyChips += safeNumber(evt.data.cost, 0); break;
+        case 'MERCHANT_REMOVE_START': st.merchantRemoveChips += safeNumber(evt.data.cost, 0); break;
+        case 'MERCHANT_REMOVE_CONFIRM': st.merchantRemoves += 1; break;
+        case 'MERCHANT_REROLL': st.merchantRerolls += 1; st.merchantRerollChips += safeNumber(evt.data.cost, 0); break;
+        case 'COCKTAIL_BOUGHT': st.cocktailsBought += 1; st.cocktailSpendChips += safeNumber(evt.data.cost, 0); break;
+        case 'LOAN_TAKEN': st.loansTaken += 1; break;
+        case 'LOAN_REPAID': st.loansRepaid += 1; break;
+        case 'COLLECTOR_SHOP_GENERATED': st.collectorOffersShown += 1; break;
+        case 'COLLECTOR_BUY': st.collectorPurchases += 1; st.collectorBuyChips += safeNumber(evt.data.cost, 0); break;
+        case 'MODIFY_CANDIDATES_SHOWN': st.modifyCandidateSetsShown += 1; break;
+        case 'MODIFY_APPLY': st.modifyApplies += 1; break;
+        case 'MODIFY_SERVICE_SELECT': st.modifySpendChips += safeNumber(evt.data.cost, 0); break;
+        case 'FEEDBACK_UPDATED': st.feedbackUpdates += 1; break;
+        case 'DECK_SNAPSHOT': st.deckSnapshots += 1; break;
       }
+    }
+
+    function beginFloorTracking(floorNum) {
+      if (!gameLog || !run) return;
+      gameLog.floorTracker = {
+        floor: floorNum,
+        startedAt: new Date().toISOString(),
+        chipsStart: safeNumber(run.chips, 0),
+        karmaStart: safeNumber(run.karma, 0),
+        chipsLow: safeNumber(run.chips, 0),
+        chipsHigh: safeNumber(run.chips, 0),
+        matches: 0,
+        wins: 0,
+        losses: 0,
+        ties: 0
+      };
+    }
+
+    function endCurrentFloorIfOpen({ endReason = 'FLOOR_EXIT' } = {}) {
+      if (!gameLog || !gameLog.floorTracker || !run) return;
+      const ft = gameLog.floorTracker;
+      const summary = {
+        floor: ft.floor,
+        startedAt: ft.startedAt,
+        endedAt: new Date().toISOString(),
+        chipsStart: ft.chipsStart,
+        chipsEnd: safeNumber(run.chips, 0),
+        chipsLow: ft.chipsLow,
+        chipsHigh: ft.chipsHigh,
+        karmaStart: ft.karmaStart,
+        karmaEnd: safeNumber(run.karma, 0),
+        karmaGain: safeNumber(run.karma, 0) - ft.karmaStart,
+        matches: ft.matches,
+        wins: ft.wins,
+        losses: ft.losses,
+        ties: ft.ties,
+        endReason
+      };
+      logEvent('FLOOR_END', summary);
+      gameLog.floorTracker = null;
+    }
+
+    function getEventMeta(type, data = {}) {
+      const base = { scope: 'both', importance: 40, category: 'system' };
+      const map = {
+        FLOOR_START: { scope: 'story', importance: 85, category: 'run' },
+        FLOOR_END: { scope: 'story', importance: 88, category: 'run' },
+        RUN_SUMMARY: { scope: 'story', importance: 95, category: 'run' },
+        TILE_ENTER: { scope: 'story', importance: 55, category: 'movement' },
+        MATCH_START: { scope: 'story', importance: 70, category: 'match' },
+        MATCH_END: { scope: 'story', importance: 82, category: 'match' },
+        MATCH_START_FAILED: { scope: 'story', importance: 90, category: 'terminal' },
+        GAME_END: { scope: 'story', importance: 100, category: 'terminal' },
+        LOAN_DEFAULTED: { scope: 'story', importance: 92, category: 'terminal' },
+        BOSS_FIGHT_FAILED: { scope: 'story', importance: 90, category: 'boss' },
+        BOSS_CLEARED: { scope: 'story', importance: 88, category: 'boss' },
+        KEYCARD_OBTAINED: { scope: 'story', importance: 84, category: 'progression' },
+        NPC_ASSIGNED: { scope: 'debug', importance: 20, category: 'debug' }
+      };
+      return { ...base, ...(map[type] || {}) };
     }
 
     function getEventCtx() {
@@ -2469,47 +2554,48 @@ const CALLING_RANK_THRESHOLDS = [
         floor: run ? run.floor : null,
         chips: run ? safeNumber(run.chips, null) : null,
         karma: run ? safeNumber(run.karma, null) : null,
-        playerName: run ? (run.playerName || '') : '',
         callingCard: run && run.callingCard ? { ...run.callingCard } : null,
-        callingRankValue: run && run.callingCard ? rankToValue(run.callingCard.rank) : null,
         tileId: run && run.board ? run.board.currentTileId : null,
         tileType: currentTile ? currentTile.type : null,
-        encounterSeq: run && run.activeEncounter ? run.activeEncounter.seq : null,
-        encounterType: run && run.activeEncounter ? run.activeEncounter.type : null,
-        matchSeq: blackjackMatch ? blackjackMatch.matchSeq : null,
-        matchType: blackjackMatch ? blackjackMatch.type : null,
-        matchPhase: blackjackMatch ? blackjackMatch.phase : null,
-        turn: blackjackMatch ? blackjackMatch.turn : null,
-        visibility: {
-          revealOnClose: (uiSettings && uiSettings.revealTotalsOnClose) !== false,
-          difficulty: getOpponentDifficulty()
-        },
-        bossFight: (run && run.bossFight && run.bossFight.active) ? {
-          round: run.bossFight.round,
-          maxRounds: run.bossFight.maxRounds,
-          hp: run.bossFight.hp,
-          maxHp: run.bossFight.maxHp,
-          phase: run.bossFight.phase,
-          targetLaneIdx: run.bossFight.targetLaneIdx
-        } : null
+        mode: run && run.ui ? run.ui.mode : null
       };
     }
 
     function logEvent(type, data = {}) {
       if (!gameLog) return;
+      const prev = gameLog.events.length ? gameLog.events[gameLog.events.length - 1] : null;
+      const chips = run ? safeNumber(run.chips, null) : null;
+      const karma = run ? safeNumber(run.karma, null) : null;
+      const prevChips = prev ? safeNumber(prev.chips, chips) : chips;
+      const prevKarma = prev ? safeNumber(prev.karma, karma) : karma;
       const evt = {
         id: gameLog.events.length + 1,
         ts: new Date().toISOString(),
         type,
         floor: run ? run.floor : null,
-        chips: run ? safeNumber(run.chips, null) : null,
+        chips,
+        karma,
+        meta: getEventMeta(type, data),
         ctx: getEventCtx(),
+        delta: {
+          chips: (typeof chips === 'number' && typeof prevChips === 'number') ? (chips - prevChips) : null,
+          karma: (typeof karma === 'number' && typeof prevKarma === 'number') ? (karma - prevKarma) : null
+        },
         data
       };
       gameLog.events.push(evt);
+      if (gameLog.floorTracker && typeof chips === 'number') {
+        gameLog.floorTracker.chipsLow = Math.min(gameLog.floorTracker.chipsLow, chips);
+        gameLog.floorTracker.chipsHigh = Math.max(gameLog.floorTracker.chipsHigh, chips);
+      }
+      if (gameLog.floorTracker && type === 'MATCH_START') gameLog.floorTracker.matches += 1;
+      if (gameLog.floorTracker && type === 'MATCH_END') {
+        if (data.outcome === 'WIN') gameLog.floorTracker.wins += 1;
+        else if (data.outcome === 'LOSS') gameLog.floorTracker.losses += 1;
+        else gameLog.floorTracker.ties += 1;
+      }
       updateLogStats(evt);
       persistLogSoon();
-
       if (logPanelOpen) renderLogPanel();
     }
 
@@ -2527,9 +2613,16 @@ const CALLING_RANK_THRESHOLDS = [
         tileType: currentTile ? currentTile.type : null,
         matchSeq: blackjackMatch ? blackjackMatch.matchSeq : null,
         chips: safeNumber(run.chips, 0),
-        message: outcomeObj.message || null
+        message: outcomeObj.message || null,
+        reasonCode: outcomeObj.reasonCode || 'UNKNOWN'
       };
 
+      const analysis = getRunEndAnalysis();
+      const playstyle = analysis && analysis.summary ? analysis.summary.playstyle : null;
+      const resonancePct = playstyle ? Math.round(safeNumber(playstyle.confidence, 0) * 100) : null;
+
+      gameLog.player.archetype = playstyle && playstyle.primary ? playstyle.primary.name : null;
+      gameLog.player.resonancePct = resonancePct;
       gameLog.runOutcome = { ...baseOutcome };
       gameLog.finalState = {
         chips: safeNumber(run.chips, 0),
@@ -2539,9 +2632,26 @@ const CALLING_RANK_THRESHOLDS = [
         tileType: currentTile ? currentTile.type : null,
         callingCard: run.callingCard ? { ...run.callingCard } : null,
         deckSnapshot: deckSnapshot(),
-        deckSummary: buildDeckSummary()
+        deckSummary: buildDeckSummary(),
+        playstyle: playstyle ? { ...playstyle, resonancePct } : null
       };
       if (run.feedback) gameLog.feedback = { ...run.feedback };
+
+      logEvent('RUN_SUMMARY', {
+        outcome: baseOutcome.outcome,
+        reasonCode: baseOutcome.reasonCode,
+        floorsReached: gameLog.stats ? gameLog.stats.floorsReached : null,
+        matches: gameLog.stats ? gameLog.stats.matches : null,
+        wins: gameLog.stats ? gameLog.stats.wins : null,
+        losses: gameLog.stats ? gameLog.stats.losses : null,
+        ties: gameLog.stats ? gameLog.stats.ties : null,
+        chipsStart: gameLog.initialState ? gameLog.initialState.chips : null,
+        chipsEnd: safeNumber(run.chips, 0),
+        karmaStart: gameLog.initialState ? gameLog.initialState.karma : null,
+        karmaEnd: safeNumber(run.karma, 0),
+        archetype: gameLog.player.archetype,
+        resonancePct
+      });
       persistLogSoon();
     }
 
@@ -2616,7 +2726,9 @@ const CALLING_RANK_THRESHOLDS = [
       if (t === 'KARMA_GAIN') return `Karma +${d.amount} (total ${d.total})`;
       if (t === 'FEEDBACK_UPDATED') return `Feedback updated`;
       if (t === 'DECK_SNAPSHOT') return `Deck snapshot saved`;
-      if (t === 'GAME_END') return `Run ended: ${d.result}`;
+      if (t === 'GAME_END') return `Run ended: ${d.result} (${d.reasonCode || 'UNKNOWN'})`;
+      if (t === 'FLOOR_END') return `Floor ${d.floor} ended (${d.endReason})`;
+      if (t === 'RUN_SUMMARY') return `Run summary: ${d.outcome || 'UNKNOWN'} · ${d.reasonCode || 'UNKNOWN'}`;
       return t;
     }
 
@@ -4149,16 +4261,19 @@ function benchPush(card, source = '') {
       run.board.currentTileId = null;
       run.board.visited = new Set();
       run.board.path = [];
-      if (floor === 1 && run.secret && run.secret.keys && !run.secret.keys.highStakes.tileId) {
-        const highs = run.board.tiles.filter(t => t.type === 'HIGH_STAKES');
-        if (highs.length) {
-          const pick = randomChoice(highs);
-          run.secret.keys.highStakes.tileId = pick.id;
+      if (run.secret && run.secret.keys && run.secret.keys.highStakes) {
+        const hsKey = run.secret.keys.highStakes;
+        if (!hsKey.obtained) {
+          const hsTiles = run.board.tiles.filter(t => t.type === 'HIGH_STAKES');
+          hsKey.tileId = hsTiles.length ? hsTiles[Math.floor(Math.random() * hsTiles.length)].id : null;
+          hsKey.floor = floor;
+          hsKey.hinted = false;
         }
       }
       run.ui.mode = 'BOARD';
 
-      logEvent('FLOOR_START', { floor });
+      beginFloorTracking(floor);
+      logEvent('FLOOR_START', { floor, chipsStart: run.chips, karmaStart: run.karma, layoutSeed: run.board.layoutSeed || null, deckSnapshot: deckSnapshot() });
       run.board.tiles.forEach(tile => {
         if (tile.npc) {
           logEvent('NPC_ASSIGNED', {
@@ -4185,14 +4300,17 @@ function benchPush(card, source = '') {
     }
 
     function enterTile(tileId) {
+      const fromTileId = run.board.currentTileId;
+      const wasVisited = run.board.visited.has(tileId);
       run.board.currentTileId = tileId;
       run.board.visited.add(tileId);
       run.board.path.push(tileId);
 
-      const tileType = run.board.tiles[tileId].type;
+      const tile = run.board.tiles[tileId];
+      const tileType = tile.type;
       run.encounterSeq = safeNumber(run.encounterSeq, 0) + 1;
       run.activeEncounter = { seq: run.encounterSeq, type: tileType, tileId, tileType };
-      logEvent('TILE_ENTER', { tileId, tileType });
+      logEvent('TILE_ENTER', { tileId, tileType, fromTileId, wasVisited, pathIndex: run.board.path.length - 1, npcName: tile && tile.npc ? tile.npc.name : null, npcCard: tile && tile.npc ? tile.npc.callingCard : null });
 
       renderBoard();
       resolveTileEncounter(tileType);
@@ -4327,7 +4445,7 @@ function benchPush(card, source = '') {
       let offerHtml = '';
       const hsKey = run.secret && run.secret.keys ? run.secret.keys.highStakes : null;
       if (hsKey && !hsKey.obtained && run.floor === hsKey.floor && !hsKey.hinted && hsKey.tileId !== null) {
-        offerHtml += `<p class="modal-text">"High roller on this floor. Find the right table and win big."</p>`;
+        offerHtml += `<p class="modal-text">"There’s a high-stakes table with a Key Card on this floor."</p>`;
         hsKey.hinted = true;
       }
       if (!offeredId) {
@@ -5381,23 +5499,36 @@ body += `
 
     // Blackjack encounters
     function encounterBlackjackStandard() {
-      if (run.chips < BUYIN_STANDARD) { gameOver("You can't afford the buy-in."); return; }
+      if (run.chips < BUYIN_STANDARD) {
+        logEvent('MATCH_START_FAILED', { type: 'STANDARD', buyIn: BUYIN_STANDARD, chips: run.chips, reason: 'INSUFFICIENT_CHIPS' });
+        gameOver("You can't afford the buy-in.", 'INSUFFICIENT_BUYIN');
+        return;
+      }
       startBlackjackMatch('STANDARD', BUYIN_STANDARD);
     }
 
     function encounterBlackjackHigh() {
-      if (run.chips < BUYIN_HIGH) { gameOver("You can't afford the buy-in."); return; }
+      if (run.chips < BUYIN_HIGH) {
+        logEvent('MATCH_START_FAILED', { type: 'HIGH_STAKES', buyIn: BUYIN_HIGH, chips: run.chips, reason: 'INSUFFICIENT_CHIPS' });
+        gameOver("You can't afford the buy-in.", 'INSUFFICIENT_BUYIN');
+        return;
+      }
       const hsKey = run.secret && run.secret.keys ? run.secret.keys.highStakes : null;
-      const specialReward = (run.floor === 1 && hsKey && !hsKey.obtained && run.board.currentTileId === hsKey.tileId) ? 'KEY_HIGH' : null;
+      const specialReward = (hsKey && !hsKey.obtained && run.board.currentTileId === hsKey.tileId) ? 'KEY_HIGH' : null;
       startBlackjackMatch('HIGH_STAKES', BUYIN_HIGH, { specialReward });
     }
 
     function encounterBoss() {
       if (run.floor === 3 && run.loan.active && !run.loan.repaid) {
-        gameOver("Debt unpaid. You cannot face the final boss.");
+        logEvent('LOAN_DEFAULTED', { floor: run.floor, amountOwed: LOAN_REPAY, at: 'BOSS_ENTRANCE' });
+        gameOver("Debt unpaid. You cannot face the final boss.", 'LOAN_DEFAULTED');
         return;
       }
-      if (run.chips < BUYIN_BOSS) { gameOver("You can't afford the buy-in."); return; }
+      if (run.chips < BUYIN_BOSS) {
+        logEvent('MATCH_START_FAILED', { type: 'BOSS', buyIn: BUYIN_BOSS, chips: run.chips, reason: 'INSUFFICIENT_CHIPS' });
+        gameOver("You can't afford the buy-in.", 'INSUFFICIENT_BUYIN');
+        return;
+      }
       startBossFight();
     }
 
@@ -5737,11 +5868,13 @@ body += `
 
         const c = drawCardFromPile(pile, fb);
         if (!c) return null;
-        if (isModifier(c)) {
+        if (isModifier(c) || (side === 'player' && c && c.sleeveId === 'BLUE')) {
           if (blackjackMatch) {
             if (side === 'player') {
-              benchPush(c, 'auto-bench');
+              const src = isModifier(c) ? 'auto-bench' : 'blue-sleeve-deal';
+              benchPush(c, src);
               blackjackMatch.metrics.modifiersBenched += 1;
+              logEvent('PLAYER_DRAW_BENCH', { card: cardToString(c), cardUid: c.uid || null, cardRef: cardRef(c), source: src });
             } else if (side === 'dealer') {
               blackjackMatch.dealerBench = blackjackMatch.dealerBench || [];
               blackjackMatch.dealerBench.push(c);
@@ -6261,12 +6394,12 @@ body += `
     function startEarningsSequence(parts, onDone) {
       if (!blackjackMatch) return;
       const steps = [];
-      const push = (name, delta) => { if (safeNumber(delta, 0) !== 0) steps.push({ name, delta: safeNumber(delta, 0) }); };
-      push('Payout', parts.payout || 0);
-      push('Side Bet', parts.sideBet || 0);
-      push('Rake', -(parts.rake || 0));
-      push('Bonus', parts.bonus || 0);
-      blackjackMatch.earningsSeq = { active: true, steps, idx: 0, accrued: 0, message: 'Earnings tally…', onDone };
+      const push = (name, delta, kind) => { if (safeNumber(delta, 0) !== 0) steps.push({ name, delta: safeNumber(delta, 0), kind }); };
+      push('Payout', parts.payout || 0, 'payout');
+      push('Side Bet', parts.sideBet || 0, 'sidebet');
+      push('Rake', -(parts.rake || 0), 'rake');
+      push('Bonus', parts.bonus || 0, 'bonus');
+      blackjackMatch.earningsSeq = { active: true, steps, idx: 0, accrued: 0, message: 'Earnings tally…', onDone, laneAccrued: Array(5).fill(0) };
       advanceEarningsSequence();
     }
 
@@ -6282,6 +6415,17 @@ body += `
       }
       const step = es.steps[es.idx++];
       es.accrued += step.delta;
+      const r = blackjackMatch.result;
+      if (r && r.laneChip) {
+        if (step.kind === 'sidebet') {
+          const arr = r.laneChip.transferNetByLane || [];
+          for (let i = 0; i < 5; i++) es.laneAccrued[i] += safeNumber(arr[i], 0);
+        }
+        if (step.kind === 'bonus') {
+          const arr = r.laneChip.bonusByLane || [];
+          for (let i = 0; i < 5; i++) es.laneAccrued[i] += safeNumber(arr[i], 0);
+        }
+      }
       es.message = `${step.name}: ${step.delta >= 0 ? '+' : ''}${step.delta}`;
       renderAll();
       setTimeout(advanceEarningsSequence, 650);
@@ -6292,8 +6436,14 @@ body += `
       const steps = [];
       (breakdown.lanes || []).forEach(lane => {
         if (lane.base > 0) steps.push({ type: 'laneBase', lane, delta: lane.base, message: `Lane ${lane.idx + 1} win +${lane.base}`, cardUids: [] });
-        if (lane.stampTotal > 0) steps.push({ type: 'laneStamps', lane, delta: lane.stampTotal, message: `Lane ${lane.idx + 1} stamps +${lane.stampTotal}`, cardUids: lane.stampUids || [] });
-        if (lane.patternTotal > 0) steps.push({ type: 'lanePatterns', lane, delta: lane.patternTotal, message: `Lane ${lane.idx + 1} patterns +${lane.patternTotal}`, cardUids: lane.patternUids || [] });
+        (lane.stamps || []).forEach(stamp => {
+          if (safeNumber(stamp.delta, 0) <= 0) return;
+          steps.push({ type: 'laneStamp', lane, delta: safeNumber(stamp.delta, 0), message: `Lane ${lane.idx + 1} ${stamp.name || 'Stamp'} +${stamp.delta}`, cardUids: stamp.cardUid ? [stamp.cardUid] : [] });
+        });
+        (lane.patterns || []).forEach(pattern => {
+          if (safeNumber(pattern.delta, 0) <= 0) return;
+          steps.push({ type: 'lanePattern', lane, delta: safeNumber(pattern.delta, 0), message: `Lane ${lane.idx + 1} ${pattern.name || 'Pattern'} +${pattern.delta}`, cardUids: pattern.cardUids || [] });
+        });
       });
       for (const extra of (extras || [])) {
         if (safeNumber(extra.delta, 0) <= 0) continue;
@@ -6309,6 +6459,7 @@ body += `
         stepIndex: 0,
         accrued: 0,
         total,
+        laneAccrued: Array(5).fill(0),
         focusLane: null,
         focusSide: null,
         focusCardUids: [],
@@ -6349,6 +6500,7 @@ body += `
       seq.message = step.message || 'Karma tally…';
       if (step.delta > 0) {
         seq.accrued += step.delta;
+        if (step.lane && typeof step.lane.idx === 'number') seq.laneAccrued[step.lane.idx] += step.delta;
         seq.float = {
           id: `${Date.now()}_${seq.stepIndex}`,
           laneIdx: step.lane ? step.lane.idx : null,
@@ -6368,6 +6520,43 @@ body += `
     window.skipScoreSequence = function() {
       if (!blackjackMatch || !blackjackMatch.scoreSeq || !blackjackMatch.scoreSeq.active) return;
       blackjackMatch.scoreSeq.isFast = true;
+    };
+
+
+    window.skipResolutionAnimations = function(){
+      if (!blackjackMatch) return;
+      if (blackjackMatch.earningsSeq && blackjackMatch.earningsSeq.active){
+        const es = blackjackMatch.earningsSeq;
+        while (es.idx < es.steps.length){
+          const step = es.steps[es.idx++];
+          es.accrued += step.delta;
+          const r = blackjackMatch.result;
+          if (r && r.laneChip){
+            if (step.kind === 'sidebet'){
+              const arr = r.laneChip.transferNetByLane || [];
+              for (let i=0;i<5;i++) es.laneAccrued[i] += safeNumber(arr[i],0);
+            }
+            if (step.kind === 'bonus'){
+              const arr = r.laneChip.bonusByLane || [];
+              for (let i=0;i<5;i++) es.laneAccrued[i] += safeNumber(arr[i],0);
+            }
+          }
+        }
+        es.active = false;
+      }
+      if (blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active){
+        const ss = blackjackMatch.scoreSeq;
+        while (ss.stepIndex < ss.steps.length){
+          const step = ss.steps[ss.stepIndex++];
+          if (step.delta > 0){
+            ss.accrued += step.delta;
+            if (step.lane && typeof step.lane.idx === 'number') ss.laneAccrued[step.lane.idx] += step.delta;
+          }
+        }
+        finishScoreSequence();
+        return;
+      }
+      renderAll();
     };
 
     // =============================================
@@ -6563,6 +6752,15 @@ body += `
     };
 
 
+    function fuseCardsInDeck(cardA, cardB) {
+      const fused = { uid: nextCardUid(), type: 'FUSE', a: cardA, b: cardB, sleeveId: 'FUSION' };
+      run.playerDeck = (run.playerDeck || []).filter(c => c !== cardA && c !== cardB);
+      run.playerDeck.push(fused);
+      recordDeckSnapshot('FUSION_CREATED', { a: cardRef(cardA), b: cardRef(cardB), fused: cardRef(fused) });
+      return fused;
+    }
+
+
     function handleFusionOnCardPlaced(pos, placed) {
       if (!pos || !placed || !isStandardCard(placed)) return placed;
 
@@ -6572,12 +6770,17 @@ body += `
         if (pendingIdx !== -1 && placedIdx !== -1 && pendingIdx !== placedIdx) {
           const fusionCard = pos.cards[pendingIdx];
           const placedCard = pos.cards[placedIdx];
-          const fused = { uid: null, type: 'FUSE', a: fusionCard, b: placedCard, sleeveId: 'FUSION' };
-          assignUid(fused);
+          const fusedDeckCard = fuseCardsInDeck(fusionCard, placedCard);
           pos.cards = pos.cards.filter((_, i) => i !== pendingIdx && i !== placedIdx);
-          pos.cards.push(fused);
+          pos.cards.push(fusedDeckCard);
           pos.pendingFusionUid = null;
-          return fused;
+          logEvent('FUSION_TRIGGERED', {
+            laneCards: (pos.cards || []).map(cardRef),
+            a: cardRef(fusionCard),
+            b: cardRef(placedCard),
+            fused: cardRef(fusedDeckCard)
+          });
+          return fusedDeckCard;
         }
       }
 
@@ -6711,6 +6914,17 @@ body += `
       updateThreatTargetLane(false, 'player_end_turn_close');
       if (checkMatchEnd()) return;
       endPlayerTurn();
+    };
+
+    window.passTillMatchEnd = function(){
+      if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (blackjackMatch.turn !== 'player') return;
+      if (blackjackMatch.drawnCard) return;
+      if (countOpenPositions(blackjackMatch.playerPositions) > 0) return;
+      blackjackMatch.turn = 'dealer';
+      blackjackMatch.turnStartMs = Date.now();
+      renderAll();
+      setTimeout(() => dealerTurn(), 380);
     };
 
     function endPlayerTurn() {
@@ -7150,6 +7364,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
     function resolveMatch(options = {}) {
       blackjackMatch.phase = 'resolved';
       clearDealerTimers();
+      const chipsBefore = safeNumber(run.chips, 0);
 
       // defensive finalize
       finalizeBusts(blackjackMatch.playerPositions, 'player');
@@ -7164,6 +7379,8 @@ function dealerStandPhase(diff, maxPasses = 6) {
       const dealerTotals = [];
       const playerBusts = [];
       const dealerBusts = [];
+      const laneTransferRaw = Array(5).fill(0);
+      const laneBonus = Array(5).fill(0);
 
       for (let i = 0; i < 5; i++) {
         const pPos = blackjackMatch.playerPositions[i];
@@ -7191,6 +7408,13 @@ function dealerStandPhase(diff, maxPasses = 6) {
         }
         positionResults.push(result);
 
+        let raw = 0;
+        if ((pBust && dBust) || (!pBust && !dBust && pTotal === dTotal)) raw = 0;
+        else if (!pBust && dBust) raw = pTotal;
+        else if (pBust && !dBust) raw = -dTotal;
+        else raw = pTotal - dTotal;
+        laneTransferRaw[i] = raw;
+
         // Transfers
         if ((pBust && dBust) || (!pBust && !dBust && pTotal === dTotal)) continue;
 
@@ -7204,6 +7428,10 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
       const transferMultiplier = blackjackMatch.transferMultiplier || 1;
       transferNet *= transferMultiplier;
+      for (let i = 0; i < 5; i++) {
+        const p = blackjackMatch.playerPositions[i];
+        if (p && p.bonus21Awarded) laneBonus[i] += BLACKJACK_21_REWARD;
+      }
 
       let outcome;
       let payout;
@@ -7272,6 +7500,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
         if (goldCount > 0) {
           const amount = safeNumber(playerTotals[i], 0) * goldCount;
           goldBonusTotal += amount;
+          laneBonus[i] += amount;
           logEvent('GOLD_SLEEVE_BONUS', { laneIdx: i + 1, amount, count: goldCount });
         }
       }
@@ -7337,7 +7566,11 @@ function dealerStandPhase(diff, maxPasses = 6) {
         const laneCards = blackjackMatch.playerPositions[i].cards || [];
         const vfCount = collectLaneCardsForEffects(laneCards).filter(c => getCardStampId(c) === 'VENTURE_FUND').length;
         const laneKarmaTotal = safeNumber(karmaBreakdown.lanes[i]?.laneTotal, 0);
-        if (vfCount > 0) ventureFundChips += laneKarmaTotal * vfCount;
+        if (vfCount > 0) {
+          const gain = laneKarmaTotal * vfCount;
+          ventureFundChips += gain;
+          laneBonus[i] += gain;
+        }
       }
       if (ventureFundChips > 0) {
         run.chips = safeNumber(run.chips) + ventureFundChips;
@@ -7357,6 +7590,15 @@ function dealerStandPhase(diff, maxPasses = 6) {
         exhaustion: options.exhaustion || null,
         karmaGained,
         karmaBreakdown: { ...karmaBreakdown, extras: karmaExtras, total: karmaGained }
+      };
+      const laneTransferNet = laneTransferRaw.map(v => safeNumber(v, 0) * transferMultiplier);
+      const laneTotal = laneTransferNet.map((v, i) => v + safeNumber(laneBonus[i], 0));
+      blackjackMatch.result.laneChip = {
+        transferMultiplier,
+        transferRawByLane: laneTransferRaw.slice(),
+        transferNetByLane: laneTransferNet.slice(),
+        bonusByLane: laneBonus.slice(),
+        totalByLane: laneTotal
       };
 
       // finalize bust counts for match metrics
@@ -7393,6 +7635,10 @@ blackjackMatch.result.rake = rake;
 blackjackMatch.result.rakeRate = rakeRate;
 
 run.chips = safeNumber(run.chips) + payout + transferNet - rake;
+      blackjackMatch.result.chipsBefore = chipsBefore;
+      blackjackMatch.result.chipsAfter = safeNumber(run.chips, 0);
+      blackjackMatch.postMatchGameOver = run.chips < 0;
+      blackjackMatch.postMatchGameOverReason = blackjackMatch.postMatchGameOver ? 'CHIPS_NEGATIVE' : null;
 
       const durationMs = Math.round(performance.now() - blackjackMatch.metrics.startedAtMs);
 
@@ -8134,9 +8380,30 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     // =============================================
     window.blackjackContinue = function() {
       clearDealerTimers();
+      if (!blackjackMatch) return;
+
+      if (isResolutionAnimationActive()) {
+        if (blackjackMatch.earningsSeq && blackjackMatch.earningsSeq.active) blackjackMatch.earningsSeq.active = false;
+        if (blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active) blackjackMatch.scoreSeq.active = false;
+        if (blackjackMatch.pendingRewardStart) {
+          blackjackMatch.pendingRewardStart = false;
+          startWinnerRewardFlow();
+        }
+        renderAll();
+      }
 
       if (blackjackMatch.rewardPending) {
-        showToast('Resolve winner reward first');
+        if (blackjackMatch.pendingRewardStart) {
+          blackjackMatch.pendingRewardStart = false;
+          startWinnerRewardFlow();
+        } else if (blackjackMatch.winnerReward) {
+          showToast('Choose a reward to continue.');
+        }
+        return;
+      }
+
+      if (blackjackMatch.postMatchGameOver) {
+        triggerGameOver(blackjackMatch.postMatchGameOverReason || 'CHIPS_NEGATIVE');
         return;
       }
 
@@ -8149,7 +8416,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         blackjackMatch = null;
 
         if (win) victory();
-        else gameOver('You were outplayed by The Watcher.');
+        else gameOver('You were outplayed by The Watcher.', 'WATCHER_LOSS');
 
         return;
       }
@@ -8163,10 +8430,12 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           logEvent('BOSS_CLEARED', { floor: run.floor, bossWins: run.bossWins, benchCapacity: getBenchCapacity() });
           showToast(`Boss cleared. Bench capacity is now ${getBenchCapacity()}.`);
           if (run.floor < 3) {
+            endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
             blackjackMatch = null;
             initFloor(run.floor + 1);
             showToast(`Floor ${run.floor} begins!`);
           } else {
+            endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
             blackjackMatch = null;
             if (shouldStartWatcher()) startWatcherEncounter();
             else victory();
@@ -8177,15 +8446,16 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         bf.benchCarry = (blackjackMatch.bench || []).slice();
         bf.roundsRemaining = Math.max(0, safeNumber(bf.roundsRemaining, bf.maxRounds) - 1);
         if (bf.roundsRemaining <= 0 && bf.hp > 0) {
-          gameOver("Time expired before boss HP was depleted.");
+          logEvent('BOSS_FIGHT_FAILED', { reason: 'TIME', floor: run.floor, boss: { hp: bf.hp, maxHp: bf.maxHp, round: bf.round, roundsRemaining: bf.roundsRemaining } });
+          gameOver("Time expired. The boss remains.", 'BOSS_TIMER_EXPIRED');
           return;
         }
         if (bf.round < bf.maxRounds) {
           startBossRound(bf.round + 1);
           renderAll();
         } else {
-          logEvent('BOSS_FIGHT_FAILED', { floor: run.floor, round: bf.round, maxRounds: bf.maxRounds, hp: bf.hp });
-          gameOver("The boss withstands the assault.");
+          logEvent('BOSS_FIGHT_FAILED', { reason: 'WITHSTOOD', floor: run.floor, boss: { hp: bf.hp, maxHp: bf.maxHp, round: bf.round } });
+          gameOver("The boss withstands the assault.", 'BOSS_WITHSTOOD');
         }
         return;
       }
@@ -8196,16 +8466,18 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           logEvent('BOSS_CLEARED', { floor: run.floor, bossWins: run.bossWins, benchCapacity: getBenchCapacity() });
           showToast(`Boss cleared. Bench capacity is now ${getBenchCapacity()}.`);
           if (run.floor < 3) {
+            endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
             blackjackMatch = null;
             initFloor(run.floor + 1);
             showToast(`Floor ${run.floor} begins!`);
           } else {
+            endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
             blackjackMatch = null;
             if (shouldStartWatcher()) startWatcherEncounter();
             else victory();
           }
         } else {
-          gameOver("You lost to the boss.");
+          gameOver("You lost to the boss.", 'BOSS_LOSS');
         }
       } else {
         blackjackMatch = null;
@@ -8213,13 +8485,21 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         renderAll();
       }
     };
+    function triggerGameOver(reason) {
+      if (reason === 'CHIPS_NEGATIVE') {
+        gameOver('Chips below zero', 'CHIPS_NEGATIVE');
+        return;
+      }
+      gameOver('Run ended.', reason || 'UNKNOWN');
+    }
 
-    function gameOver(message) {
+    function gameOver(message, reasonCode = 'UNKNOWN') {
       clearDealerTimers();
       run.ui.mode = 'GAMEOVER';
       run.ui.message = message;
-      logEvent('GAME_END', { result: 'GAMEOVER', message });
-      finalizeRunLog({ outcome: 'loss', message });
+      endCurrentFloorIfOpen({ endReason: reasonCode || 'GAMEOVER' });
+      logEvent('GAME_END', { result: 'GAMEOVER', message, reasonCode });
+      finalizeRunLog({ outcome: 'loss', message, reasonCode });
       renderAll();
       if (uiSettings.autoOpenLogOnEnd) openLogPanel('stats');
     }
@@ -8227,8 +8507,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     function victory() {
       clearDealerTimers();
       run.ui.mode = 'VICTORY';
-      logEvent('GAME_END', { result: 'VICTORY' });
-      finalizeRunLog({ outcome: 'win', message: null });
+      endCurrentFloorIfOpen({ endReason: 'VICTORY' });
+      logEvent('GAME_END', { result: 'VICTORY', reasonCode: 'VICTORY' });
+      finalizeRunLog({ outcome: 'win', message: null, reasonCode: 'VICTORY' });
       renderAll();
       if (uiSettings.autoOpenLogOnEnd) openLogPanel('stats');
     }
@@ -8273,7 +8554,21 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
     function renderHUD() {
       const hud = document.getElementById('hud');
-      const chips = safeNumber(run.chips, 0);
+      let chips = safeNumber(run.chips, 0);
+      let karma = safeNumber(run.karma, 0);
+      if (blackjackMatch) {
+        const es = blackjackMatch.earningsSeq;
+        if (es && es.active && blackjackMatch.result) {
+          const before = safeNumber(blackjackMatch.result.chipsBefore, chips);
+          chips = before + safeNumber(es.accrued, 0);
+        }
+        const ss = blackjackMatch.scoreSeq;
+        if (ss && ss.active) {
+          const total = safeNumber(ss.total, 0);
+          const accrued = safeNumber(ss.accrued, 0);
+          karma = safeNumber(run.karma, 0) - (total - accrued);
+        }
+      }
       const loanStatus = run.loan.active ? (run.loan.repaid ? 'Repaid' : `Owed: ${LOAN_REPAY}`) : 'None';
       const canRepay = run.loan.active && !run.loan.repaid && chips >= LOAN_REPAY;
       const rankInfo = getCallingRankInfo();
@@ -8305,7 +8600,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             </div>
             <div class="hud-stat">
               <span class="hud-stat-label">Karma</span>
-              <span class="hud-stat-value karma">${safeNumber(run.karma, 0)}</span>
+              <span class="hud-stat-value karma">${karma}</span>
             </div>
             <div class="hud-stat">
               <span class="hud-stat-label">Tokens</span>
@@ -8338,7 +8633,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
                 <span class="hud-calling-main">${callingText}</span>
               </div>
               <div class="hud-calling-row">
-                <span class="hud-calling-sub">Karma ${safeNumber(run.karma, 0)}</span>
+                <span class="hud-calling-sub">Karma ${karma}</span>
                 <span class="hud-calling-sub">${rankLine}</span>
               </div>
               <div class="xpbar"><div class="xpbar-fill" style="width:${prog}%"></div></div>
@@ -8602,8 +8897,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           <div class="cc-card-stage">
             <div class="cc-bounce" id="ccBounce">
               <div class="cc-float" id="ccFloat">
-                <div class="cc-tilt" id="ccTilt">
-                  <div class="cc-flip ${flipped ? 'is-flipped' : ''}" id="ccFlip" role="button" tabindex="0" aria-label="Calling card. Click to flip for details.">
+                <div class="cc-scale">
+                  <div class="cc-tilt" id="ccTilt">
+                    <div class="cc-flip ${flipped ? 'is-flipped' : ''}" id="ccFlip" role="button" tabindex="0" aria-label="Calling card. Click to flip for details.">
                     <div class="cc-face cc-neon cc-front">
                       <div class="cc-corner">${escapeHtml(rank)}</div>
                       <div class="cc-suit">${escapeHtml(suit)}</div>
@@ -8620,6 +8916,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
                       <div class="cc-back-lines" style="opacity:0.85;">Tap / click to flip back</div>
                     </div>
 
+                  </div>
                   </div>
                 </div>
               </div>
@@ -9147,95 +9444,76 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       return `<div class="bj-state ${state}">${state}</div>`;
     }
 
-    function renderPosition(pos, idx, side, isResolved, laneWinner) {
-  const state = posState(pos);
-  const total = getPositionTotal(pos);
-
-  // Spy Network should always override visibility for that lane
-  const spy = (side === 'dealer')
-    && blackjackMatch
-    && blackjackMatch.spyReveals
-    && blackjackMatch.spyReveals.has(idx);
-  const spadeReveal = (side === 'dealer')
-    && blackjackMatch
-    && blackjackMatch.spadePeekLanes
-    && blackjackMatch.spadePeekLanes.has(idx);
-
-  // NEW: totals + hole-card reveal behavior for dealer
-  // - if revealTotalsOnClose: reveal when lane closes (stood/bust)
-  // - else: reveal only when match resolves
-  const revealTotalsOnClose = (uiSettings && uiSettings.revealTotalsOnClose) !== false;
-  const showDealerTotal = spy || spadeReveal || isResolved || (revealTotalsOnClose && pos.isComplete);
-
-  const showTotal = (side === 'player') ? true : showDealerTotal;
-  const canReveal = (side === 'player') ? true : showDealerTotal;
-  const totalText = showTotal ? `${total}` : '??';
-  const totalBustVisual = canReveal && total > 21 ? 'bust' : '';
-
-  // Hole card reveals when we reveal totals (or via spy, or on match resolve)
-  const revealHole = (side === 'dealer') ? showDealerTotal : true;
-
-  const displayState = (state === 'bust' && !canReveal) ? 'stand' : state;
-  let cls = `bj-position ${displayState}`;
-  if (blackjackMatch && blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active
-    && blackjackMatch.scoreSeq.focusLane === idx
-    && blackjackMatch.scoreSeq.focusSide === side) {
-    cls += ' score-flash';
-  }
-  if (side === 'player' && run && run.bossFight && run.bossFight.active
-    && run.bossFight.phase === 2 && run.bossFight.targetLaneIdx === idx) {
-    cls += ' boss-target';
-  }
-  if (side === 'player' && blackjackMatch && blackjackMatch.type === 'WATCHER'
-    && blackjackMatch.watcherTargetLaneIdx === idx) {
-    cls += ' watcher-target';
-  }
-  if (displayState === 'open') cls += ' open';
-  if (displayState === 'stand') cls += ' stand';
-  if (displayState === 'bust') cls += ' bust';
-  if (displayState === 'closed') cls += ' closed';
-
-  if (isResolved) {
-    if (laneWinner === side) cls += ' winner';
-  }
-
-  // NEW: Dealer cards: first card face-down unless revealed; others face-up
-  const focusedUids = new Set((blackjackMatch && blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active && blackjackMatch.scoreSeq.focusLane === idx && blackjackMatch.scoreSeq.focusSide === side)
-    ? (blackjackMatch.scoreSeq.focusCardUids || []) : []);
-  const cardsHtml = (pos.cards || []).map((c, j) => {
-    if (side === 'dealer') {
-      const faceDown = (j === 0) && !revealHole;
-      return renderCard(c, faceDown);
+    function renderLaneSummary(side, idx, isResolved){
+      if (!blackjackMatch || !isResolved) return '';
+      if (side !== 'player') return '';
+      const r = blackjackMatch.result || {};
+      const laneChip = r.laneChip || null;
+      const kb = r.karmaBreakdown || null;
+      const es = blackjackMatch.earningsSeq;
+      const ss = blackjackMatch.scoreSeq;
+      let chipsNow = 0;
+      if (es && es.active && Array.isArray(es.laneAccrued)) chipsNow = safeNumber(es.laneAccrued[idx], 0);
+      else if (laneChip && Array.isArray(laneChip.totalByLane)) chipsNow = safeNumber(laneChip.totalByLane[idx], 0);
+      let karmaNow = 0;
+      if (ss && ss.active && Array.isArray(ss.laneAccrued)) karmaNow = safeNumber(ss.laneAccrued[idx], 0);
+      else if (kb && Array.isArray(kb.lanes) && kb.lanes[idx]) karmaNow = safeNumber(kb.lanes[idx].laneTotal, 0);
+      return `<div class="lane-summary"><span>Chips <b>${chipsNow >= 0 ? '+' : ''}${chipsNow}</b></span><span>Karma <b>${karmaNow >= 0 ? '+' : ''}${karmaNow}</b></span></div>`;
     }
-    const popClass = focusedUids.has(c && c.uid) ? 'karma-pop' : '';
-    return renderCard(c, false, popClass);
-  }).join('');
 
-  const mods = (pos.mods || []);
-  const trapDelta = (!pos.isOpen && blackjackMatch && blackjackMatch.traps) ? blackjackMatch.traps[side][idx] : 0;
-  const displayMods = mods.length ? mods : (trapDelta ? [trapDelta] : []);
-  const modsText = displayMods.length ? displayMods.map(m => (m > 0 ? `+${m}` : `${m}`)).join(' ') : '';
-  const modsLine = displayMods.length
-    ? `<div class="bj-position-num" style="color: var(--accent-blue); font-weight:800;">MOD: ${modsText}</div>`
-    : `<div class="bj-position-num">MOD: —</div>`;
-  const f = blackjackMatch && blackjackMatch.scoreSeq ? blackjackMatch.scoreSeq.float : null;
-  const floatHtml = (f && f.side === side && f.laneIdx === idx)
-    ? `<div class="karma-float" data-float-id="${f.id}">${escapeHtml(f.text || '')}</div>`
-    : '';
+    function renderResolutionLogEarnings(){
+      const es = blackjackMatch && blackjackMatch.earningsSeq;
+      const steps = (es && es.steps) ? es.steps : [];
+      if (!steps.length) return '';
+      const idx = es.active ? Math.max(0, es.idx - 1) : steps.length - 1;
+      return `<div style="flex:1 1 320px; border:1px solid var(--border-color); border-radius:12px; padding:10px; background:rgba(0,0,0,0.18);"><div style="font-family:'Cinzel',serif; color:var(--accent-gold); letter-spacing:1px; font-size:12px; margin-bottom:8px;">Earnings Log</div><div style="max-height:160px; overflow:auto; font-size:12px; color:var(--text-secondary);">${steps.map((st,i)=>`<div style="display:flex; justify-content:space-between; gap:10px; padding:3px 0; ${i===idx?'color:var(--text-primary); font-weight:800;':''}"><span>${escapeHtml(st.name)}</span><span>${st.delta>=0?'+':''}${st.delta}</span></div>`).join('')}</div></div>`;
+    }
 
-  return `
-    <div class="${cls}" id="${side}_lane_${idx}">
-      <div class="bj-position-num">${side.toUpperCase()} #${idx+1}</div>
-      <div class="bj-cards">${cardsHtml}</div>
-      <div class="bj-total ${totalBustVisual}">${totalText}</div>
-      ${stateBadge(displayState)}
-      ${modsLine}
-      ${floatHtml}
-      <div id="${side}_lane_actions_${idx}" style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center;"></div>
-    </div>
-  `;
-}
+    function renderResolutionLogKarma(){
+      const ss = blackjackMatch && blackjackMatch.scoreSeq;
+      const steps = (ss && ss.steps) ? ss.steps : [];
+      if (!steps.length) return '';
+      const idx = ss.active ? Math.max(0, ss.stepIndex - 1) : steps.length - 1;
+      return `<div style="flex:2 1 420px; border:1px solid var(--border-color); border-radius:12px; padding:10px; background:rgba(0,0,0,0.18);"><div style="font-family:'Cinzel',serif; color:var(--accent-gold); letter-spacing:1px; font-size:12px; margin-bottom:8px;">Karma Log</div><div style="max-height:160px; overflow:auto; font-size:12px; color:var(--text-secondary);">${steps.map((st,i)=>`<div style="display:flex; justify-content:space-between; gap:10px; padding:3px 0; ${i===idx?'color:var(--text-primary); font-weight:800;':''}"><span>${escapeHtml(st.message || '')}</span><span>${st.delta>0?`+${st.delta}`:''}</span></div>`).join('')}</div></div>`;
+    }
 
+    function renderPosition(pos, idx, side, isResolved, laneWinner) {
+      const state = posState(pos);
+      const total = getPositionTotal(pos);
+      const spy = (side === 'dealer') && blackjackMatch && blackjackMatch.spyReveals && blackjackMatch.spyReveals.has(idx);
+      const spadeReveal = (side === 'dealer') && blackjackMatch && blackjackMatch.spadePeekLanes && blackjackMatch.spadePeekLanes.has(idx);
+      const revealTotalsOnClose = (uiSettings && uiSettings.revealTotalsOnClose) !== false;
+      const showDealerTotal = spy || spadeReveal || isResolved || (revealTotalsOnClose && pos.isComplete);
+      const showTotal = (side === 'player') ? true : showDealerTotal;
+      const canReveal = (side === 'player') ? true : showDealerTotal;
+      const totalText = showTotal ? `${total}` : '??';
+      const totalBustVisual = ((side === 'player') || isResolved) && canReveal && total > 21 ? 'bust' : '';
+      const revealHole = (side === 'dealer') ? showDealerTotal : true;
+      const displayState = (state === 'bust' && !canReveal) ? 'stand' : state;
+      let cls = `bj-position ${displayState}`;
+      if (blackjackMatch && blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active && blackjackMatch.scoreSeq.focusLane === idx && blackjackMatch.scoreSeq.focusSide === side) cls += ' score-flash';
+      if (side === 'player' && run && run.bossFight && run.bossFight.active && run.bossFight.phase === 2 && run.bossFight.targetLaneIdx === idx) cls += ' boss-target';
+      if (side === 'player' && blackjackMatch && blackjackMatch.type === 'WATCHER' && blackjackMatch.watcherTargetLaneIdx === idx) cls += ' watcher-target';
+      if (displayState === 'open') cls += ' open';
+      if (displayState === 'stand') cls += ' stand';
+      if (displayState === 'bust' && (side === 'player' || isResolved)) cls += ' bust';
+      if (displayState === 'closed') cls += ' closed';
+      if (isResolved && laneWinner === side) cls += ' winner';
+      const focusedUids = new Set((blackjackMatch && blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active && blackjackMatch.scoreSeq.focusLane === idx && blackjackMatch.scoreSeq.focusSide === side) ? (blackjackMatch.scoreSeq.focusCardUids || []) : []);
+      const cardsHtml = (pos.cards || []).map((c, j) => {
+        if (side === 'dealer') return renderCard(c, (j === 0) && !revealHole);
+        const popClass = focusedUids.has(c && c.uid) ? 'karma-pop' : '';
+        return renderCard(c, false, popClass);
+      }).join('');
+      const mods = (pos.mods || []);
+      const trapDelta = (!pos.isOpen && blackjackMatch && blackjackMatch.traps) ? blackjackMatch.traps[side][idx] : 0;
+      const displayMods = mods.length ? mods : (trapDelta ? [trapDelta] : []);
+      const modsText = displayMods.length ? displayMods.map(m => (m > 0 ? `+${m}` : `${m}`)).join(' ') : '';
+      const modsLine = displayMods.length ? `<div class="bj-position-num" style="color: var(--accent-blue); font-weight:800;">MOD: ${modsText}</div>` : `<div class="bj-position-num">MOD: —</div>`;
+      const f = blackjackMatch && blackjackMatch.scoreSeq ? blackjackMatch.scoreSeq.float : null;
+      const floatHtml = (f && f.side === side && f.laneIdx === idx) ? `<div class="karma-float" data-float-id="${f.id}">${escapeHtml(f.text || '')}</div>` : '';
+      return `<div class="${cls}" id="${side}_lane_${idx}"><div class="bj-position-num">${side.toUpperCase()} #${idx+1}</div><div class="bj-cards">${cardsHtml}</div><div class="bj-total ${totalBustVisual}">${totalText}</div>${stateBadge(displayState)}${modsLine}${renderLaneSummary(side, idx, isResolved)}${floatHtml}<div id="${side}_lane_actions_${idx}" style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center;"></div></div>`;
+    }
 
     function renderBlackjack() {
       const boardView = document.getElementById('boardView');
@@ -9332,40 +9610,28 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         const rewardNote = blackjackMatch.rewardPending
           ? `<div class="bj-result-score" style="color:var(--accent-gold); font-weight:800;">Winner reward pending…</div>`
           : '';
-
         const exhaustionNote = result.exhaustion
           ? `<div class="bj-result-score" style="color:var(--accent-red); font-weight:800;">Deck exhaustion (${result.exhaustion.side})</div>`
           : '';
-
         const scoreSeq = blackjackMatch.scoreSeq;
         const earningsSeq = blackjackMatch.earningsSeq;
         const earningsNow = earningsSeq && earningsSeq.active ? earningsSeq.accrued : netFromEnd;
-        const earningsLine = earningsSeq && earningsSeq.active
-          ? `<div class="bj-result-score" style="color:var(--accent-blue); font-weight:800;">Earnings tally: ${escapeHtml(earningsSeq.message || '')}</div>`
-          : '';
-        const scoreLine = scoreSeq && scoreSeq.active
-          ? `<div class="bj-result-score" style="color:var(--accent-blue); font-weight:800;">Karma tally: +${Math.max(0, scoreSeq.accrued)} / +${Math.max(0, scoreSeq.total)} · ${escapeHtml(scoreSeq.message || '')}</div>`
-          : '';
+        const karmaNow = scoreSeq && scoreSeq.active ? Math.max(0, scoreSeq.accrued) : Math.max(0, (result.karmaGained || 0));
+        const rankText = run.callingCard ? `${run.callingCard.rank}${run.callingCard.suit}` : '—';
 
         html += `
           <div class="bj-result">
-            <div class="bj-result-title ${titleCls}">${outcome}</div>
-            <div class="bj-result-score">
-              Lanes: You ${result.playerWins} — Dealer ${result.dealerWins}<br/>
-              Payout: ${payout} · Side Bet x${transferMultiplier}: ${transfer >= 0 ? '+' : ''}${transfer}${rakeLine} · Bonus: ${bonus}
+            <div class="bj-result-row">
+              <div><b>Outcome:</b> <span class="${titleCls}">${outcome}</span></div>
+              <div><b>Match Earnings:</b> <span class="${netCls}">${earningsNow >= 0 ? '+' : ''}${earningsNow}</span> <span style="color:var(--text-muted)">(Payout ${payout}, SideBet ${transfer >= 0 ? '+' : ''}${transfer}, Rake -${rake}, Bonus ${bonus})</span></div>
             </div>
-            <div class="bj-result-chips ${netCls}">
-              Match Earnings: ${earningsNow >= 0 ? '+' : ''}${earningsNow}
+            <div class="bj-result-row">
+              <div><b>Karma:</b> +${karmaNow} <span style="color:var(--text-muted)">(Rank ${rankText})</span></div>
+              <div style="display:flex; gap:10px; justify-content:flex-end;">${isResolutionAnimationActive() ? '<button class="bj-btn" onclick="skipResolutionAnimations()">Skip</button>' : ''}<button class="bj-btn" onclick="blackjackContinue()" ${isResolutionAnimationActive() || blackjackMatch.rewardPending ? 'disabled' : ''}>Complete</button></div>
             </div>
             ${rewardNote}
             ${exhaustionNote}
-            ${earningsLine}
-            <div class="bj-result-chips ${Math.max(0, (result.karmaGained || 0)) > 0 ? 'positive' : 'neutral'}">Karma Gained: +${Math.max(0, (scoreSeq && scoreSeq.active) ? scoreSeq.accrued : (result.karmaGained || 0))}</div>
-            ${scoreLine}
-            <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-              <button class="bj-btn" onclick="blackjackContinue()" ${blackjackMatch.rewardPending || isResolutionAnimationActive() ? 'disabled' : ''}>Continue</button>
-              ${(scoreSeq && scoreSeq.active) ? '<button class="bj-btn" onclick="skipScoreSequence()">Skip Tally</button>' : ''}
-            </div>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;">${renderResolutionLogEarnings()}${renderResolutionLogKarma()}</div>
           </div>
         `;
       } else {
@@ -9483,7 +9749,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
                   ? (isModifier(armedCard)
                     ? 'Armed modifier: apply to any open lane (player or dealer). Costs 1 token.'
                     : 'Armed card: place into any open player lane (ends your turn). Costs 1 token.')
-                  : 'Modifiers drawn are benched automatically. Using the Bench costs 1 token.'}
+                  : 'Use Bench before drawing. Costs 1 token.'}
               </div>
             </div>
           `;
@@ -9496,7 +9762,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
               <div class="bj-action-btns">
                 <button class="bj-btn" onclick="playerDrawCard()" ${(!isPlayerTurn || !!drawn || countOpenPositions(blackjackMatch.playerPositions) === 0) ? 'disabled' : ''}>Draw</button>
-                <button class="bj-btn" onclick="playerEndTurn()" ${(!isPlayerTurn || !!drawn) ? 'disabled' : ''}>Close & End</button>
+                ${(isPlayerTurn && countOpenPositions(blackjackMatch.playerPositions) > 0) ? `<button class="bj-btn danger" ${(!isPlayerTurn || !!drawn) ? 'disabled' : ''} onclick="playerEndTurn()">Stand All &amp; End Turn</button>` : ''}
+                ${(isPlayerTurn && countOpenPositions(blackjackMatch.playerPositions) === 0 && !allPositionsComplete(blackjackMatch.dealerPositions)) ? `<button class="bj-btn" ${(!isPlayerTurn || !!drawn) ? 'disabled' : ''} onclick="passTillMatchEnd()">Pass Till Match End</button>` : ''}
               </div>
 
               <div class="controls-row">
@@ -9615,8 +9882,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       "The Surgeon":        { name: "Maria", epithet: "The Surgeon" },
       "The Saboteur":       { name: "Rook",  epithet: "The Saboteur" },
       "The High Roller":    { name: "Vance", epithet: "The High Roller" },
-      "The Engine Builder": { name: "Inez",  epithet: "The Engine Builder" },
-      "The Karma Chaser":   { name: "Sol",   epithet: "The Karma Chaser" },
+      "Engineer":           { name: "Inez",  epithet: "Engineer" },
+      "Politico":           { name: "Sol",   epithet: "Politico" },
       "The Banker":         { name: "Edwin", epithet: "The Banker" }
     };
 
@@ -9768,8 +10035,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         {name:'The Surgeon', vec:{surgery:0.85, control:0.65, engine:0.4, economy:0.4}},
         {name:'The Saboteur', vec:{pressure:0.85, actions:0.7, risk:0.5}},
         {name:'The High Roller', vec:{risk:0.9, economy:0.2, control:0.2}},
-        {name:'The Engine Builder', vec:{engine:0.9, control:0.45, surgery:0.35}},
-        {name:'The Karma Chaser', vec:{karma:0.9, engine:0.5, control:0.35}},
+        {name:'Engineer', vec:{engine:0.9, control:0.45, surgery:0.35}},
+        {name:'Politico', vec:{karma:0.9, engine:0.5, control:0.35}},
         {name:'The Banker', vec:{economy:0.9, control:0.7, risk:0.1}}
       ];
       function cosineScore(vec){
@@ -9797,8 +10064,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const floors = [...byFloor.keys()].sort((a,b)=>a-b);
       return floors.map(f=>{ const i = byFloor.get(f); const isBoss = String(matches[i] && matches[i].tableType || '').toUpperCase()==='BOSS'; return { floor:f, matchPos:i, isBoss }; });
     }
-    function renderEndSummaryChart(summary, derived){
-      const canvas = document.getElementById('chartEndSummary');
+    function renderEndChipsChart(summary, derived){
+      const canvas = document.getElementById('chartEndChips');
       if (!canvas) return;
       const ctx = setupCanvas(canvas);
       const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -9807,47 +10074,52 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       if (!matches.length){ clearChart(ctx,w,h); return; }
       const xs = matches.map((_,i)=> i/(Math.max(1, matches.length-1)));
       const chips = matches.map(m=> (typeof m.chipsAfter === 'number') ? m.chipsAfter : 0);
-      const karma = buildKarmaCumulative(matches, summary.startKarma);
-      const yVals = [...chips, ...karma].filter(v=>typeof v === 'number');
-      const yMin = Math.min(0, ...yVals);
-      const yMax = Math.max(1, ...yVals);
+      const yMin = Math.min(0, ...chips);
+      const yMax = Math.max(1, ...chips);
       clearChart(ctx,w,h);
-      drawAxes(ctx,w,h,pad,'Match','Value',yMin,yMax);
+      drawAxes(ctx,w,h,pad,'Match','Chips',yMin,yMax);
       drawLineScaled(ctx,w,h,pad,xs,chips,yMin,yMax,'rgba(125,211,252,0.90)');
-      drawLineScaled(ctx,w,h,pad,xs,karma,yMin,yMax,'rgba(52,211,153,0.90)');
       const markers = buildFloorEndMarkers(matches);
-      const labelStride = (markers.length > 8) ? 2 : 1;
-      markers.forEach((m, idx)=>{
+      markers.forEach((m)=>{
         const xN = xs[m.matchPos];
         const x = pad + xN*(w-2*pad);
         ctx.save();
         ctx.strokeStyle = 'rgba(255,255,255,0.22)';
         ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h-pad); ctx.stroke();
-        if (idx % labelStride === 0){
-          ctx.fillStyle = 'rgba(255,255,255,0.65)';
-          ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
-          ctx.fillText(`F${m.floor}`, x+4, pad+12);
-        }
-        if (m.isBoss){ ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fillText('♛', x+4, pad+26); }
-        ctx.restore();
-        const chipV = chips[m.matchPos];
-        const karmaV = karma[m.matchPos];
-        const yChip = pad + (1-((chipV-yMin)/(yMax-yMin||1)))*(h-2*pad);
-        const yKarma = pad + (1-((karmaV-yMin)/(yMax-yMin||1)))*(h-2*pad);
-        ctx.save();
-        ctx.fillStyle = 'rgba(125,211,252,0.95)';
-        drawPoint(ctx, x, yChip, 3);
-        drawTextBox(ctx, `C ${formatCompact(chipV)}`, x+6, yChip-2);
-        ctx.restore();
-        ctx.save();
-        ctx.fillStyle = 'rgba(52,211,153,0.95)';
-        drawPoint(ctx, x, yKarma, 3);
-        drawTextBox(ctx, `K ${formatCompact(karmaV)}`, x+6, yKarma-2);
         ctx.restore();
       });
-      const cap = document.getElementById('endChartCaption');
-      if (cap) cap.textContent = 'Chips (C) and Karma (K) by match • floor ends marked • boss floors flagged ♛';
+      const cap = document.getElementById('endChartCaptionChips');
+      if (cap) cap.textContent = 'Chips by match • floor ends marked';
     }
+
+    function renderEndKarmaChart(summary, derived){
+      const canvas = document.getElementById('chartEndKarma');
+      if (!canvas) return;
+      const ctx = setupCanvas(canvas);
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      const pad = 42;
+      const matches = derived.matches || [];
+      if (!matches.length){ clearChart(ctx,w,h); return; }
+      const xs = matches.map((_,i)=> i/(Math.max(1, matches.length-1)));
+      const karma = buildKarmaCumulative(matches, summary.startKarma);
+      const yMin = Math.min(0, ...karma);
+      const yMax = Math.max(1, ...karma);
+      clearChart(ctx,w,h);
+      drawAxes(ctx,w,h,pad,'Match','Karma',yMin,yMax);
+      drawLineScaled(ctx,w,h,pad,xs,karma,yMin,yMax,'rgba(52,211,153,0.90)');
+      const markers = buildFloorEndMarkers(matches);
+      markers.forEach((m)=>{
+        const xN = xs[m.matchPos];
+        const x = pad + xN*(w-2*pad);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+        ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h-pad); ctx.stroke();
+        ctx.restore();
+      });
+      const cap = document.getElementById('endChartCaptionKarma');
+      if (cap) cap.textContent = 'Karma by match • floor ends marked';
+    }
+
     function getRunEndAnalysis(){
       const events = (gameLog && gameLog.events) ? gameLog.events : [];
       const matches = events.filter(e => e && e.type === 'MATCH_END').map(e => ({
@@ -9876,13 +10148,22 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         endChips: finalState ? safeNumber(finalState.chips, safeNumber(run && run.chips, 0)) : safeNumber(run && run.chips, 0),
         chipsLow: gameLog && gameLog.stats ? safeNumber(gameLog.stats.chipsLow, 0) : 0,
         matchProfitTotal: gameLog && gameLog.stats ? safeNumber(gameLog.stats.payoutReceived, 0) + safeNumber(gameLog.stats.transferNet, 0) - safeNumber(gameLog.stats.buyinSpent, 0) : 0,
-        totalSpend: gameLog && gameLog.stats ? safeNumber(gameLog.stats.buyinSpent, 0) + safeNumber(gameLog.stats.merchantBuys, 0) + safeNumber(gameLog.stats.merchantRemoves, 0) + safeNumber(gameLog.stats.merchantRerolls, 0) : 0,
+        totalSpend: gameLog && gameLog.stats ? (
+          safeNumber(gameLog.stats.buyinSpent, 0)
+          + safeNumber(gameLog.stats.merchantBuyChips, 0)
+          + safeNumber(gameLog.stats.merchantRemoveChips, 0)
+          + safeNumber(gameLog.stats.merchantRerollChips, 0)
+          + safeNumber(gameLog.stats.collectorBuyChips, 0)
+          + safeNumber(gameLog.stats.modifySpendChips, 0)
+          + safeNumber(gameLog.stats.cocktailSpendChips, 0)
+        ) : 0,
         sinkAgg: {
-          'Merchant buys': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.merchantBuys, 0) : 0),
-          'Merchant removals': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.merchantRemoves, 0) : 0),
-          'Merchant rerolls': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.merchantRerolls, 0) : 0),
-          'Collector': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.collectorPurchases, 0) : 0),
-          'Modify': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.modifyApplies, 0) : 0)
+          'Merchant buys': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.merchantBuyChips, 0) : 0),
+          'Merchant removals': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.merchantRemoveChips, 0) : 0),
+          'Merchant rerolls': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.merchantRerollChips, 0) : 0),
+          'Collector': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.collectorBuyChips, 0) : 0),
+          'Modify': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.modifySpendChips, 0) : 0),
+          'Cocktails': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.cocktailSpendChips, 0) : 0)
         },
         profitStdDev: 0,
         player21Rate: 0,
@@ -9935,7 +10216,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           </div>
         `;
       }
-      renderEndSummaryChart(s, d);
+      renderEndChipsChart(s, d);
+      renderEndKarmaChart(s, d);
     }
     function renderEndScreen() {
       const boardView = document.getElementById('boardView');
@@ -9972,8 +10254,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             <div class="run-end-tiny" id="endArchetypeLine"></div>
             <div class="run-end-tiny run-end-muted" id="endResonance" style="margin-bottom:10px;"></div>
             <div class="run-end-cols" id="endBuildDeckStats"></div>
-            <canvas id="chartEndSummary"></canvas>
-            <div class="run-end-tiny run-end-muted" id="endChartCaption" style="margin-top:8px;"></div>
+            <canvas id="chartEndChips"></canvas>
+            <div class="run-end-tiny run-end-muted" id="endChartCaptionChips" style="margin-top:8px;"></div>
+            <canvas id="chartEndKarma" style="margin-top:10px;"></canvas>
+            <div class="run-end-tiny run-end-muted" id="endChartCaptionKarma" style="margin-top:8px;"></div>
           </div>
 
           <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
@@ -9992,14 +10276,22 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     // TILE RESOLUTION
     // =============================================
     function encounterBlackjackStandard() {
-      if (run.chips < BUYIN_STANDARD) { gameOver("You can't afford the buy-in."); return; }
+      if (run.chips < BUYIN_STANDARD) {
+        logEvent('MATCH_START_FAILED', { type: 'STANDARD', buyIn: BUYIN_STANDARD, chips: run.chips, reason: 'INSUFFICIENT_CHIPS' });
+        gameOver("You can't afford the buy-in.", 'INSUFFICIENT_BUYIN');
+        return;
+      }
       startBlackjackMatch('STANDARD', BUYIN_STANDARD);
     }
 
     function encounterBlackjackHigh() {
-      if (run.chips < BUYIN_HIGH) { gameOver("You can't afford the buy-in."); return; }
+      if (run.chips < BUYIN_HIGH) {
+        logEvent('MATCH_START_FAILED', { type: 'HIGH_STAKES', buyIn: BUYIN_HIGH, chips: run.chips, reason: 'INSUFFICIENT_CHIPS' });
+        gameOver("You can't afford the buy-in.", 'INSUFFICIENT_BUYIN');
+        return;
+      }
       const hsKey = run.secret && run.secret.keys ? run.secret.keys.highStakes : null;
-      const specialReward = (run.floor === 1 && hsKey && !hsKey.obtained && run.board.currentTileId === hsKey.tileId) ? 'KEY_HIGH' : null;
+      const specialReward = (hsKey && !hsKey.obtained && run.board.currentTileId === hsKey.tileId) ? 'KEY_HIGH' : null;
       startBlackjackMatch('HIGH_STAKES', BUYIN_HIGH, { specialReward });
     }
 
