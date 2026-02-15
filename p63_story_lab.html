@@ -489,27 +489,55 @@ const BASE_PACK = {
     "PERMANENT RECORD — GRAND CASINO"
   ],
   brief: {
-    beatLabels: {
-      BANKROLL_SECURED: ["Bankroll Secured","Stability Established","Bankroll Stabilized"],
-      SLIDE: ["Slide","Bankroll Erosion","House Pressure"],
-      THIN_STACK: ["Thin Stack","Stack Tightened","Discipline Tested"],
-      NEAR_ZERO: ["Near Zero","On the Edge","Stack at the Lip"],
-      RECOVERY: ["Recovery","Clawback","Return from the Edge"],
-      HIGH_STAKES_PRESS: ["High Stakes Press","High Stakes Lean","Pressure Betting"],
-      TRANSFER_RELIANCE: ["Transfer Reliance","Multiplier Dependence","Transfer-Heavy"],
-      OVERLEVERAGED: ["Overleveraged","Risk Forward","Too Much Weight"],
-      SHOP_HEAVY: ["Shop-Heavy","Inventory Obsession","Services Over Tables"],
-      REROLL_SPIRAL: ["Reroll Spiral","Chasing Inventory","Rotating the Shelf"],
-      DEBT_TAKEN: ["Debt Taken","Loan Opened","Borrowed Time"],
-      SUIT_CONVERGENCE: ["Suit Convergence","Convergence Pattern","Suit Sweep"],
-      CALLING_SURGE: ["Calling Surge","Calling Acceleration","Rank Pressure"],
-      KARMA_SPIKE: ["Karma Spike","Karma Event","Karma Surge"],
-      TIMER_PRESSURE: ["Timer Pressure","Clock Pressure","Time Limit"]
+    archetypeAliases: {
+      "Engine Builder":"Engineer",
+      "The Engine Builder":"Engineer",
+      "Engineer":"Engineer",
+      "Karma Chaser":"Politico",
+      "The Karma Chaser":"Politico",
+      "Politico":"Politico"
     },
     summaryTemplates: [
       "Summary: Subject advanced to Floor {payload.floorsReached}. Bosses cleared: {payload.bossesCleared}. Termination by {payload.termination}.",
-      "Summary: Floor {payload.floorsReached} reached. Boss clears: {payload.bossesCleared}. Run ended by {payload.termination}.",
-      "Summary: Subject reached Floor {payload.floorsReached}; cleared {payload.bossesCleared} boss table(s). Terminated by {payload.termination}."
+      "Summary: Floor {payload.floorsReached} reached. Bosses cleared: {payload.bossesCleared}. Record ended by {payload.termination}.",
+      "Summary: Subject reached Floor {payload.floorsReached}. Cleared {payload.bossesCleared} boss table(s). Termination by {payload.termination}.",
+      "Summary: Progress logged through Floor {payload.floorsReached}. Bosses cleared: {payload.bossesCleared}. Closure by {payload.termination}.",
+      "Summary: Subject reached Floor {payload.floorsReached}. Bosses cleared: {payload.bossesCleared}. The run concluded by {payload.termination}."
+    ],
+    beatLabels: {
+      HIGH_STAKES_PRESS: ["High Stakes Press","High Stakes Lean","High Stakes Emphasis","High Stakes Bias","High Stakes Habit","High Stakes Dependence","High Stakes Tilt","High Stakes Appetite"],
+      TRANSFER_RELIANCE: ["Transfer Reliance","Transfer First","Transfer Habit","Multiplier Hunting","Transfer-Centered","Transfer Driven","Leveraged Transfers","Transfer Gamble"],
+      SHOP_HEAVY: ["Inventory Obsession","Service Loop","Counter Shopping","Tool Accumulation","Catalog Hunger","Inventory Forward","Services Over Tables","Merchant Gravity"],
+      NEAR_ZERO: ["Near Zero","On the Edge","Thin Stack","Breathless Ledger","Low Stack","Knife-Edge","Empty Pockets","Coin-Flip Bankroll"],
+      VOLATILE: ["Volatility","Variance Storm","Swing Heavy","Unsteady Floor","Wild Ledger","Sharp Swings","Turbulence","Noisy Outcome"],
+      STABLE: ["Advantage Held","Controlled Play","Steady Ledger","Disciplined Line","Even Keel","Quiet Wins","Measured Pace","Clean Accounting"],
+      OVERLEVERAGED: ["Overleveraged","Risk Forward","Leveraged Risk","Pressed Too Far","Debt-Adjacent","Thin Margin","Pushed Limits","Risk-Weighted"],
+      DEBT_EVENT: ["Debt Touched","Debt Opened","Debt Collected","Debt Shadow","Interest Paid","Debt Pressure","Loan Echo","Debt Event"],
+      KARMA_SPIKE: ["Karma Spike","Karma Surge","Karma Windfall","Karma Bloom","Karma Shock","Karma Break","Karma Flood","Karma Event"],
+      CALLING_GROWTH: ["Calling Growth","Calling Advancement","Calling Pressure","Calling Heat","Calling Climb","Calling Momentum","Calling Upgrade","Calling Signal"],
+      BANKROLL_SECURED: ["Bankroll Secured","Stability Established","Bankroll Stabilized"],
+      SLIDE: ["Slide","Bankroll Erosion","House Pressure"],
+      TIMER_PRESSURE: ["Timer Pressure","Clock Pressure","Time Limit"]
+    },
+    chipsVerbs: {
+      up: ["rose","climbed","lifted","advanced","surged","recovered","rebuilt","steadied upward","expanded","grew","stacked up","ran hot","found altitude","swelled","gained ground"],
+      down: ["fell","eroded","slipped","declined","collapsed","bled","drained","sank","thinned","gave back","lost ground","ran cold","shed chips","shrunk","fractured"],
+      flat: ["held","stayed level","barely moved","ended near start","stabilized","balanced out","closed flat","settled","found equilibrium"]
+    },
+    pressurePhrases: {
+      chipsLow: [" Discipline tested at {payload.chipsLow}."," A dip tested discipline ({payload.chipsLow})."," The stack went thin ({payload.chipsLow})."," A choke point emerged ({payload.chipsLow})."," A near-zero moment recorded ({payload.chipsLow})."," The ledger tightened to {payload.chipsLow}."," The floor demanded proof at {payload.chipsLow}."," The bankroll held its breath ({payload.chipsLow})."],
+      none: [""]
+    },
+    riskPhrases: {
+      hs: [" High Stakes leaned on ({payload.highStakesCount})."," High Stakes pressed ({payload.highStakesCount})."," High Stakes repeated ({payload.highStakesCount})."," High Stakes returned ({payload.highStakesCount})."," High Stakes chosen ({payload.highStakesCount})."],
+      transfer: [" Transfers peaked at x{payload.transferPeak}."," Multipliers peaked at x{payload.transferPeak}."," Transfer ceiling reached x{payload.transferPeak}."," Transfer appetite reached x{payload.transferPeak}."," Multiplier hunting peaked at x{payload.transferPeak}."],
+      combined: [" High Stakes leaned on ({payload.highStakesCount}); transfers peaked at x{payload.transferPeak}."," High Stakes pressed ({payload.highStakesCount}); multipliers reached x{payload.transferPeak}."," High Stakes repeated ({payload.highStakesCount}); transfer ceiling x{payload.transferPeak}."," High Stakes emphasized ({payload.highStakesCount}); leverage peaked at x{payload.transferPeak}."],
+      none: [""]
+    },
+    floorLineTemplates: [
+      "Floor {payload.floor} — {payload.tags}: Chips {payload.chipsVerb} {payload.chipsStart} → {payload.chipsEnd}.{payload.pressure}{payload.risk}{payload.notable} {payload.signature}",
+      "Floor {payload.floor} — {payload.tags}: Chips {payload.chipsVerb} {payload.chipsStart} → {payload.chipsEnd}.{payload.risk}{payload.pressure}{payload.notable} {payload.signature}",
+      "Floor {payload.floor} — {payload.tags}: Chips {payload.chipsStart} → {payload.chipsEnd} ({payload.chipsDelta}).{payload.pressure}{payload.risk}{payload.notable} {payload.signature}"
     ],
     terminationLabels: {
       BOSS_TIMER_EXPIRED: ["time limit at the boss table","the clock at the boss door","timer at the boss table"],
@@ -517,58 +545,48 @@ const BASE_PACK = {
       PLAYER_QUIT: ["withdrawal","self-termination","exit by choice"],
       UNKNOWN: ["unknown cause","unclassified cause","unspecified cause"]
     },
-    floorLineTemplates: [
-      "Floor {payload.floor} — {payload.tags}: Chips {payload.chipsVerb} {payload.chipsStart} → {payload.chipsEnd}.{payload.pressure}{payload.risk}{payload.notable} {payload.signature}",
-      "Floor {payload.floor} — {payload.tags}: Chips {payload.chipsVerb} {payload.chipsStart} → {payload.chipsEnd}.{payload.risk}{payload.pressure}{payload.notable} {payload.signature}",
-      "Floor {payload.floor} — {payload.tags}: Chips {payload.chipsStart} → {payload.chipsEnd} ({payload.chipsDelta}).{payload.pressure}{payload.risk}{payload.notable} {payload.signature}"
-    ],
-    chipsVerbs: {
-      up: ["rose","climbed","advanced","lifted"],
-      down: ["fell","slipped","eroded","declined"],
-      flat: ["held","stabilized","stayed level","remained steady"]
-    },
-    pressurePhrases: {
-      nearZero: [" The stack went thin ({payload.chipsLow})."," A near-zero moment recorded ({payload.chipsLow})."," Chips narrowed to {payload.chipsLow}."],
-      tightened: [" The floor tightened ({payload.chipsLow})."," The House tightened the lane ({payload.chipsLow})."," A choke point emerged ({payload.chipsLow})."],
-      discipline: [" A dip tested discipline ({payload.chipsLow})."," Discipline tested at {payload.chipsLow}."," The record notes a dip ({payload.chipsLow})."],
-      none: [""]
-    },
-    riskPhrases: {
-      highStakesOnly: [" High Stakes pressed ({payload.highStakesCount})."," High Stakes leaned on ({payload.highStakesCount})."," Subject pressed High Stakes ({payload.highStakesCount})."],
-      transferOnly: [" Transfers peaked at x{payload.maxTransfer}."," Multiplier peaked at x{payload.maxTransfer}."," Transfer ceiling hit x{payload.maxTransfer}."],
-      both: [" High Stakes pressed ({payload.highStakesCount}); transfers peaked at x{payload.maxTransfer}."," High Stakes leaned ({payload.highStakesCount}); multiplier peaked at x{payload.maxTransfer}."," Risk posture: High Stakes ({payload.highStakesCount}) • Transfer x{payload.maxTransfer}."],
-      none: [""]
-    },
     notableTemplates: {
-      BIG_SWING: [" Notable: {payload.npcName} drove the largest swing ({payload.swing})."," Notable: largest swing at {payload.tableLabel} vs {payload.npcName} ({payload.swing})."," Notable: {payload.npcName} recorded the largest variance ({payload.swing})."],
-      ACTION: [" Notable: action acquired — {payload.actionName} ({payload.cost})."," Notable: {payload.actionName} entered the toolkit (cost {payload.cost})."," Notable: {payload.actionName} purchased; chips exchanged ({payload.cost})."],
-      SHOP: [" Notable: services consumed ({payload.shopCount}); spend {payload.shopSpend}."," Notable: inventory activity ({payload.shopCount}); chips routed to services ({payload.shopSpend})."," Notable: subject favored services over tables ({payload.shopSpend})."],
-      DECK_MILESTONE: [" Notable: deck altered — {payload.deckNote}."," Notable: mutation logged — {payload.deckNote}."," Notable: deck state shifted — {payload.deckNote}."],
-      BENCH: [" Notable: bench intervention on lane {payload.lane} ({payload.delta})."," Notable: bench altered lane {payload.lane} ({payload.delta})."," Notable: bench deployed — lane {payload.lane} adjusted ({payload.delta})."]
+      SHOP: ["Services consumed ({payload.shopCount}); spend {payload.shopSpend}.","Inventory activity ({payload.shopCount}); chips routed to services ({payload.shopSpend}).","Services favored over tables; spend {payload.shopSpend}.","Tools acquired in bulk ({payload.shopCount}); spend {payload.shopSpend}.","The subject shopped the floor ({payload.shopCount}); spend {payload.shopSpend}."],
+      BIG_SWING: ["{payload.npcName} drove the largest swing ({payload.swing}).","Largest variance recorded against {payload.npcName} ({payload.swing}).","{payload.npcName} delivered the biggest result delta ({payload.swing}).","The sharpest swing came from {payload.npcName} ({payload.swing})."],
+      BENCH: ["Bench intervention logged: lane {payload.lane} ({payload.delta}).","Bench altered lane {payload.lane} ({payload.delta}).","Bench deployed: lane {payload.lane} adjusted ({payload.delta}).","Bench correction applied at lane {payload.lane} ({payload.delta})."],
+      ACTION: ["Action acquired: {payload.actionName} (cost {payload.cost}).","{payload.actionName} added to toolkit (cost {payload.cost}).","Action purchased: {payload.actionName} ({payload.cost}).","{payload.actionName} entered inventory; spend {payload.cost}."],
+      DECK_MILESTONE: ["Deck altered: {payload.deckNote}.","Deck mutation logged: {payload.deckNote}.","Deck state shifted: {payload.deckNote}.","Deck change recorded: {payload.deckNote}."]
     },
     signatures: {
-      Engineer: { low:["Tools were applied without doctrine.","Blueprints don't predict thunder.","Efficiency rose; certainty did not.","Subject measured the table; the table measured back.","Method was visible. Motive stayed unfiled.","The House recorded outputs, not intent."], mid:["The subject tuned risk like an instrument.","Blueprints were adjusted in real time.","Variance was treated as a parameter, not a threat.","Systems thinking held under strain.","The record shows measured aggression."], high:["The blueprint held; the House conceded ground.","Variance was absorbed into design.","The subject made the floor behave.","Risk became a controlled input.","Pressure produced clarity."] },
-      Politico: { low:["Leverage was attempted without coalition.","The subject played optics against arithmetic.","Influence was spent faster than it was earned.","The table does not vote.","The House ignores speeches."], mid:["Leverage was applied where it mattered.","The subject traded risk for position.","Influence was converted into outcome.","The floor responded to timing.","Pressure was negotiated, not begged."], high:["The subject made the floor follow the story.","Influence shaped the ledger.","Even variance was made to pay tribute.","The House negotiated in silence."] },
-      Generic: { low:["The record notes intention without alignment.","The subject acted; the House answered.","A pattern was sought; only traces were found."], mid:["The subject adapted as the floor shifted.","Variance was managed, not feared."], high:["The subject moved with the House and still gained ground.","The floor bent before it broke."] }
+      Engineer: {
+        low: ["Tools were applied without doctrine.","Blueprints don't predict thunder.","Efficiency rose; certainty did not.","Subject measured the table; the table measured back.","Method was visible. Motive stayed unfiled.","The House recorded outputs, not intent.","The subject optimized the wrong variable.","Clean logic; unclear purpose."],
+        mid: ["The subject tuned risk like an instrument.","Blueprints were adjusted in real time.","Variance was treated as a parameter, not a threat.","Systems thinking held under strain.","The record shows measured aggression.","The floor behaved until it didn't."],
+        high: ["The blueprint held; the House conceded ground.","Variance was absorbed into design.","The subject made the floor behave.","Risk became a controlled input.","Pressure produced clarity.","The subject built a ladder out of losses."]
+      },
+      Politico: {
+        low: ["Leverage was attempted without coalition.","The subject played optics against arithmetic.","Influence was spent faster than it was earned.","The table does not vote.","The House ignores speeches.","The subject negotiated with a mirror."],
+        mid: ["Leverage was applied where it mattered.","The subject traded risk for position.","Influence was converted into outcome.","The floor responded to timing.","Pressure was negotiated, not begged.","The subject found votes in silence."],
+        high: ["The subject made the floor follow the story.","Influence shaped the ledger.","Even variance was made to pay tribute.","The House negotiated in silence.","The subject turned conflict into margin."]
+      },
+      Generic: {
+        low: ["The record notes intention without alignment.","The subject acted; the House answered.","A pattern was sought; only traces were found.","The floor refused interpretation."],
+        mid: ["The subject adapted as the floor shifted.","Variance was managed, not feared.","The record shows adjustment under pressure."],
+        high: ["The subject moved with the House and still gained ground.","The floor bent before it broke.","The House conceded in increments."]
+      }
     },
     marginalia: {
-      generic: ["“The house does not explain itself.”","“Some floors teach by subtraction.”","“Luck is loud. Accounting is louder.”","“Noise can be studied. It cannot be trusted.”","“A record is not mercy.”"],
-      Engineer: ["“Blueprints are prayers written in numbers.”","“Method arrived early. Motive arrived late.”","“Precision was visible. Mercy was not.”","“The House records the blueprint, not the dream.”"],
-      Politico: ["“The floor votes with chips.”","“Influence is counted, not declared.”","“The table negotiates in outcomes.”","“Leverage works until it doesn't.”"]
+      generic: ["“The house does not explain itself.”","“Some floors teach by subtraction.”","“Luck is loud. Accounting is louder.”","“Noise can be studied. It cannot be trusted.”","“A record is not mercy.”","“The bright carpet hides the math.”","Margin note: The subject kept walking after the ledger flinched.","Margin note: A win can still be a warning."],
+      Engineer: ["“Blueprints are prayers written in numbers.”","“Method arrived early. Motive arrived late.”","“Precision was visible. Mercy was not.”","“The House records the blueprint, not the dream.”","“Every lever works. Not every lever matters.”","Margin note: The subject treated fear like a rounding error."],
+      Politico: ["“The floor votes with chips.”","“Influence is counted, not declared.”","“The table negotiates in outcomes.”","“Leverage works until it doesn't.”","“Even allies have a house edge.”","Margin note: The subject tried to bargain with probability."]
     },
     bossLines: {
-      clean:["Boss {payload.bossNum} — Clean Clearance: Cleared in {payload.rounds} round.","Boss {payload.bossNum} — Clean Clearance: Neutralized in {payload.rounds} round."],
-      grind2:["Boss {payload.bossNum} — Grind: Cleared in {payload.rounds} rounds.","Boss {payload.bossNum} — Grind: Required {payload.rounds} rounds to clear."],
-      lastGasp3:["Boss {payload.bossNum} — Last Gasp: Cleared in {payload.rounds} rounds.","Boss {payload.bossNum} — Last Gasp: Cleared at the final round ({payload.rounds})."],
-      countermeasures:[" Countermeasures {payload.countermeasures}."," Countermeasures recorded: {payload.countermeasures}."],
-      benchCap:[" Bench capacity {payload.benchCapacity}."," Bench capacity now {payload.benchCapacity}."],
-      timerFail:["Boss {payload.bossNum} — Timer Pressure: Engagement ended by timer.","Boss {payload.bossNum} — Timer Pressure: Time expired; engagement ended."],
-      timerHP:[" HP {payload.hp}/{payload.maxHp}."," Remaining HP {payload.hp}/{payload.maxHp}."]
+      clean: ["Boss {payload.bossNum} — Clean Clearance: Cleared in {payload.rounds} round.","Boss {payload.bossNum} — Clean Clearance: Neutralized in {payload.rounds} round.","Boss {payload.bossNum} — Clean Clearance: No drag, no doubt ({payload.rounds} round)."],
+      grind2: ["Boss {payload.bossNum} — Grind: Cleared in {payload.rounds} rounds.","Boss {payload.bossNum} — Grind: Required {payload.rounds} rounds to clear.","Boss {payload.bossNum} — Grind: Cleared, but not cheaply ({payload.rounds} rounds)."],
+      lastGasp3: ["Boss {payload.bossNum} — Last Gasp: Cleared at the final round ({payload.rounds}).","Boss {payload.bossNum} — Last Gasp: Cleared on the last breath ({payload.rounds}).","Boss {payload.bossNum} — Last Gasp: Clearance came late ({payload.rounds} rounds)."],
+      countermeasures: [" Countermeasures {payload.countermeasures}."," Countermeasures recorded: {payload.countermeasures}."," Countermeasures triggered: {payload.countermeasures}."],
+      benchCap: [" Bench capacity {payload.benchCapacity}."," Bench capacity now {payload.benchCapacity}."," Bench expanded: capacity {payload.benchCapacity}."],
+      timerFail: ["Boss {payload.bossNum} — Timer Pressure: Engagement ended by timer.","Boss {payload.bossNum} — Timer Pressure: The clock closed the door.","Boss {payload.bossNum} — Timer Pressure: Time expired; engagement ended."],
+      timerHP: [" HP {payload.hp}/{payload.maxHp}."," Remaining HP {payload.hp}/{payload.maxHp}."," HP at seal: {payload.hp}/{payload.maxHp}."]
     },
     dispositionTemplates: [
-      "Disposition: Chips {payload.chipsStart} → {payload.chipsEnd}. Karma {payload.karmaEnd}. Calling Card {payload.callingCard}.",
-      "Disposition: Chips {payload.chipsStart} → {payload.chipsEnd}. Karma {payload.karmaEnd}. Calling {payload.callingCard}.",
-      "Disposition: Ledger closed at {payload.chipsEnd} chips. Karma {payload.karmaEnd}. Calling {payload.callingCard}."
+      "Disposition: Chips {payload.chipsStart} → {payload.chipsEnd}. Karma {payload.karmaEnd}. Calling {payload.callingCard}.{payload.deckState}",
+      "Disposition: Ledger closed at {payload.chipsEnd} chips. Karma {payload.karmaEnd}. Calling {payload.callingCard}.{payload.deckState}",
+      "Disposition: Chips sealed at {payload.chipsEnd}. Karma {payload.karmaEnd}. Calling {payload.callingCard}.{payload.deckState}"
     ]
   },
   legacyStorylets: {
@@ -1124,8 +1142,9 @@ function renderRecordV3(runLog, opts={}){
   const runId = runLog?.runId || runLog?.sessionId || "—";
   const runSummary = [...events].reverse().find(ev=>ev.type === "RUN_SUMMARY")?.data || runLog?.runOutcome || {};
   const playerName = runLog?.player?.name || runSummary?.playerName || runSummary?.player || "Unknown";
+  const aliasMap = { ...(currentPack?.archetypeAliases || {}), ...(currentPack?.brief?.archetypeAliases || {}) };
   const archetypeRaw = runLog?.player?.archetype || runSummary?.archetype || "Unknown";
-  const archetypeName = currentPack?.archetypeAliases?.[archetypeRaw] || String(archetypeRaw).replace(/^The\s+/,"") || "Unknown";
+  const archetypeName = aliasMap[archetypeRaw] || String(archetypeRaw).replace(/^The\s+/,"") || "Unknown";
   const resonancePct = runLog?.player?.resonancePct ?? runSummary?.resonancePct ?? null;
   const casinoName = runLog?.app?.casinoName || "Grand Casino";
   const casinoId = runLog?.app?.casinoId || "grand_casino";
@@ -1135,11 +1154,37 @@ function renderRecordV3(runLog, opts={}){
     ? String(opts.seedOverride).trim()
     : `${runId}|${playerName}`;
 
+  const matchMetaBySeq = Object.create(null);
+  function formatCallingCard(cc){
+    if(!cc) return "";
+    if(typeof cc === "string") return cc;
+    if(cc.rank && cc.suit) return `${cc.rank}${cc.suit}`;
+    return "";
+  }
+  function formatNpcName(npcName, matchType){
+    if(!npcName) return "Unknown";
+    if(npcName.startsWith("High Roller") || npcName.startsWith("Floor Boss")) return npcName;
+    if(String(matchType||"").toUpperCase() === "HIGH_STAKES") return `High Roller ${npcName}`;
+    return npcName;
+  }
+  for(const ev of events){
+    if(ev.type === "MATCH_START"){
+      const d = ev.data || {};
+      if(d.matchSeq == null) continue;
+      matchMetaBySeq[d.matchSeq] = {
+        matchType: d.type,
+        npcName: d.npcName,
+        npcCalling: formatCallingCard(d.npcCallingCard),
+        affinity: d.affinity,
+        edgeDelta: d.edgeDelta
+      };
+    }
+  }
+
   function rngPick(arr, rng){
     if(!arr || !arr.length) return "";
     return arr[Math.floor(rng() * arr.length)];
   }
-
   function pickTpl(arr, payload, seed){
     const t = rngPick(arr, makeRng(seed));
     return tpl(t || "", { payload });
@@ -1165,8 +1210,23 @@ function renderRecordV3(runLog, opts={}){
     for(const [,arr] of m) arr.sort((a,b)=>Number(a.id||0)-Number(b.id||0));
     return m;
   }
-
   const floorEvents = byFloor();
+
+  function findLastDeckSnapshot(){
+    for(let i=events.length-1;i>=0;i--){
+      const ds = events[i]?.data?.deckSnapshot;
+      if(ds) return ds;
+    }
+    return null;
+  }
+  function formatDeckState(ds){
+    if(!ds) return "";
+    const deckSize = ds.deckSize ?? "?";
+    const stamped = ds.stampedCount ?? 0;
+    const sleeved = ds.sleevedCount ?? 0;
+    const fused = ds.fusedCount ?? 0;
+    return ` Deck state at seal: ${deckSize} cards, ${stamped} stamped, ${sleeved} sleeved, ${fused} fused.`;
+  }
 
   function buildFloorDigest(floor){
     const evs = floorEvents.get(floor) || [];
@@ -1181,7 +1241,7 @@ function renderRecordV3(runLog, opts={}){
       matches: Number(fend?.matches ?? 0), wins: Number(fend?.wins ?? 0), losses: Number(fend?.losses ?? 0), ties: Number(fend?.ties ?? 0),
       karmaGain: Number(fend?.karmaGain ?? 0),
       highStakesCount: 0,
-      maxTransfer: 1,
+      transferPeak: 1,
       shopCount: 0,
       shopSpend: 0,
       rerolls: 0,
@@ -1189,10 +1249,12 @@ function renderRecordV3(runLog, opts={}){
       suitSweepCount: 0,
       callingLevelUps: 0,
       peakKarmaGainEvent: 0,
+      benchUses: 0,
+      benchLastLane: "?",
+      benchLastDelta: 0,
       boss: { timerFail:false, rounds:null, countermeasures:0, benchCapacity:null, hp:null, maxHp:null },
-      bigSwing: null,
+      bigSwing: { abs:0, net:0, npcName:"Unknown", npcCalling:"", matchType:"" },
       notableDeck: "",
-      benchNotable: null,
       actionBuy: null
     };
 
@@ -1208,20 +1270,28 @@ function renderRecordV3(runLog, opts={}){
         if(!fend && outcome==="WIN") digest.wins++;
         if(!fend && outcome==="LOSS") digest.losses++;
         if(!fend && outcome==="TIE") digest.ties++;
-        const swing = computeNetChipsFromMatchEnd(ev?.data || {});
-        if(!digest.bigSwing || Math.abs(swing) > Math.abs(digest.bigSwing.swing)){
-          digest.bigSwing = {
-            swing,
-            npcName: ev?.data?.npcName || "Unknown",
-            tableLabel: ev?.data?.tableLabel || ev?.data?.type || "Table"
-          };
+
+        const d = ev.data || {};
+        const meta = matchMetaBySeq[d.matchSeq] || {};
+        const matchType = String(d.type || meta.matchType || "").toUpperCase();
+        if(matchType !== "BOSS"){
+          const net = computeNetChipsFromMatchEnd(d);
+          const absNet = Math.abs(net);
+          if(absNet > digest.bigSwing.abs){
+            digest.bigSwing = {
+              abs: absNet,
+              net,
+              matchType,
+              npcName: formatNpcName(meta.npcName || d.npcName, matchType),
+              npcCalling: meta.npcCalling || ""
+            };
+          }
         }
       }
-      if(ev.type==="TRANSFER_BET" || ev.type==="TRANSFER_SET") digest.maxTransfer = Math.max(digest.maxTransfer, Number(ev?.data?.mult||1));
+      if(ev.type==="TRANSFER_BET" || ev.type==="TRANSFER_SET") digest.transferPeak = Math.max(digest.transferPeak, Number(ev?.data?.mult||1));
       if(["COLLECTOR_BUY","MERCHANT_BUY","MODIFY_SERVICE_SELECT","BARTENDER_TAKE"].includes(ev.type)){
         digest.shopCount++;
-        const amt = Number(ev?.data?.cost ?? ev?.data?.chips ?? 0);
-        digest.shopSpend += amt;
+        digest.shopSpend += Number(ev?.data?.cost ?? ev?.data?.chips ?? 0);
       }
       if(ev.type==="MERCHANT_REROLL") digest.rerolls++;
       if(ev.type==="LOAN_TAKEN") digest.debtTaken = true;
@@ -1229,7 +1299,7 @@ function renderRecordV3(runLog, opts={}){
       if(ev.type==="CALLING_CARD_LEVEL_UP") digest.callingLevelUps++;
       if(ev.type==="KARMA_GAIN") digest.peakKarmaGainEvent = Math.max(digest.peakKarmaGainEvent, Number(ev?.data?.amount||0));
       if(ev.type==="BOSS_COUNTERMEASURE") digest.boss.countermeasures++;
-      if(ev.type==="BOSS_FIGHT_DEFEATED") digest.boss.rounds = Number(ev?.data?.round||digest.boss.rounds||0) || null;
+      if(ev.type==="BOSS_FIGHT_DEFEATED") digest.boss.rounds = Number(ev?.data?.round||0) || digest.boss.rounds;
       if(ev.type==="BOSS_ROUND_START") digest.boss.rounds = Math.max(Number(digest.boss.rounds||0), Number(ev?.data?.round||0)) || digest.boss.rounds;
       if(ev.type==="BOSS_CLEARED") digest.boss.benchCapacity = ev?.data?.benchCapacity ?? digest.boss.benchCapacity;
       if(ev.type==="BOSS_FIGHT_FAILED"){
@@ -1237,101 +1307,85 @@ function renderRecordV3(runLog, opts={}){
         digest.boss.hp = ev?.data?.boss?.hp ?? ev?.data?.hp ?? null;
         digest.boss.maxHp = ev?.data?.boss?.maxHp ?? ev?.data?.maxHp ?? null;
       }
-      if(["BURN_AFTER_READING","WINNER_REWARD_FUSE","KEYCARD_OBTAINED","FREE_REMOVAL"].includes(ev.type)){
-        digest.notableDeck = ev.type.replaceAll("_"," ").toLowerCase();
-      }
+      if(["BURN_AFTER_READING","WINNER_REWARD_FUSE","KEYCARD_OBTAINED","FREE_REMOVAL"].includes(ev.type)) digest.notableDeck = ev.type.replaceAll("_"," ").toLowerCase();
       if(ev.type==="ACTION_PURCHASED" || ev.type==="COCKTAIL_BOUGHT") digest.actionBuy = { actionName: ev?.data?.actionName || ev?.data?.actionId || "Action", cost: Number(ev?.data?.cost||0)};
       if(ev.type==="DEALER_BENCH_APPLY" || ev.type==="BENCH_APPLY"){
-        const delta = Number(ev?.data?.delta || ev?.data?.appliedDelta || 0);
-        const lane = ev?.data?.lane ?? ev?.data?.laneIdx ?? "?";
-        if(!digest.benchNotable || Math.abs(delta) > Math.abs(digest.benchNotable.delta)) digest.benchNotable = { lane, delta };
+        digest.benchUses++;
+        digest.benchLastLane = ev?.data?.lane ?? ev?.data?.laneIdx ?? "?";
+        digest.benchLastDelta = Number(ev?.data?.delta || ev?.data?.appliedDelta || 0);
       }
     }
     return digest;
   }
 
   const tagRules = [
-    ["RECOVERY", d=>d.chipsLow!=null && d.chipsLow<=25 && d.chipsEnd>d.chipsStart],
     ["NEAR_ZERO", d=>d.chipsLow!=null && d.chipsLow<=25],
     ["OVERLEVERAGED", d=>d.highStakesCount>=2 && d.chipsEnd<d.chipsStart],
     ["HIGH_STAKES_PRESS", d=>d.highStakesCount>=2],
-    ["TRANSFER_RELIANCE", d=>d.maxTransfer>=4],
+    ["TRANSFER_RELIANCE", d=>d.transferPeak>=4],
     ["SHOP_HEAVY", d=>d.shopCount>=4 || (d.chipsStart>0 && d.shopSpend>=d.chipsStart*0.25)],
-    ["DEBT_TAKEN", d=>d.debtTaken],
-    ["SUIT_CONVERGENCE", d=>d.suitSweepCount>=4],
-    ["CALLING_SURGE", d=>d.callingLevelUps>=2],
+    ["DEBT_EVENT", d=>d.debtTaken],
+    ["CALLING_GROWTH", d=>d.callingLevelUps>=2],
     ["KARMA_SPIKE", d=>d.karmaGain>=1500 || d.peakKarmaGainEvent>=300],
-    ["BANKROLL_SECURED", d=>d.chipsEnd>d.chipsStart && d.chipsLow>=0.4*d.chipsStart],
-    ["SLIDE", d=>d.chipsEnd<d.chipsStart]
+    ["STABLE", d=>d.chipsEnd>d.chipsStart && d.losses<=d.wins],
+    ["VOLATILE", d=>d.losses>=d.wins && d.matches>=3],
+    ["SLIDE", d=>d.chipsEnd<d.chipsStart],
+    ["BANKROLL_SECURED", d=>d.chipsEnd>=d.chipsStart]
   ];
   function getBeatTags(d, prev){
     const cand = tagRules.filter(([_,fn])=>fn(d)).map(([k])=>k);
-    if(!cand.length) cand.push(d.chipsEnd>=d.chipsStart ? "BANKROLL_SECURED" : "SLIDE");
+    if(!cand.length) cand.push("VOLATILE");
     let out = cand.slice(0,2);
     if(prev?.[0] && out[0]===prev[0] && cand[1]) out = [cand[1], cand[0]].slice(0,2);
     return out;
   }
-
   function pressurePhrase(d, floor){
-    const payload = { chipsLow: fmtNum(d.chipsLow) };
     if(d.chipsLow==null || d.chipsStart==null) return "";
-    if(d.chipsLow<=25) return pickTpl(packBrief?.pressurePhrases?.nearZero || [""], payload, `${seedStr}|floor${floor}|pressure`);
-    if(d.chipsLow<=d.chipsStart*0.15) return pickTpl(packBrief?.pressurePhrases?.tightened || [""], payload, `${seedStr}|floor${floor}|pressure`);
-    if(d.chipsLow<=d.chipsStart*0.4) return pickTpl(packBrief?.pressurePhrases?.discipline || [""], payload, `${seedStr}|floor${floor}|pressure`);
+    if(d.chipsLow <= d.chipsStart * 0.40){
+      return pickTpl(packBrief?.pressurePhrases?.chipsLow || [""], { chipsLow: fmtNum(d.chipsLow) }, `${seedStr}|floor${floor}|pressure`);
+    }
     return "";
   }
-
   function riskPhrase(d, floor){
-    const payload={ highStakesCount: fmtNum(d.highStakesCount), maxTransfer: fmtNum(d.maxTransfer) };
-    let key = "none";
-    if(d.highStakesCount>=2 && d.maxTransfer>=4) key="both";
-    else if(d.highStakesCount>=2) key="highStakesOnly";
-    else if(d.maxTransfer>=4) key="transferOnly";
-    return pickTpl(packBrief?.riskPhrases?.[key] || [""], payload, `${seedStr}|floor${floor}|risk`);
+    const payload = { highStakesCount: fmtNum(d.highStakesCount), transferPeak: fmtNum(d.transferPeak) };
+    if(d.highStakesCount>=2 && d.transferPeak>=4) return pickTpl(packBrief?.riskPhrases?.combined || [""], payload, `${seedStr}|floor${floor}|risk`);
+    if(d.highStakesCount>=2) return pickTpl(packBrief?.riskPhrases?.hs || [""], payload, `${seedStr}|floor${floor}|risk`);
+    if(d.transferPeak>=4) return pickTpl(packBrief?.riskPhrases?.transfer || [""], payload, `${seedStr}|floor${floor}|risk`);
+    return "";
   }
-
   function resonanceBand(v){
     if(v==null || !Number.isFinite(Number(v))) return "mid";
     if(Number(v)<35) return "low";
     if(Number(v)>70) return "high";
     return "mid";
   }
-
   function signatureLine(floor){
     const band = resonanceBand(resonancePct);
-    const sigs = packBrief?.signatures || {};
-    const bank = sigs?.[archetypeName]?.[band] || sigs?.Generic?.[band] || ["The House records outcomes, not wishes."];
+    const bank = packBrief?.signatures?.[archetypeName]?.[band] || packBrief?.signatures?.Generic?.[band] || ["The House records outcomes, not wishes."];
     return rngPick(bank, makeRng(`${seedStr}|floor${floor}|sig`));
   }
-
   function beatLabel(tag, floor, slot){
     const labels = packBrief?.beatLabels?.[tag] || [tag];
     return rngPick(labels, makeRng(`${seedStr}|floor${floor}|tag${slot}`));
   }
+  function pickNotables(d, floor){
+    const n = packBrief?.notableTemplates || {};
+    const cands = [];
+    const add = (key, weight, payload)=>{ if(n[key]?.length) cands.push({key,weight,payload}); };
 
-  function pickNotableBeat(d, floor){
-    const notable = packBrief?.notableTemplates || {};
-    if((d.chipsLow!=null && d.chipsLow<=25) && d.bigSwing && include.match && Math.abs(d.bigSwing.swing)>=120){
-      return pickTpl(notable.BIG_SWING || [""], { npcName:d.bigSwing.npcName, tableLabel:d.bigSwing.tableLabel, swing: fmtNum(d.bigSwing.swing)}, `${seedStr}|floor${floor}|notable`);
-    }
-    if(include.shops && (d.shopCount>=4 || d.shopSpend>=Math.max(120, (d.chipsStart||0)*0.25))){
-      return pickTpl(notable.SHOP || [""], { shopCount: fmtNum(d.shopCount), shopSpend: fmtNum(d.shopSpend) }, `${seedStr}|floor${floor}|notable`);
-    }
-    if(include.deck && d.notableDeck){
-      return pickTpl(notable.DECK_MILESTONE || [""], { deckNote: d.notableDeck }, `${seedStr}|floor${floor}|notable`);
-    }
-    if(include.bench && d.benchNotable){
-      return pickTpl(notable.BENCH || [""], { lane:d.benchNotable.lane, delta:fmtNum(d.benchNotable.delta) }, `${seedStr}|floor${floor}|notable`);
-    }
-    if(include.match && d.bigSwing && Math.abs(d.bigSwing.swing)>=120){
-      return pickTpl(notable.BIG_SWING || [""], { npcName:d.bigSwing.npcName, tableLabel:d.bigSwing.tableLabel, swing: fmtNum(d.bigSwing.swing)}, `${seedStr}|floor${floor}|notable`);
-    }
-    if(include.shops && d.actionBuy){
-      return pickTpl(notable.ACTION || [""], { actionName:d.actionBuy.actionName, cost:fmtNum(d.actionBuy.cost) }, `${seedStr}|floor${floor}|notable`);
-    }
-    return "";
+    if(include.shops && d.shopCount >= 6) add("SHOP", Math.min(10, d.shopCount), { shopCount: fmtNum(d.shopCount), shopSpend: fmtNum(d.shopSpend) });
+    if(include.match && d.bigSwing.abs >= 200) add("BIG_SWING", Math.min(10, Math.floor(d.bigSwing.abs/100)), { npcName:d.bigSwing.npcName, swing:fmtNum(d.bigSwing.net), npcCalling:d.bigSwing.npcCalling });
+    if(include.bench && d.benchUses >= 2) add("BENCH", Math.min(10, d.benchUses), { lane:d.benchLastLane, delta:fmtNum(d.benchLastDelta) });
+    if(include.shops && d.actionBuy) add("ACTION", 6, { actionName:d.actionBuy.actionName, cost:fmtNum(d.actionBuy.cost) });
+    if(include.deck && d.notableDeck) add("DECK_MILESTONE", 6, { deckNote:d.notableDeck });
+    if(!cands.length) return "";
+
+    cands.sort((a,b)=>b.weight-a.weight);
+    const chosen=[cands[0]];
+    if(cands[1] && cands[1].weight>=6) chosen.push(cands[1]);
+    const parts=chosen.map((c,idx)=>pickTpl(n[c.key], c.payload, `${seedStr}|floor${floor}|notable|${c.key}|${idx}`));
+    return ` Notable: ${parts.join(" ")}`;
   }
-
   function bossLine(d, floor){
     if(!include.boss) return "";
     const b = packBrief?.bossLines || {};
@@ -1356,7 +1410,7 @@ function renderRecordV3(runLog, opts={}){
     `ARCHIVE RECORD — ${String(casinoName).toUpperCase()}`,
     `File: ${String(casinoId).slice(0,3).toUpperCase() || "P63"} / RUN ${runId}`,
     `Player: ${playerName}`,
-    `Classification: ${archetypeName}${resonancePct!=null ? ` — Resonance ${fmtNum(resonancePct)}%` : ""}`,
+    `Classification: ${archetypeName}${resonancePct!=null ? ` — Resonance of ${fmtNum(resonancePct)}%` : ""}`,
     ""
   ];
 
@@ -1382,7 +1436,7 @@ function renderRecordV3(runLog, opts={}){
       chipsDelta: `${chipDelta>=0?'+':''}${fmtNum(chipDelta)}`,
       pressure: pressurePhrase(d,floor),
       risk: riskPhrase(d,floor),
-      notable: pickNotableBeat(d,floor),
+      notable: pickNotables(d,floor),
       signature: signatureLine(floor)
     };
     const floorLine = pickTpl(packBrief?.floorLineTemplates || ["Floor {payload.floor} — {payload.tags}: Chips {payload.chipsVerb} {payload.chipsStart} → {payload.chipsEnd}.{payload.pressure}{payload.risk}{payload.notable} {payload.signature}"], linePayload, `${seedStr}|floor${floor}|line`);
@@ -1415,14 +1469,16 @@ function renderRecordV3(runLog, opts={}){
     chipsStart: fmtNum(runSummary?.chipsStart ?? runLog?.initialState?.chips),
     chipsEnd: fmtNum(runSummary?.chipsEnd ?? runLog?.finalState?.chips),
     karmaEnd: fmtNum(runSummary?.karmaEnd ?? runLog?.finalState?.karma),
-    callingCard: fmtCard(calling)
+    callingCard: fmtCard(calling),
+    deckState: include.deck ? formatDeckState(findLastDeckSnapshot()) : ""
   };
-  const disp = pickTpl(packBrief?.dispositionTemplates || ["Disposition: Chips {payload.chipsStart} → {payload.chipsEnd}. Karma {payload.karmaEnd}. Calling Card {payload.callingCard}."], dispPayload, `${seedStr}|disp`);
+  const disp = pickTpl(packBrief?.dispositionTemplates || ["Disposition: Chips {payload.chipsStart} → {payload.chipsEnd}. Karma {payload.karmaEnd}. Calling {payload.callingCard}.{payload.deckState}"], dispPayload, `${seedStr}|disp`);
   lines.push(disp);
   inserts.push({ order:999, insertType:"BRIEF_DISPOSITION", floor:null, ts:"", importance:100, cooldownKey:"BRIEF_DISPOSITION", payload:dispPayload });
 
   return { story: lines.join("\n").replace(/\n{3,}/g,"\n\n").trim(), seedStr, inserts };
 }
+
 
 /* =========================================================
    UI Logic
