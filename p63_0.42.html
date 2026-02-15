@@ -1891,13 +1891,19 @@
     const BARTENDER_REWARD = 50;
     const MINIGAME_REWARD = 50;
 
-    const MERCHANT_BUY_BASE_STANDARD = 50;
-    const MERCHANT_BUY_BASE_MOD = 100;
+    const MERCHANT_BUY_BASE_STANDARD = 25;
+    const MERCHANT_BUY_BASE_MOD = 75;
     const MERCHANT_BUY_INCREMENT = 25;
     const MERCHANT_REMOVE_COST = 50;
     const REMOVAL_REROLL_COST = 25;      // also used as inventory reroll cost
     const MERCHANT_INVENTORY_REROLL_COST = 25;
     const COLLECTOR_COST_BY_RARITY = { common: 20, uncommon: 35, rare: 60 };
+    const MODIFY_SLOT_COUNT = 3;
+    const MODIFY_CORE_COST = 35;
+    const MODIFY_PREMIUM_COST = 100;
+    const MODIFY_REROLL_BASE = 10;
+    const MODIFY_REROLL_STEP = 5;
+    const MODIFY_CANDIDATE_COUNT = 5;
 
 // Economy tuning
 const MERCHANT_REMOVE_INCREMENT = 25; // removal cost increases by this amount each time you start a paid removal
@@ -2347,7 +2353,7 @@ const CALLING_RANK_THRESHOLDS = [
         },
         modify: {
           services: Object.values(MODIFY_SERVICES).map(s => ({ id: s.id, tier: s.tier, kind: s.kind })),
-          pricing: { coreBase: 100, coreInc: 25, premiumBase: 200, premiumInc: 50 }
+          pricing: { coreBase: MODIFY_CORE_COST, premiumBase: MODIFY_PREMIUM_COST, rerollBase: MODIFY_REROLL_BASE, rerollStep: MODIFY_REROLL_STEP }
         },
         stamps: Object.values(STAMP_DEFS).map(s => ({ id: s.id, rarity: s.rarity })),
         sleeves: Object.values(SLEEVE_DEFS).map(s => ({ id: s.id, rarity: s.rarity }))
@@ -2412,6 +2418,8 @@ const CALLING_RANK_THRESHOLDS = [
           modifyCandidateSetsShown: 0,
           modifyApplies: 0,
           modifySpendChips: 0,
+          modifyRerolls: 0,
+          modifyRerollChips: 0,
           loansTaken: 0,
           loansRepaid: 0,
           tokensGained: 0,
@@ -2481,6 +2489,11 @@ const CALLING_RANK_THRESHOLDS = [
         case 'MODIFY_CANDIDATES_SHOWN': st.modifyCandidateSetsShown += 1; break;
         case 'MODIFY_APPLY': st.modifyApplies += 1; break;
         case 'MODIFY_SERVICE_SELECT': st.modifySpendChips += safeNumber(evt.data.cost, 0); break;
+        case 'MODIFY_REROLL':
+          st.modifyRerolls += 1;
+          st.modifyRerollChips += safeNumber(evt.data.cost, 0);
+          st.modifySpendChips += safeNumber(evt.data.cost, 0);
+          break;
         case 'FEEDBACK_UPDATED': st.feedbackUpdates += 1; break;
         case 'DECK_SNAPSHOT': st.deckSnapshots += 1; break;
       }
@@ -2680,6 +2693,7 @@ const CALLING_RANK_THRESHOLDS = [
       if (t === 'MODIFY_SERVICE_SELECT') return `Card Press service: ${d.serviceId} (-${d.cost})`;
       if (t === 'MODIFY_CANDIDATES_SHOWN') return `Card Press candidates shown (${d.countShown || 0})`;
       if (t === 'MODIFY_SELECTION') return `Card Press selection: ${d.serviceId}`;
+      if (t === 'MODIFY_REROLL') return `Card Press rerolled candidates (-${d.cost || 0})`;
       if (t === 'MODIFY_APPLY') return `Card Press applied: ${d.serviceId} (${d.count || 0} cards)`;
       if (t === 'MODIFY_LEAVE') return `Card Press closed`;
       if (t === 'COLLECTOR_SHOP_GENERATED') return `Collector shop generated`;
@@ -3842,11 +3856,9 @@ const CALLING_RANK_THRESHOLDS = [
       if (isFused(card)) {
         const a = getCardValueOptions(card.a);
         const b = getCardValueOptions(card.b);
-        const sums = [];
-        for (const av of a) {
-          for (const bv of b) sums.push(av + bv);
-        }
-        return Array.from(new Set(sums));
+        const vals = Array.from(new Set([...(a || []), ...(b || [])]));
+        vals.sort((x, y) => x - y);
+        return vals;
       }
 
       if (card.__negValue !== undefined) return [safeNumber(card.__negValue, 0)];
@@ -3956,8 +3968,37 @@ function getOpponentDifficulty() {
   return (d === 'easy' || d === 'medium' || d === 'hard') ? d : 'hard';
 }
 
+function computeShopPriceContext(npc) {
+  let affinity = 'neutral';
+  let edgeDelta = 0;
+  let priceMult = 1;
+
+  if (npc && run && run.callingCard) {
+    affinity = getAffinity(run.callingCard.suit, npc.callingCard.suit);
+    edgeDelta = rankToValue(run.callingCard.rank) - rankToValue(npc.callingCard.rank);
+
+    const affinityMod = affinity === 'resonant' ? -0.10 : (affinity === 'dissonant' ? 0.10 : 0);
+    const edgeMod = Math.max(-0.10, Math.min(0.10, (rankToValue(npc.callingCard.rank) - rankToValue(run.callingCard.rank)) * 0.01));
+    priceMult = Math.max(0.75, Math.min(1.25, 1 + affinityMod + edgeMod));
+  }
+
+  return { affinity, edgeDelta, priceMult };
+}
+
 function getMerchantPriceMult() {
   const ctx = run && run.ui && run.ui.merchantContext;
+  const mult = ctx && typeof ctx.priceMult === 'number' ? ctx.priceMult : 1;
+  return Math.max(0.75, Math.min(1.25, mult));
+}
+
+function getModifyPriceMult() {
+  const ctx = run && run.ui && run.ui.modifyContext;
+  const mult = ctx && typeof ctx.priceMult === 'number' ? ctx.priceMult : 1;
+  return Math.max(0.75, Math.min(1.25, mult));
+}
+
+function getCollectorPriceMult() {
+  const ctx = run && run.ui && run.ui.collectorContext;
   const mult = ctx && typeof ctx.priceMult === 'number' ? ctx.priceMult : 1;
   return Math.max(0.75, Math.min(1.25, mult));
 }
@@ -3983,12 +4024,17 @@ function getMerchantBuyCost(card) {
   return Math.ceil(scaled * getMerchantPriceMult());
 }
 
-function getModifyServiceCost(serviceId, floor) {
-  const baseFloor = Math.max(1, safeNumber(floor, 1));
+function getModifyServiceCost(serviceId) {
   const isPremium = serviceId === 'CALLING_SUIT_SWEEP' || serviceId === 'UNIFORM_RANK_PRESS';
-  const base = isPremium ? 200 : 100;
-  const step = isPremium ? 50 : 25;
-  return base + ((baseFloor - 1) * step);
+  const base = isPremium ? MODIFY_PREMIUM_COST : MODIFY_CORE_COST;
+  return Math.ceil(base * getModifyPriceMult());
+}
+
+function getModifyRerollCost() {
+  const ctx = run && run.ui && run.ui.modifyContext;
+  const n = safeNumber(ctx && ctx.rerollCount, 0);
+  const base = MODIFY_REROLL_BASE + (MODIFY_REROLL_STEP * n);
+  return Math.ceil(base * getModifyPriceMult());
 }
 
 function getModKey(delta) { return String(delta); }
@@ -4106,7 +4152,9 @@ function benchPush(card, source = '') {
       const roleSuits = {
         BARTENDER: '♥',
         MERCHANT: '♦',
-        LOAN_SHARK: '♣'
+        LOAN_SHARK: '♣',
+        MODIFY: '♠',
+        COLLECTOR: '♣'
       };
 
       if (!tableTypes.includes(type) && !roleSuits[type]) return null;
@@ -4568,82 +4616,117 @@ function benchPush(card, source = '') {
       return eligible;
     }
 
-    function buildModifyOffers() {
-      const eligible = getEligibleStandardIndices();
-      if (!eligible.length) return [];
-      const services = [MODIFY_SERVICES.RESUIT.id, MODIFY_SERVICES.RERANK.id];
-      services.push(MODIFY_SERVICES.UNIFORM_RANK_PRESS.id);
-      if (run && run.callingCard) services.push(MODIFY_SERVICES.CALLING_SUIT_SWEEP.id);
-      return shuffle(services).slice(0, Math.min(2, services.length));
+    function buildModifyServicePool() {
+      const eligibleCount = getEligibleStandardIndices().length;
+      if (!eligibleCount) return [];
+
+      const pool = [
+        MODIFY_SERVICES.RESUIT.id,
+        MODIFY_SERVICES.RERANK.id,
+        MODIFY_SERVICES.UNIFORM_RANK_PRESS.id
+      ];
+
+      if (run && run.callingCard) pool.push(MODIFY_SERVICES.CALLING_SUIT_SWEEP.id);
+      return pool;
+    }
+
+    function rollModifyService() {
+      const pool = buildModifyServicePool();
+      if (!pool.length) return null;
+      return randomChoice(pool);
     }
 
     function encounterModify() {
-      const offers = buildModifyOffers();
-      const eligibleCount = getEligibleStandardIndices().length;
+      const tile = run.board.tiles[run.board.currentTileId];
+      const npc = tile ? tile.npc : null;
+      const pricing = computeShopPriceContext(npc);
 
       run.ui.modifyContext = {
         tileId: run.board.currentTileId,
-        servicesOffered: offers,
-        serviceUsed: false,
-        selectedServiceId: null,
-        previewIndices: [],
-        rankChoices: null
+        npc,
+        affinity: pricing.affinity,
+        edgeDelta: pricing.edgeDelta,
+        priceMult: pricing.priceMult,
+        slots: Array.from({ length: MODIFY_SLOT_COUNT }, () => rollModifyService()).filter(Boolean),
+        session: null,
+        rerollCount: 0
       };
 
       logEvent('MODIFY_ENTER', {
         tileId: run.board.currentTileId,
         floor: run.floor,
         chips: safeNumber(run.chips),
+        npcName: npc ? npc.name : null,
+        npcCallingCard: npc ? npc.callingCard : null,
+        affinity: pricing.affinity,
+        edgeDelta: pricing.edgeDelta,
+        priceMult: Number(pricing.priceMult.toFixed(2)),
         deckSize: run.playerDeck.length,
-        eligibleCount,
-        servicesOffered: offers
+        eligibleCount: getEligibleStandardIndices().length,
+        slots: run.ui.modifyContext.slots
       });
 
       renderModifyMenu();
     }
 
     function renderModifyMenu() {
-      const ctx = run.ui.modifyContext || {};
+      const ctx = run.ui.modifyContext;
       const eligibleCount = getEligibleStandardIndices().length;
-      const offers = ctx.servicesOffered || [];
-      const inProgress = !!ctx.selectedServiceId && !ctx.serviceUsed;
       const chipsNow = safeNumber(run.chips);
+      const priceMult = getModifyPriceMult();
+      const npc = ctx && ctx.npc;
+
+      const npcLine = npc
+        ? `${npc.name} · ${cardToString(npc.callingCard)} · ${affinityIcon(ctx.affinity)} · Prices x${priceMult.toFixed(2)}`
+        : `Prices x${priceMult.toFixed(2)}`;
 
       let body = `
-        <p class="modal-text">Modify changes cards already in your deck (base cards only). Choose one service.</p>
+        <p class="modal-text">The Press will re-shape base cards already in your deck.</p>
+        <div class="log-kv" style="margin-bottom:10px;">${npcLine}</div>
         <p class="modal-text">Chips: <strong>${chipsNow}</strong> | Eligible cards: <strong>${eligibleCount}</strong></p>
       `;
 
       if (!eligibleCount) {
         body += `<p class="modal-text" style="color:var(--text-muted);">No eligible cards to modify.</p>`;
-      } else if (inProgress) {
-        const meta = MODIFY_SERVICES[ctx.selectedServiceId];
-        body += `<p class="modal-text" style="color:var(--accent-gold); font-weight:700;">Service in progress: ${meta ? meta.name : ctx.selectedServiceId}</p>`;
-      } else if (ctx.serviceUsed) {
-        body += `<p class="modal-text" style="color:var(--accent-green); font-weight:700;">Service completed.</p>`;
       }
+
+      if (ctx && ctx.session) {
+        const meta = MODIFY_SERVICES[ctx.session.serviceId];
+        body += `<p class="modal-text" style="color:var(--accent-gold); font-weight:700;">Service pending: ${meta ? meta.name : ctx.session.serviceId}</p>`;
+      }
+
+      const slots = (ctx && ctx.slots) || [];
+      const slotsHtml = slots.map((serviceId, idx) => {
+        const meta = MODIFY_SERVICES[serviceId];
+        const cost = getModifyServiceCost(serviceId);
+        const canUse = eligibleCount > 0 && (serviceId !== 'CALLING_SUIT_SWEEP' || (run && run.callingCard));
+        const disabled = !canUse || chipsNow < cost || !!(ctx && ctx.session);
+
+        return `
+          <div class="merchant-card-slot" style="min-width:180px;">
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+              <strong>${meta ? meta.name : serviceId}</strong>
+              <span style="font-size:11px; color:var(--text-muted);">${meta ? meta.tier : ''}</span>
+            </div>
+            <div style="font-size:12px; color:var(--text-secondary); min-height:28px;">
+              ${serviceId === 'RESUIT' ? 'Change the suit of one base card.' :
+                serviceId === 'RERANK' ? 'Change the rank of one base card.' :
+                serviceId === 'CALLING_SUIT_SWEEP' ? 'Re-suit a small set to your calling suit.' :
+                'Press one rank onto a small set.'}
+            </div>
+            <button class="modal-btn" ${disabled ? 'disabled' : ''} onclick="buyModifyService(${idx})">Buy (${cost})</button>
+          </div>
+        `;
+      }).join('');
+
+      body += `<div class="merchant-cards">${slotsHtml}</div>`;
+      body += `<p class="modal-text" style="color:var(--text-muted);">Re-roll cost increases each time you re-roll this visit.</p>`;
 
       const buttons = [];
-      if (eligibleCount && !ctx.serviceUsed && !inProgress) {
-        offers.forEach(serviceId => {
-          const meta = MODIFY_SERVICES[serviceId];
-          const cost = getModifyServiceCost(serviceId, run.floor);
-          buttons.push({
-            text: `${meta ? meta.name : serviceId} (${cost})`,
-            primary: true,
-            disabled: chipsNow < cost,
-            action: () => selectModifyService(serviceId)
-          });
-        });
-      } else if (inProgress) {
-        buttons.push({
-          text: 'Continue',
-          primary: true,
-          action: () => openModifyService(ctx.selectedServiceId)
-        });
-      }
-
-      if (!inProgress) {
+      if (ctx && ctx.session) {
+        buttons.push({ text: 'Continue', primary: true, action: () => openModifyService(ctx.session.serviceId) });
+        buttons.push({ text: 'Abandon (No Refund)', action: () => abandonModifySession() });
+      } else {
         buttons.push({
           text: 'Leave',
           action: () => {
@@ -4658,50 +4741,81 @@ function benchPush(card, source = '') {
       showModal('Modify', body, buttons);
     }
 
-    function selectModifyService(serviceId) {
+    window.buyModifyService = function(slotIdx) {
       const ctx = run.ui.modifyContext;
-      if (!ctx || ctx.serviceUsed) return;
-      const meta = MODIFY_SERVICES[serviceId];
-      const cost = getModifyServiceCost(serviceId, run.floor);
+      if (!ctx || ctx.session) return;
+
+      const serviceId = ctx.slots[slotIdx];
+      if (!serviceId) return;
+
+      const cost = getModifyServiceCost(serviceId);
       if (run.chips < cost) return;
 
       const chipsBefore = run.chips;
       run.chips -= cost;
-      ctx.selectedServiceId = serviceId;
+
+      ctx.session = { serviceId, slotIdx };
+
       logEvent('MODIFY_SERVICE_SELECT', {
         serviceId,
-        tier: meta ? meta.tier : null,
-        kind: meta ? meta.kind : null,
+        tier: MODIFY_SERVICES[serviceId]?.tier || null,
+        kind: MODIFY_SERVICES[serviceId]?.kind || null,
+        slotIdx,
         cost,
         chipsBefore,
         chipsAfter: run.chips
       });
+
       openModifyService(serviceId);
+    };
+
+    function rerollModifyCandidates(serviceId) {
+      const ctx = run.ui.modifyContext;
+      if (!ctx || !ctx.session) return;
+
+      const cost = getModifyRerollCost();
+      if (run.chips < cost) return;
+
+      run.chips -= cost;
+      ctx.rerollCount = safeNumber(ctx.rerollCount, 0) + 1;
+
+      logEvent('MODIFY_REROLL', {
+        serviceId,
+        slotIdx: ctx.session.slotIdx,
+        cost,
+        rerollCount: ctx.rerollCount,
+        chipsAfter: run.chips
+      });
+
+      openModifyService(serviceId, true);
     }
 
-    function openModifyService(serviceId) {
+    function openModifyService(serviceId, forceReroll = false) {
       if (serviceId === MODIFY_SERVICES.RESUIT.id) {
-        openModifyCorePicker('Re-Suit', serviceId);
+        openModifyCorePicker('Re-Suit', serviceId, forceReroll);
         return;
       }
       if (serviceId === MODIFY_SERVICES.RERANK.id) {
-        openModifyCorePicker('Re-Rank', serviceId);
+        openModifyCorePicker('Re-Rank', serviceId, forceReroll);
         return;
       }
       if (serviceId === MODIFY_SERVICES.CALLING_SUIT_SWEEP.id) {
-        openModifyCallingSuitSweep();
+        openModifyCallingSuitSweep(forceReroll);
         return;
       }
       if (serviceId === MODIFY_SERVICES.UNIFORM_RANK_PRESS.id) {
-        openModifyUniformRankPress();
+        openModifyUniformRankPress(forceReroll);
       }
     }
 
-    function openModifyCorePicker(title, serviceId) {
+    function openModifyCorePicker(title, serviceId, forceReroll = false) {
       const ctx = run.ui.modifyContext;
       const eligible = getEligibleStandardIndices();
-      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
-      ctx.previewIndices = sample;
+      if (!ctx.previewIndices || !ctx.previewIndices.length || forceReroll) {
+        const sample = shuffle(eligible).slice(0, Math.min(MODIFY_CANDIDATE_COUNT, eligible.length));
+        ctx.previewIndices = sample;
+      }
+      const sample = ctx.previewIndices || [];
       const meta = MODIFY_SERVICES[serviceId];
       logEvent('MODIFY_CANDIDATES_SHOWN', {
         serviceId,
@@ -4724,6 +4838,7 @@ function benchPush(card, source = '') {
         <p class="modal-text">Choose a card to modify.</p>
         <div class="merchant-cards">${cardsHtml}</div>
       `, [
+        { text: `Re-roll (${getModifyRerollCost()})`, action: () => rerollModifyCandidates(serviceId) },
         { text: 'Back', action: () => renderModifyMenu() }
       ]);
 
@@ -4750,7 +4865,7 @@ function benchPush(card, source = '') {
           ${SUITS.map(suit => `<button class="modal-btn" onclick="applyModifyResuit(${deckIdx}, '${suit}')">${suit}</button>`).join('')}
         </div>
       `, [
-        { text: 'Back', action: () => renderModifyMenu() }
+        { text: 'Back', action: () => openModifyService('RESUIT') }
       ]);
     }
 
@@ -4763,7 +4878,7 @@ function benchPush(card, source = '') {
         <p class="modal-text">Choose a new rank for ${cardToString(card)}.</p>
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:8px;">${ranksHtml}</div>
       `, [
-        { text: 'Back', action: () => renderModifyMenu() }
+        { text: 'Back', action: () => openModifyService('RERANK') }
       ]);
     }
 
@@ -4779,11 +4894,20 @@ function benchPush(card, source = '') {
       applyModifyService('RERANK', [deckIdx], () => { card.rank = rank; });
     };
 
-    function openModifyCallingSuitSweep() {
+    function openModifyCallingSuitSweep(forceReroll = false) {
       const ctx = run.ui.modifyContext;
       const eligible = getEligibleStandardIndices();
-      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
-      ctx.previewIndices = sample;
+      if (!ctx.previewIndices || !ctx.previewIndices.length || forceReroll) {
+        ctx.previewIndices = shuffle(eligible).slice(0, Math.min(MODIFY_CANDIDATE_COUNT, eligible.length));
+      }
+      const sample = ctx.previewIndices || [];
+
+      logEvent('MODIFY_CANDIDATES_SHOWN', {
+        serviceId: 'CALLING_SUIT_SWEEP',
+        tier: MODIFY_SERVICES.CALLING_SUIT_SWEEP.tier,
+        countShown: sample.length,
+        candidates: sample.map(i => cardRef(run.playerDeck[i]))
+      });
 
       const cardsHtml = sample.map(idx => {
         const card = run.playerDeck[idx];
@@ -4806,17 +4930,29 @@ function benchPush(card, source = '') {
             });
           }
         },
+        { text: `Re-roll (${getModifyRerollCost()})`, action: () => rerollModifyCandidates('CALLING_SUIT_SWEEP') },
         { text: 'Back', action: () => renderModifyMenu() }
       ]);
     }
 
-    function openModifyUniformRankPress() {
+    function openModifyUniformRankPress(forceReroll = false) {
       const ctx = run.ui.modifyContext;
       const eligible = getEligibleStandardIndices();
-      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
-      ctx.previewIndices = sample;
-      const ranks = shuffle(RANKS.slice()).slice(0, 2);
-      ctx.rankChoices = ranks;
+      if (!ctx.previewIndices || !ctx.previewIndices.length || forceReroll) {
+        ctx.previewIndices = shuffle(eligible).slice(0, Math.min(MODIFY_CANDIDATE_COUNT, eligible.length));
+      }
+      const sample = ctx.previewIndices || [];
+      if (!ctx.rankChoices || !ctx.rankChoices.length || forceReroll) {
+        ctx.rankChoices = shuffle(RANKS.slice()).slice(0, 2);
+      }
+      const ranks = ctx.rankChoices;
+
+      logEvent('MODIFY_CANDIDATES_SHOWN', {
+        serviceId: 'UNIFORM_RANK_PRESS',
+        tier: MODIFY_SERVICES.UNIFORM_RANK_PRESS.tier,
+        countShown: sample.length,
+        candidates: sample.map(i => cardRef(run.playerDeck[i]))
+      });
 
       const cardsHtml = sample.map(idx => {
         const card = run.playerDeck[idx];
@@ -4839,12 +4975,15 @@ function benchPush(card, source = '') {
             });
           }
         })),
+        { text: `Re-roll (${getModifyRerollCost()})`, action: () => rerollModifyCandidates('UNIFORM_RANK_PRESS') },
         { text: 'Back', action: () => renderModifyMenu() }
       ]);
     }
 
     function applyModifyService(serviceId, indices, applyFn) {
       const ctx = run.ui.modifyContext;
+      const slotIdx = ctx && ctx.session ? ctx.session.slotIdx : null;
+
       const before = indices.map(i => cardToString(run.playerDeck[i]));
       const affectedUids = indices.map(i => run.playerDeck[i]?.uid || null);
       applyFn();
@@ -4852,6 +4991,7 @@ function benchPush(card, source = '') {
 
       logEvent('MODIFY_APPLY', {
         serviceId,
+        slotIdx,
         count: indices.length,
         affectedCardUids: affectedUids,
         affectedBefore: before,
@@ -4860,9 +5000,11 @@ function benchPush(card, source = '') {
       });
       recordDeckSnapshot('MODIFY_APPLY');
 
+      if (ctx && slotIdx !== null && slotIdx !== undefined) {
+        ctx.slots[slotIdx] = rollModifyService();
+      }
       if (ctx) {
-        ctx.serviceUsed = true;
-        ctx.selectedServiceId = null;
+        ctx.session = null;
         ctx.previewIndices = [];
         ctx.rankChoices = null;
       }
@@ -4870,6 +5012,21 @@ function benchPush(card, source = '') {
       renderModifyMenu();
       renderAll();
       showToast('Modify service applied');
+    }
+
+    function abandonModifySession() {
+      const ctx = run.ui.modifyContext;
+      if (!ctx || !ctx.session) return;
+
+      const slotIdx = ctx.session.slotIdx;
+      if (slotIdx !== null && slotIdx !== undefined) ctx.slots[slotIdx] = rollModifyService();
+      ctx.session = null;
+      ctx.previewIndices = [];
+      ctx.rankChoices = null;
+
+      logEvent('MODIFY_ABANDON', { tileId: run.board.currentTileId, slotIdx });
+      renderModifyMenu();
+      showToast('Service abandoned (no refund)');
     }
 
     // =============================================
@@ -4918,6 +5075,17 @@ function benchPush(card, source = '') {
 
     function encounterCollector() {
       const tileId = run.board.currentTileId;
+      const tile = run.board.tiles[tileId];
+      const npc = tile ? tile.npc : null;
+      const pricing = computeShopPriceContext(npc);
+      run.ui.collectorContext = {
+        tileId,
+        npc,
+        affinity: pricing.affinity,
+        edgeDelta: pricing.edgeDelta,
+        priceMult: pricing.priceMult
+      };
+
       if (!run.collectorShop || run.collectorShop.tileId !== tileId) {
         const shopId = `shop-${safeNumber(run.encounterSeq, 0)}-${tileId}`;
         run.collectorShop = {
@@ -4942,7 +5110,12 @@ function benchPush(card, source = '') {
         tileId,
         floor: run.floor,
         chips: safeNumber(run.chips),
-        deckSize: run.playerDeck.length
+        deckSize: run.playerDeck.length,
+        npcName: npc ? npc.name : null,
+        npcCallingCard: npc ? npc.callingCard : null,
+        affinity: pricing.affinity,
+        edgeDelta: pricing.edgeDelta,
+        priceMult: Number(pricing.priceMult.toFixed(2))
       });
 
       renderCollector();
@@ -4955,8 +5128,16 @@ function benchPush(card, source = '') {
       const activeIdx = shop.activeItemIdx;
       const inProgress = activeIdx !== null && activeIdx !== undefined;
 
+      const ctx = run.ui && run.ui.collectorContext;
+      const priceMult = getCollectorPriceMult();
+      const npc = ctx && ctx.npc;
+      const npcLine = npc
+        ? `${npc.name} · ${cardToString(npc.callingCard)} · ${affinityIcon(ctx.affinity)} · Prices x${priceMult.toFixed(2)}`
+        : `Prices x${priceMult.toFixed(2)}`;
+
       let body = `
         <p class="modal-text">The Collector offers stamps and sleeves to shape your deck.</p>
+        <div class="log-kv" style="margin-bottom:10px;">${npcLine}</div>
         <p class="modal-text">Chips: <strong>${chipsNow}</strong></p>
       `;
 
@@ -4967,7 +5148,8 @@ function benchPush(card, source = '') {
 
       const itemsHtml = shop.items.map((item, idx) => {
         const eligible = item.type === 'STAMP' ? getEligibleStampCardIndices().length : getEligibleSleeveCardIndices().length;
-        const itemCost = item.cost || COLLECTOR_COST_BY_RARITY[item.rarity] || COLLECTOR_COST_BY_RARITY.common;
+        const baseCost = item.cost || COLLECTOR_COST_BY_RARITY[item.rarity] || COLLECTOR_COST_BY_RARITY.common;
+        const itemCost = Math.ceil(baseCost * getCollectorPriceMult());
         const disabled = chipsNow < itemCost || eligible === 0 || inProgress;
         const status = eligible === 0 ? 'No eligible cards' : '';
         const rarityClass = `rarity-${item.rarity}`;
@@ -5001,6 +5183,7 @@ function benchPush(card, source = '') {
           action: () => {
             logEvent('COLLECTOR_LEAVE', { tileId: run.board.currentTileId });
             run.collectorShop = null;
+            if (run.ui) run.ui.collectorContext = null;
             closeModal();
             renderAll();
           }
@@ -5015,7 +5198,8 @@ function benchPush(card, source = '') {
       if (!shop) return;
       const item = shop.items[idx];
       if (!item) return;
-      const itemCost = item.cost || COLLECTOR_COST_BY_RARITY[item.rarity] || COLLECTOR_COST_BY_RARITY.common;
+      const baseCost = item.cost || COLLECTOR_COST_BY_RARITY[item.rarity] || COLLECTOR_COST_BY_RARITY.common;
+      const itemCost = Math.ceil(baseCost * getCollectorPriceMult());
       if (run.chips < itemCost) return;
 
       if (item.type === 'STAMP' && getEligibleStampCardIndices().length === 0) return;
@@ -5028,7 +5212,7 @@ function benchPush(card, source = '') {
         itemId: item.id,
         name: item.name,
         type: item.type,
-        cost: (item.cost || COLLECTOR_COST_BY_RARITY[item.rarity] || COLLECTOR_COST_BY_RARITY.common),
+        cost: itemCost,
         shopId: shop.shopId,
         slot: idx,
         chipsBefore,
@@ -9595,6 +9779,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       if (isResolved && result) {
         const outcome = result.outcome;
         const titleCls = outcome === 'WIN' ? 'win' : (outcome === 'LOSS' ? 'lose' : 'tie');
+        const laneW = safeNumber(result.playerWins, 0);
+        const laneL = safeNumber(result.dealerWins, 0);
+        const laneP = Math.max(0, 5 - laneW - laneL);
+        const laneRecord = `${laneW}–${laneL}` + (laneP ? ` (+${laneP}P)` : '');
 
         const transfer = blackjackMatch.transferChipsNet || 0;
         const bonus = blackjackMatch.bonusChipsEarned || 0;
@@ -9622,7 +9810,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         html += `
           <div class="bj-result">
             <div class="bj-result-row">
-              <div><b>Outcome:</b> <span class="${titleCls}">${outcome}</span></div>
+              <div>
+                <b>Outcome:</b>
+                <span class="${titleCls}">${outcome}</span>
+                <span style="margin-left:8px; color:var(--text-muted); font-weight:700;">${laneRecord}</span>
+              </div>
               <div><b>Match Earnings:</b> <span class="${netCls}">${earningsNow >= 0 ? '+' : ''}${earningsNow}</span> <span style="color:var(--text-muted)">(Payout ${payout}, SideBet ${transfer >= 0 ? '+' : ''}${transfer}, Rake -${rake}, Bonus ${bonus})</span></div>
             </div>
             <div class="bj-result-row">
