@@ -3856,11 +3856,9 @@ const CALLING_RANK_THRESHOLDS = [
       if (isFused(card)) {
         const a = getCardValueOptions(card.a);
         const b = getCardValueOptions(card.b);
-        const sums = [];
-        for (const av of a) {
-          for (const bv of b) sums.push(av + bv);
-        }
-        return Array.from(new Set(sums));
+        const vals = Array.from(new Set([...(a || []), ...(b || [])]));
+        vals.sort((x, y) => x - y);
+        return vals;
       }
 
       if (card.__negValue !== undefined) return [safeNumber(card.__negValue, 0)];
@@ -9781,6 +9779,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       if (isResolved && result) {
         const outcome = result.outcome;
         const titleCls = outcome === 'WIN' ? 'win' : (outcome === 'LOSS' ? 'lose' : 'tie');
+        const laneW = safeNumber(result.playerWins, 0);
+        const laneL = safeNumber(result.dealerWins, 0);
+        const laneP = Math.max(0, 5 - laneW - laneL);
+        const laneRecord = `${laneW}–${laneL}` + (laneP ? ` (+${laneP}P)` : '');
 
         const transfer = blackjackMatch.transferChipsNet || 0;
         const bonus = blackjackMatch.bonusChipsEarned || 0;
@@ -9808,7 +9810,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         html += `
           <div class="bj-result">
             <div class="bj-result-row">
-              <div><b>Outcome:</b> <span class="${titleCls}">${outcome}</span></div>
+              <div>
+                <b>Outcome:</b>
+                <span class="${titleCls}">${outcome}</span>
+                <span style="margin-left:8px; color:var(--text-muted); font-weight:700;">${laneRecord}</span>
+              </div>
               <div><b>Match Earnings:</b> <span class="${netCls}">${earningsNow >= 0 ? '+' : ''}${earningsNow}</span> <span style="color:var(--text-muted)">(Payout ${payout}, SideBet ${transfer >= 0 ? '+' : ''}${transfer}, Rake -${rake}, Bonus ${bonus})</span></div>
             </div>
             <div class="bj-result-row">
