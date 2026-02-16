@@ -3711,18 +3711,24 @@ const CALLING_RANK_THRESHOLDS = [
       const out = [];
       for (const c of cards || []) {
         if (!c || isModifier(c) || isKeyCard(c)) continue;
-        if (isFused(c)) {
-          out.push(c);
-        } else {
-          out.push(c);
-        }
+        out.push(c); // fused counts as ONE card entity for effect scanning
       }
       return out;
     }
 
+    function cardHasSleeve(card, sleeveId) {
+      if (!card) return false;
+      if (isFused(card)) {
+        return card.sleeveId === sleeveId
+          || card.a?.sleeveId === sleeveId
+          || card.b?.sleeveId === sleeveId;
+      }
+      return card.sleeveId === sleeveId;
+    }
+
     function laneHasSleeve(pos, sleeveId) {
       const cards = collectLaneCardsForEffects(pos?.cards || []);
-      return cards.some(c => c && c.sleeveId === sleeveId);
+      return cards.some(c => cardHasSleeve(c, sleeveId));
     }
 
     function getStampKarmaContribution(stampId, baseValue, laneSize) {
@@ -6742,7 +6748,7 @@ body += `
 
     function countGoldSleeves(pos) {
       const laneCards = pos && pos.cards ? pos.cards : [];
-      return collectLaneCardsForEffects(laneCards).filter(c => c && c.sleeveId === 'GOLD').length;
+      return collectLaneCardsForEffects(laneCards).filter(c => cardHasSleeve(c, 'GOLD')).length;
     }
 
     function buildKarmaBreakdown(positionResults, playerTotals) {
@@ -6760,7 +6766,7 @@ body += `
             if (!stampId) return;
             const def = getStampDef(stampId);
             let delta = getStampKarmaContribution(stampId, base, laneSize);
-            const foilMult = (card && card.sleeveId === 'FOIL') ? 2 : 1;
+            const foilMult = cardHasSleeve(card, 'FOIL') ? 2 : 1;
             if (stampId === 'HOUSE_EDGE' && base === 21) delta = laneSize * 10;
             delta *= foilMult;
             stampTotal += delta;
@@ -7182,7 +7188,7 @@ body += `
         }
       }
 
-      if (placed.sleeveId === 'FUSION') pos.pendingFusionUid = placed.uid;
+      if (!isFused(placed) && placed.sleeveId === 'FUSION') pos.pendingFusionUid = placed.uid;
       if (placed.sleeveId === 'ERASER') pos.eraserCharges = safeNumber(pos.eraserCharges, 0) + 1;
       return placed;
     }
