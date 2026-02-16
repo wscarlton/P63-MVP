@@ -3988,7 +3988,8 @@ function getModifyServiceCost(serviceId, floor) {
   const isPremium = serviceId === 'CALLING_SUIT_SWEEP' || serviceId === 'UNIFORM_RANK_PRESS';
   const base = isPremium ? 200 : 100;
   const step = isPremium ? 50 : 25;
-  return base + ((baseFloor - 1) * step);
+  const scaled = base + ((baseFloor - 1) * step);
+  return Math.ceil(scaled * getModifyPriceMult());
 }
 
 function getModKey(delta) { return String(delta); }
@@ -4552,12 +4553,44 @@ function benchPush(card, source = '') {
     // =============================================
     // MODIFY
     // =============================================
+    const MODIFY_CANDIDATE_COUNT = 5;
+    const MODIFY_PREMIUM_CHANCE = 0.25;
+    const MODIFY_RANK_SHIFT_MAX_STEPS = 3;
+    const MODIFY_RANK_SHIFT_STEP_COST = 15;
+
     const MODIFY_SERVICES = {
       RESUIT: { id: 'RESUIT', name: 'Re-Suit', tier: 'core', kind: 'single' },
-      RERANK: { id: 'RERANK', name: 'Re-Rank', tier: 'core', kind: 'single' },
+      RERANK: { id: 'RERANK', name: 'Rank Shift', tier: 'core', kind: 'single' },
       CALLING_SUIT_SWEEP: { id: 'CALLING_SUIT_SWEEP', name: 'Calling Suit Sweep', tier: 'premium', kind: 'bulk' },
       UNIFORM_RANK_PRESS: { id: 'UNIFORM_RANK_PRESS', name: 'Uniform Rank Press', tier: 'premium', kind: 'bulk' }
     };
+
+    function rankIndex(rank) { return RANKS.indexOf(rank); }
+
+    function computeShiftedRank(rank, delta) {
+      const i = rankIndex(rank);
+      if (i < 0) return rank;
+      const j = i + delta;
+      if (j < 0 || j >= RANKS.length) return null;
+      return RANKS[j];
+    }
+
+    function getModifyPriceMult() {
+      const ctx = run && run.ui && run.ui.modifyContext;
+      const mult = ctx && typeof ctx.priceMult === 'number' ? ctx.priceMult : 1;
+      return Math.max(0.75, Math.min(1.25, mult));
+    }
+
+    function getRankShiftExtraCost(delta) {
+      const n = Math.abs(delta);
+      if (n <= 1) return 0;
+      const units = ((n - 1) * n) / 2;
+      return Math.ceil(units * MODIFY_RANK_SHIFT_STEP_COST * getModifyPriceMult());
+    }
+
+    function getModifyRerollCost() {
+      return Math.ceil(REMOVAL_REROLL_COST * getModifyPriceMult());
+    }
 
     function getEligibleStandardIndices() {
       if (!run || !run.playerDeck) return [];
@@ -4568,13 +4601,23 @@ function benchPush(card, source = '') {
       return eligible;
     }
 
+    function rollModifyService() {
+      const core = [MODIFY_SERVICES.RESUIT.id, MODIFY_SERVICES.RERANK.id];
+      const premium = [MODIFY_SERVICES.UNIFORM_RANK_PRESS.id];
+      if (run && run.callingCard) premium.push(MODIFY_SERVICES.CALLING_SUIT_SWEEP.id);
+
+      if (premium.length && Math.random() < MODIFY_PREMIUM_CHANCE) {
+        return randomChoice(premium);
+      }
+      return randomChoice(core);
+    }
+
     function buildModifyOffers() {
       const eligible = getEligibleStandardIndices();
       if (!eligible.length) return [];
-      const services = [MODIFY_SERVICES.RESUIT.id, MODIFY_SERVICES.RERANK.id];
-      services.push(MODIFY_SERVICES.UNIFORM_RANK_PRESS.id);
-      if (run && run.callingCard) services.push(MODIFY_SERVICES.CALLING_SUIT_SWEEP.id);
-      return shuffle(services).slice(0, Math.min(2, services.length));
+      const offers = [];
+      for (let i = 0; i < 3; i += 1) offers.push(rollModifyService());
+      return offers;
     }
 
     function encounterModify() {
@@ -4587,7 +4630,9 @@ function benchPush(card, source = '') {
         serviceUsed: false,
         selectedServiceId: null,
         previewIndices: [],
-        rankChoices: null
+        rankChoices: null,
+        session: null,
+        rankShift: null
       };
 
       logEvent('MODIFY_ENTER', {
@@ -4613,6 +4658,22 @@ function benchPush(card, source = '') {
         <p class="modal-text">Modify changes cards already in your deck (base cards only). Choose one service.</p>
         <p class="modal-text">Chips: <strong>${chipsNow}</strong> | Eligible cards: <strong>${eligibleCount}</strong></p>
       `;
+
+      if (offers.length && !inProgress && !ctx.serviceUsed) {
+        body += `<div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">`;
+        offers.forEach(serviceId => {
+          const cost = getModifyServiceCost(serviceId, run.floor);
+          const description = serviceId === MODIFY_SERVICES.RERANK.id
+            ? 'Shift one card\'s rank up/down by up to 3 steps. Cost increases per step.'
+            : (serviceId === MODIFY_SERVICES.RESUIT.id
+              ? 'Change one card\'s suit.'
+              : (serviceId === MODIFY_SERVICES.UNIFORM_RANK_PRESS.id
+                ? 'Set 5 cards to one chosen rank.'
+                : 'Set 5 cards to your calling suit.'));
+          body += `<p class="modal-text" style="margin:0;"><strong>${MODIFY_SERVICES[serviceId]?.name || serviceId}</strong> (${cost}) — ${description}</p>`;
+        });
+        body += `</div>`;
+      }
 
       if (!eligibleCount) {
         body += `<p class="modal-text" style="color:var(--text-muted);">No eligible cards to modify.</p>`;
@@ -4679,29 +4740,49 @@ function benchPush(card, source = '') {
       openModifyService(serviceId);
     }
 
-    function openModifyService(serviceId) {
+    function rerollModifyCandidates(serviceId) {
+      const ctx = run.ui.modifyContext;
+      if (!ctx || ctx.serviceUsed) return;
+      const cost = getModifyRerollCost();
+      if (run.chips < cost) return;
+      const chipsBefore = run.chips;
+      run.chips -= cost;
+
+      logEvent('MODIFY_REROLL', {
+        serviceId,
+        cost,
+        chipsBefore,
+        chipsAfter: run.chips
+      });
+
+      openModifyService(serviceId, true);
+    }
+
+    function openModifyService(serviceId, forceReroll = false) {
       if (serviceId === MODIFY_SERVICES.RESUIT.id) {
-        openModifyCorePicker('Re-Suit', serviceId);
+        openModifyCorePicker('Re-Suit', serviceId, forceReroll);
         return;
       }
       if (serviceId === MODIFY_SERVICES.RERANK.id) {
-        openModifyCorePicker('Re-Rank', serviceId);
+        openModifyRankShift(forceReroll);
         return;
       }
       if (serviceId === MODIFY_SERVICES.CALLING_SUIT_SWEEP.id) {
-        openModifyCallingSuitSweep();
+        openModifyCallingSuitSweep(forceReroll);
         return;
       }
       if (serviceId === MODIFY_SERVICES.UNIFORM_RANK_PRESS.id) {
-        openModifyUniformRankPress();
+        openModifyUniformRankPress(forceReroll);
       }
     }
 
-    function openModifyCorePicker(title, serviceId) {
+    function openModifyCorePicker(title, serviceId, forceReroll = false) {
       const ctx = run.ui.modifyContext;
       const eligible = getEligibleStandardIndices();
-      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
-      ctx.previewIndices = sample;
+      if (!ctx.previewIndices || !ctx.previewIndices.length || forceReroll) {
+        ctx.previewIndices = shuffle(eligible).slice(0, Math.min(MODIFY_CANDIDATE_COUNT, eligible.length));
+      }
+      const sample = ctx.previewIndices;
       const meta = MODIFY_SERVICES[serviceId];
       logEvent('MODIFY_CANDIDATES_SHOWN', {
         serviceId,
@@ -4720,12 +4801,22 @@ function benchPush(card, source = '') {
         `;
       }).join('');
 
+      const rerollCost = getModifyRerollCost();
+      const canReroll = run.chips >= rerollCost;
+
       showModal(`Modify - ${title}`, `
         <p class="modal-text">Choose a card to modify.</p>
         <div class="merchant-cards">${cardsHtml}</div>
+        <div style="display:flex; justify-content:center; margin-top:8px;">
+          <button class="modal-btn" ${canReroll ? '' : 'disabled'} onclick="rerollModifyCandidatesUI('${serviceId}')">Re-roll (${rerollCost})</button>
+        </div>
       `, [
         { text: 'Back', action: () => renderModifyMenu() }
       ]);
+
+      window.rerollModifyCandidatesUI = function(selectedServiceId) {
+        rerollModifyCandidates(selectedServiceId);
+      };
 
       window.selectModifyCoreCard = function(deckIdx) {
         logEvent('MODIFY_SELECTION', {
@@ -4734,9 +4825,135 @@ function benchPush(card, source = '') {
         });
         if (serviceId === MODIFY_SERVICES.RESUIT.id) {
           openModifySuitPicker(deckIdx);
-        } else {
-          openModifyRankPicker(deckIdx);
         }
+      };
+    }
+
+    function openModifyRankShift(forceReroll = false) {
+      const ctx = run.ui.modifyContext;
+      const eligible = getEligibleStandardIndices();
+      if (!ctx || !eligible.length) return;
+
+      if (!ctx.previewIndices || !ctx.previewIndices.length || forceReroll) {
+        ctx.previewIndices = shuffle(eligible).slice(0, Math.min(MODIFY_CANDIDATE_COUNT, eligible.length));
+      }
+      const sample = ctx.previewIndices;
+      const meta = MODIFY_SERVICES.RERANK;
+      logEvent('MODIFY_CANDIDATES_SHOWN', {
+        serviceId: MODIFY_SERVICES.RERANK.id,
+        tier: meta ? meta.tier : null,
+        countShown: sample.length,
+        candidates: sample.map(i => cardRef(run.playerDeck[i]))
+      });
+
+      const cardsHtml = sample.map(idx => {
+        const card = run.playerDeck[idx];
+        return `
+          <div class="merchant-card-slot">
+            ${renderCard(card, false)}
+            <button class="modal-btn" onclick="selectModifyRankShiftCard(${idx})">Select</button>
+          </div>
+        `;
+      }).join('');
+
+      const rerollCost = getModifyRerollCost();
+      const canReroll = run.chips >= rerollCost;
+
+      showModal('Modify - Rank Shift', `
+        <p class="modal-text">Choose one card for rank shifting.</p>
+        <div class="merchant-cards">${cardsHtml}</div>
+        <div style="display:flex; justify-content:center; margin-top:8px;">
+          <button class="modal-btn" ${canReroll ? '' : 'disabled'} onclick="rerollModifyCandidatesUI('${MODIFY_SERVICES.RERANK.id}')">Re-roll (${rerollCost})</button>
+        </div>
+      `, [
+        { text: 'Back', action: () => renderModifyMenu() }
+      ]);
+
+      window.rerollModifyCandidatesUI = function(selectedServiceId) {
+        rerollModifyCandidates(selectedServiceId);
+      };
+
+      window.selectModifyRankShiftCard = function(deckIdx) {
+        logEvent('MODIFY_SELECTION', {
+          serviceId: MODIFY_SERVICES.RERANK.id,
+          selected: cardRef(run.playerDeck[deckIdx])
+        });
+        openModifyRankShiftStepper(deckIdx);
+      };
+    }
+
+    function openModifyRankShiftStepper(deckIdx) {
+      const ctx = run.ui.modifyContext;
+      const card = run.playerDeck[deckIdx];
+      if (!ctx || !card || !isStandardCard(card)) return;
+
+      if (!ctx.rankShift || ctx.rankShift.deckIdx !== deckIdx) {
+        ctx.rankShift = { deckIdx, delta: 0 };
+      }
+      ctx.session = { type: 'RANK_SHIFT', deckIdx };
+
+      const delta = safeNumber(ctx.rankShift.delta, 0);
+      const shiftedRank = computeShiftedRank(card.rank, delta);
+      const canMinusByStep = delta > -MODIFY_RANK_SHIFT_MAX_STEPS && computeShiftedRank(card.rank, delta - 1) !== null;
+      const canPlusByStep = delta < MODIFY_RANK_SHIFT_MAX_STEPS && computeShiftedRank(card.rank, delta + 1) !== null;
+      const extraCost = getRankShiftExtraCost(delta);
+      const canAfford = run.chips >= extraCost;
+      const deltaLabel = delta > 0 ? `+${delta}` : `${delta}`;
+      const previewLabel = shiftedRank ? `${card.rank} → ${shiftedRank}` : `${card.rank} → (invalid)`;
+
+      showModal('Modify - Rank Shift', `
+        <p class="modal-text">Selected card:</p>
+        <div class="merchant-cards" style="justify-content:center;">${renderCard(card, false)}</div>
+        <p class="modal-text" style="margin-top:8px;">Rank preview: <strong>${previewLabel}</strong></p>
+        <div style="display:flex; justify-content:center; gap:10px; margin-top:8px;">
+          <button class="modal-btn" ${canMinusByStep ? '' : 'disabled'} onclick="adjustRankShiftDelta(-1)">-</button>
+          <button class="modal-btn" ${canPlusByStep ? '' : 'disabled'} onclick="adjustRankShiftDelta(1)">+</button>
+        </div>
+        <p class="modal-text" style="margin-top:8px;">Steps: <strong>${deltaLabel}</strong> (extra cost: <strong>${extraCost}</strong>)</p>
+        ${!canAfford ? '<p class="modal-text" style="color:var(--danger);">Not enough chips for this shift.</p>' : ''}
+      `, [
+        { text: 'Back', action: () => openModifyRankShift() },
+        {
+          text: `Confirm${extraCost ? ` (-${extraCost})` : ''}`,
+          primary: true,
+          disabled: delta === 0 || !shiftedRank || !canAfford,
+          action: () => confirmModifyRankShift()
+        }
+      ]);
+
+      window.adjustRankShiftDelta = function(step) {
+        const state = run.ui.modifyContext && run.ui.modifyContext.rankShift;
+        if (!state) return;
+        const targetCard = run.playerDeck[state.deckIdx];
+        if (!targetCard || !isStandardCard(targetCard)) return;
+        const nextDelta = safeNumber(state.delta, 0) + step;
+        if (Math.abs(nextDelta) > MODIFY_RANK_SHIFT_MAX_STEPS) return;
+        if (computeShiftedRank(targetCard.rank, nextDelta) === null) return;
+        state.delta = nextDelta;
+        openModifyRankShiftStepper(state.deckIdx);
+      };
+
+      window.confirmModifyRankShift = function() {
+        const state = run.ui.modifyContext && run.ui.modifyContext.rankShift;
+        if (!state) return;
+        const currentCard = run.playerDeck[state.deckIdx];
+        if (!currentCard || !isStandardCard(currentCard)) return;
+
+        const applyDelta = safeNumber(state.delta, 0);
+        const rankBefore = currentCard.rank;
+        const rankAfter = computeShiftedRank(rankBefore, applyDelta);
+        const extraCostNow = getRankShiftExtraCost(applyDelta);
+        if (applyDelta === 0 || !rankAfter || run.chips < extraCostNow) return;
+
+        if (extraCostNow > 0) run.chips -= extraCostNow;
+        applyModifyService('RERANK', [state.deckIdx], () => {
+          currentCard.rank = rankAfter;
+        }, {
+          delta: applyDelta,
+          extraCost: extraCostNow,
+          rankBefore,
+          rankAfter
+        });
       };
     }
 
@@ -4750,20 +4967,7 @@ function benchPush(card, source = '') {
           ${SUITS.map(suit => `<button class="modal-btn" onclick="applyModifyResuit(${deckIdx}, '${suit}')">${suit}</button>`).join('')}
         </div>
       `, [
-        { text: 'Back', action: () => renderModifyMenu() }
-      ]);
-    }
-
-    function openModifyRankPicker(deckIdx) {
-      const card = run.playerDeck[deckIdx];
-      if (!card || !isStandardCard(card)) return;
-
-      const ranksHtml = RANKS.map(rank => `<button class="modal-btn" onclick="applyModifyRerank(${deckIdx}, '${rank}')">${rank}</button>`).join('');
-      showModal('Modify - Re-Rank', `
-        <p class="modal-text">Choose a new rank for ${cardToString(card)}.</p>
-        <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:8px;">${ranksHtml}</div>
-      `, [
-        { text: 'Back', action: () => renderModifyMenu() }
+        { text: 'Back', action: () => openModifyCorePicker('Re-Suit', MODIFY_SERVICES.RESUIT.id) }
       ]);
     }
 
@@ -4773,26 +4977,28 @@ function benchPush(card, source = '') {
       applyModifyService('RESUIT', [deckIdx], () => { card.suit = suit; });
     };
 
-    window.applyModifyRerank = function(deckIdx, rank) {
-      const card = run.playerDeck[deckIdx];
-      if (!card || !isStandardCard(card)) return;
-      applyModifyService('RERANK', [deckIdx], () => { card.rank = rank; });
-    };
-
-    function openModifyCallingSuitSweep() {
+    function openModifyCallingSuitSweep(forceReroll = false) {
       const ctx = run.ui.modifyContext;
       const eligible = getEligibleStandardIndices();
-      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
-      ctx.previewIndices = sample;
+      if (!ctx.previewIndices || !ctx.previewIndices.length || forceReroll) {
+        ctx.previewIndices = shuffle(eligible).slice(0, Math.min(MODIFY_CANDIDATE_COUNT, eligible.length));
+      }
+      const sample = ctx.previewIndices;
 
       const cardsHtml = sample.map(idx => {
         const card = run.playerDeck[idx];
         return renderCard(card, false);
       }).join('');
 
+      const rerollCost = getModifyRerollCost();
+      const canReroll = run.chips >= rerollCost;
+
       showModal('Modify - Calling Suit Sweep', `
         <p class="modal-text">Preview the cards that will be re-suited to ${run.callingCard ? run.callingCard.suit : ''}.</p>
         <div class="merchant-cards">${cardsHtml}</div>
+        <div style="display:flex; justify-content:center; margin-top:8px;">
+          <button class="modal-btn" ${canReroll ? '' : 'disabled'} onclick="rerollModifyCandidatesUI('${MODIFY_SERVICES.CALLING_SUIT_SWEEP.id}')">Re-roll (${rerollCost})</button>
+        </div>
       `, [
         {
           text: 'Confirm',
@@ -4808,24 +5014,38 @@ function benchPush(card, source = '') {
         },
         { text: 'Back', action: () => renderModifyMenu() }
       ]);
+
+      window.rerollModifyCandidatesUI = function(selectedServiceId) {
+        rerollModifyCandidates(selectedServiceId);
+      };
     }
 
-    function openModifyUniformRankPress() {
+    function openModifyUniformRankPress(forceReroll = false) {
       const ctx = run.ui.modifyContext;
       const eligible = getEligibleStandardIndices();
-      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
-      ctx.previewIndices = sample;
-      const ranks = shuffle(RANKS.slice()).slice(0, 2);
-      ctx.rankChoices = ranks;
+      if (!ctx.previewIndices || !ctx.previewIndices.length || forceReroll) {
+        ctx.previewIndices = shuffle(eligible).slice(0, Math.min(MODIFY_CANDIDATE_COUNT, eligible.length));
+      }
+      const sample = ctx.previewIndices;
+      if (!ctx.rankChoices || !ctx.rankChoices.length) {
+        ctx.rankChoices = shuffle(RANKS.slice()).slice(0, 2);
+      }
+      const ranks = ctx.rankChoices;
 
       const cardsHtml = sample.map(idx => {
         const card = run.playerDeck[idx];
         return renderCard(card, false);
       }).join('');
 
+      const rerollCost = getModifyRerollCost();
+      const canReroll = run.chips >= rerollCost;
+
       showModal('Modify - Uniform Rank Press', `
         <p class="modal-text">Choose a rank to press onto these cards.</p>
         <div class="merchant-cards">${cardsHtml}</div>
+        <div style="display:flex; justify-content:center; margin-top:8px;">
+          <button class="modal-btn" ${canReroll ? '' : 'disabled'} onclick="rerollModifyCandidatesUI('${MODIFY_SERVICES.UNIFORM_RANK_PRESS.id}')">Re-roll (${rerollCost})</button>
+        </div>
       `, [
         ...ranks.map(rank => ({
           text: `Set to ${rank}`,
@@ -4841,9 +5061,13 @@ function benchPush(card, source = '') {
         })),
         { text: 'Back', action: () => renderModifyMenu() }
       ]);
+
+      window.rerollModifyCandidatesUI = function(selectedServiceId) {
+        rerollModifyCandidates(selectedServiceId);
+      };
     }
 
-    function applyModifyService(serviceId, indices, applyFn) {
+    function applyModifyService(serviceId, indices, applyFn, extraData = null) {
       const ctx = run.ui.modifyContext;
       const before = indices.map(i => cardToString(run.playerDeck[i]));
       const affectedUids = indices.map(i => run.playerDeck[i]?.uid || null);
@@ -4856,7 +5080,8 @@ function benchPush(card, source = '') {
         affectedCardUids: affectedUids,
         affectedBefore: before,
         affectedAfter: after,
-        deckSnapshot: deckSnapshot()
+        deckSnapshot: deckSnapshot(),
+        ...(extraData || {})
       });
       recordDeckSnapshot('MODIFY_APPLY');
 
@@ -4865,6 +5090,9 @@ function benchPush(card, source = '') {
         ctx.selectedServiceId = null;
         ctx.previewIndices = [];
         ctx.rankChoices = null;
+        ctx.session = null;
+        ctx.rankShift = null;
+        ctx.servicesOffered = buildModifyOffers();
       }
 
       renderModifyMenu();
