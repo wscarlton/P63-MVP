@@ -1916,7 +1916,7 @@ const MERCHANT_REMOVE_INCREMENT = 25; // removal cost increases by this amount e
 const MOD_PURCHASE_LIMIT_PER_DELTA = 2; // only this many of each modifier (-4..+4) can be purchased per run
 const BENCH_BASE_CAPACITY = 2; // bench slots at start of run
 const BENCH_CAPACITY_BONUS_PER_BOSS_WIN = 1; // +1 bench slot after each boss victory
-const HOUSE_RAKE_RATES = { 1: 0.10, 2: 0.20, 3: 0.30 }; // applied to positive (payout + transfer) only
+const LANE_COUNT = 5;  // intentional fixed lane count (used for lane initialization / fixed arrays)
 const CALLING_PROC_CHANCE = 0.50;
 const DIAMOND_BONUS_CHIPS = 10;
 const CALLING_RANK_THRESHOLDS = [
@@ -2878,7 +2878,7 @@ const CALLING_RANK_THRESHOLDS = [
         let matchLaneL = 0;
         let matchLaneT = 0;
 
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < laneWinners.length; i++) {
           const pTotal = safeNumber(playerTotals[i], 0);
           const dTotal = safeNumber(dealerTotals[i], 0);
           const pBust = !!playerBusts[i];
@@ -3495,17 +3495,32 @@ const CALLING_RANK_THRESHOLDS = [
     // =============================================
     let __modalButtons = [];
     let __modalTitle = '';
-    window.__modalAction = function(i) {
-      const b = __modalButtons[i];
-      if (!b || b.disabled) return;
-      if (typeof b.action === 'function') b.action();
-    };
+    let __modalOnClose = null;
 
-    function showModal(title, bodyHtml, buttons = []) {
+    (function initModalDelegation(){
+      const modal = document.getElementById('modal');
+      if (!modal) return;
+
+      modal.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-modal-idx]');
+        if (!btn) return;
+
+        const i = Number(btn.getAttribute('data-modal-idx'));
+        const b = __modalButtons[i];
+        if (!b || b.disabled) return;
+
+        if (typeof b.action === 'function') b.action();
+      });
+    })();
+
+    function showModal(title, bodyHtml, buttons = [], opts = {}) {
       __modalButtons = buttons.map(b => ({ ...b }));
       __modalTitle = title || '';
+      __modalOnClose = (opts && typeof opts.onClose === 'function') ? opts.onClose : null;
+
       const overlay = document.getElementById('modalOverlay');
       const modal = document.getElementById('modal');
+
       const footer = buttons.length ? `
         <div class="modal-footer">
           ${buttons.map((b, i) => {
@@ -3515,7 +3530,7 @@ const CALLING_RANK_THRESHOLDS = [
               b.danger ? 'danger' : ''
             ].filter(Boolean).join(' ');
             const dis = b.disabled ? 'disabled' : '';
-            return `<button class="${cls}" ${dis} onclick="__modalAction(${i})">${b.text}</button>`;
+            return `<button class="${cls}" ${dis} data-modal-idx="${i}">${b.text}</button>`;
           }).join('')}
         </div>
       ` : '';
@@ -3529,10 +3544,12 @@ const CALLING_RANK_THRESHOLDS = [
     }
 
     function closeModal() {
-      if (__modalTitle === 'Merchant' && run && run.floor === 2 && run.secret && run.secret.keys && run.secret.keys.merchant) {
-        const mk = run.secret.keys.merchant;
-        if (mk.state === 'offered') mk.state = 'missed';
+      // Call modal-specific onClose hook (if any)
+      if (typeof __modalOnClose === 'function') {
+        try { __modalOnClose(); } catch (e) { console.warn('modal onClose error', e); }
       }
+
+      __modalOnClose = null;
       __modalTitle = '';
       document.getElementById('modalOverlay').classList.add('hidden');
       document.getElementById('modal').innerHTML = '';
@@ -3540,11 +3557,25 @@ const CALLING_RANK_THRESHOLDS = [
     }
 
     let toastTimer = null;
+    let procBannerTimer = null;
+
     function showProcBanner(data = {}) {
       if (!blackjackMatch) return;
-      blackjackMatch.procBanner = { suit: data.suit || '', title: data.title || 'Calling Proc', desc: data.desc || '' };
+
+      blackjackMatch.procBanner = {
+        suit: data.suit || '',
+        title: data.title || 'Calling Proc',
+        desc: data.desc || ''
+      };
+
       renderBlackjack();
-      setTimeout(() => { if (blackjackMatch) blackjackMatch.procBanner = null; renderBlackjack(); }, 1500);
+
+      if (procBannerTimer) clearTimeout(procBannerTimer);
+      procBannerTimer = setTimeout(() => {
+        if (blackjackMatch) blackjackMatch.procBanner = null;
+        renderBlackjack();
+        procBannerTimer = null;
+      }, 1500);
     }
 
     function showToast(text, ms = 1600) {
@@ -4872,6 +4903,10 @@ function benchPush(card, source = '') {
       }
     }
 
+    window.rerollModifyCandidatesUI = function(serviceId) {
+      rerollModifyCandidates(serviceId);
+    };
+
     function openModifyCorePicker(title, serviceId, forceReroll = false) {
       const ctx = run.ui.modifyContext;
       const eligible = getEligibleStandardIndices();
@@ -4911,9 +4946,6 @@ function benchPush(card, source = '') {
         { text: 'Back', action: () => renderModifyMenu() }
       ]);
 
-      window.rerollModifyCandidatesUI = function(selectedServiceId) {
-        rerollModifyCandidates(selectedServiceId);
-      };
 
       window.selectModifyCoreCard = function(deckIdx) {
         logEvent('MODIFY_SELECTION', {
@@ -4967,9 +4999,6 @@ function benchPush(card, source = '') {
         { text: 'Back', action: () => renderModifyMenu() }
       ]);
 
-      window.rerollModifyCandidatesUI = function(selectedServiceId) {
-        rerollModifyCandidates(selectedServiceId);
-      };
 
       window.selectModifyRankShiftCard = function(deckIdx) {
         logEvent('MODIFY_SELECTION', {
@@ -5116,9 +5145,6 @@ function benchPush(card, source = '') {
         { text: 'Back', action: () => renderModifyMenu() }
       ]);
 
-      window.rerollModifyCandidatesUI = function(selectedServiceId) {
-        rerollModifyCandidates(selectedServiceId);
-      };
     }
 
     function openModifyUniformRankPress(forceReroll = false) {
@@ -5164,9 +5190,6 @@ function benchPush(card, source = '') {
         { text: 'Back', action: () => renderModifyMenu() }
       ]);
 
-      window.rerollModifyCandidatesUI = function(selectedServiceId) {
-        rerollModifyCandidates(selectedServiceId);
-      };
     }
 
     function applyModifyService(serviceId, indices, applyFn, extraData = null) {
@@ -5651,8 +5674,14 @@ body += `
         buttons.push({ text: 'Leave', action: () => { leaveMerchant(); } });
       }
 
-      showModal('Merchant', body, buttons);
+      showModal('Merchant', body, buttons, { onClose: markMerchantKeyMissedIfOffered });
       renderHUD();
+    }
+
+    function markMerchantKeyMissedIfOffered() {
+      if (!run || run.floor !== 2) return;
+      const mk = run?.secret?.keys?.merchant;
+      if (mk && mk.state === 'offered') mk.state = 'missed';
     }
 
     window.rerollMerchantInventory = function() {
@@ -6062,8 +6091,8 @@ body += `
         specialReward: options.specialReward || null,
         watcherTargetLaneIdx: null,
         traps: {
-          player: Array(5).fill(0),
-          dealer: Array(5).fill(0)
+          player: Array(LANE_COUNT).fill(0),
+          dealer: Array(LANE_COUNT).fill(0)
         },
 
         // Action tokens + action usage
@@ -6104,10 +6133,10 @@ body += `
 
           initialDealComplete: false,
           laneCards: {
-            playerTotal: Array(5).fill(0),
-            dealerTotal: Array(5).fill(0),
-            playerAfterInitial: Array(5).fill(0),
-            dealerAfterInitial: Array(5).fill(0)
+            playerTotal: Array(LANE_COUNT).fill(0),
+            dealerTotal: Array(LANE_COUNT).fill(0),
+            playerAfterInitial: Array(LANE_COUNT).fill(0),
+            dealerAfterInitial: Array(LANE_COUNT).fill(0)
           }
         }
       };
@@ -6156,7 +6185,7 @@ body += `
       run.ui.mode = 'BLACKJACK';
 
       // Initialize 5 positions each
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < LANE_COUNT; i++) {
         blackjackMatch.playerPositions.push({
           cards: [],
           mods: [],
@@ -6461,7 +6490,7 @@ body += `
       }
 
       let best = null;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < blackjackMatch.playerPositions.length; i++) {
         const p = blackjackMatch.playerPositions[i];
         if (!p.isOpen || p.isComplete) continue;
         const t = getPositionTotal(p);
@@ -6482,7 +6511,7 @@ body += `
         if (curPos && curPos.isOpen && !curPos.isComplete) return;
       }
       let best = null;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < blackjackMatch.playerPositions.length; i++) {
         const p = blackjackMatch.playerPositions[i];
         if (!p.isOpen || p.isComplete) continue;
         const t = getPositionTotal(p);
@@ -6596,7 +6625,7 @@ body += `
     }
 
     function openNextPosition(positions, pile, fallbackDeck, side) {
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < positions.length; i++) {
         if (!positions[i].isOpen) {
           positions[i].isOpen = true;
           const ok = dealToPosition(positions[i], pile, fallbackDeck, side, i);
@@ -6816,7 +6845,7 @@ body += `
       push('Side Bet', parts.sideBet || 0, 'sidebet');
       push('Rake', -(parts.rake || 0), 'rake');
       push('Bonus', parts.bonus || 0, 'bonus');
-      blackjackMatch.earningsSeq = { active: true, steps, idx: 0, accrued: 0, message: 'Earnings tally…', onDone, laneAccrued: Array(5).fill(0) };
+      blackjackMatch.earningsSeq = { active: true, steps, idx: 0, accrued: 0, message: 'Earnings tally…', onDone, laneAccrued: Array(LANE_COUNT).fill(0) };
       advanceEarningsSequence();
     }
 
@@ -6836,11 +6865,11 @@ body += `
       if (r && r.laneChip) {
         if (step.kind === 'sidebet') {
           const arr = r.laneChip.transferNetByLane || [];
-          for (let i = 0; i < 5; i++) es.laneAccrued[i] += safeNumber(arr[i], 0);
+          for (let i = 0; i < es.laneAccrued.length; i++) es.laneAccrued[i] += safeNumber(arr[i], 0);
         }
         if (step.kind === 'bonus') {
           const arr = r.laneChip.bonusByLane || [];
-          for (let i = 0; i < 5; i++) es.laneAccrued[i] += safeNumber(arr[i], 0);
+          for (let i = 0; i < es.laneAccrued.length; i++) es.laneAccrued[i] += safeNumber(arr[i], 0);
         }
       }
       es.message = `${step.name}: ${step.delta >= 0 ? '+' : ''}${step.delta}`;
@@ -6876,7 +6905,7 @@ body += `
         stepIndex: 0,
         accrued: 0,
         total,
-        laneAccrued: Array(5).fill(0),
+        laneAccrued: Array(LANE_COUNT).fill(0),
         focusLane: null,
         focusSide: null,
         focusCardUids: [],
@@ -7316,7 +7345,7 @@ body += `
       if (blackjackMatch.turn !== 'player') return;
       if (blackjackMatch.drawnCard) return;
 
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < blackjackMatch.playerPositions.length; i++) {
         const pos = blackjackMatch.playerPositions[i];
         if (!pos || !pos.isOpen || pos.isComplete) continue;
         tryFireCloseAttack('player', i);
@@ -7662,7 +7691,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
   while (changed && passes++ < maxPasses) {
     changed = false;
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < blackjackMatch.dealerPositions.length; i++) {
       const pos = blackjackMatch.dealerPositions[i];
       if (!pos.isOpen || pos.isComplete) continue;
 
@@ -7810,10 +7839,10 @@ function dealerStandPhase(diff, maxPasses = 6) {
       const dealerTotals = [];
       const playerBusts = [];
       const dealerBusts = [];
-      const laneTransferRaw = Array(5).fill(0);
-      const laneBonus = Array(5).fill(0);
+      const laneTransferRaw = Array(LANE_COUNT).fill(0);
+      const laneBonus = Array(LANE_COUNT).fill(0);
 
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < blackjackMatch.playerPositions.length; i++) {
         const pPos = blackjackMatch.playerPositions[i];
         const dPos = blackjackMatch.dealerPositions[i];
 
@@ -7859,7 +7888,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
       const transferMultiplier = blackjackMatch.transferMultiplier || 1;
       transferNet *= transferMultiplier;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < blackjackMatch.playerPositions.length; i++) {
         const p = blackjackMatch.playerPositions[i];
         if (p && p.bonus21Awarded) laneBonus[i] += BLACKJACK_21_REWARD;
       }
@@ -7925,7 +7954,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
       }
 
       let goldBonusTotal = 0;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < blackjackMatch.playerPositions.length; i++) {
         const goldCount = countGoldSleeves(blackjackMatch.playerPositions[i]);
         if (!goldCount) continue;
         if (positionResults[i] !== 'player') continue;
@@ -7992,7 +8021,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
       const karmaExtraTotal = karmaExtras.reduce((sum, e) => sum + safeNumber(e.delta, 0), 0);
       const karmaGained = karmaLaneGain + karmaExtraTotal;
       let ventureFundChips = 0;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < blackjackMatch.playerPositions.length; i++) {
         if (positionResults[i] !== 'player') continue;
         const laneCards = blackjackMatch.playerPositions[i].cards || [];
         const vfCount = collectLaneCardsForEffects(laneCards).filter(c => getCardStampId(c) === 'VENTURE_FUND').length;
@@ -8525,6 +8554,16 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     // =============================================
     // ACTION IMPLEMENTATIONS
     // =============================================
+    function closeModalAndRender() {
+      closeModal();
+      renderAll();
+    }
+
+    function cancelActionSelection() {
+      if (blackjackMatch) blackjackMatch.actionSelectionInProgress = false;
+      closeModalAndRender();
+    }
+
     function drawPlayableToHandOrBench() {
       let safety = 0;
       while (safety++ < 300) {
@@ -8543,62 +8582,67 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       return null;
     }
 
-    function pickDealerLaneModal(title, text, onPick) {
-      const options = blackjackMatch.dealerPositions
-        .map((p, i) => ({ p, i }))
-        .filter(x => x.p.isOpen && !x.p.isComplete);
-
-      if (!options.length) {
+    function showLanePickerModal(title, text, laneIndices, onPick) {
+      if (!laneIndices || !laneIndices.length) {
         showToast('No valid lanes');
-        blackjackMatch.actionSelectionInProgress = false;
-        closeModal();
-        renderAll();
+        cancelActionSelection();
         return;
       }
 
-      const btns = options.map(o => ({
-        text: `Lane #${o.i + 1}`,
-        action: () => onPick(o.i)
+      const btns = laneIndices.map(i => ({
+        text: `Lane #${i + 1}`,
+        action: () => onPick(i)
       }));
 
-      btns.push({
-        text: 'Cancel',
-        action: () => {
-          blackjackMatch.actionSelectionInProgress = false;
-          closeModal();
-          renderAll();
-        }
-      });
+      btns.push({ text: 'Cancel', action: cancelActionSelection });
 
       showModal(title, `<p class="modal-text">${text}</p>`, btns);
     }
 
-    function pickPlayerRevivalLaneModal(title, text, eligible, onPick) {
-      const btns = eligible.map(i => ({
-        text: `Lane #${i + 1}`,
-        action: () => onPick(i)
-      }));
-      btns.push({
-        text: 'Cancel',
-        action: () => {
-          blackjackMatch.actionSelectionInProgress = false;
-          closeModal();
-          renderAll();
-        }
-      });
+    function pickDealerLaneModal(title, text, onPick) {
+      const laneIndices = blackjackMatch.dealerPositions
+        .map((p, i) => ({ p, i }))
+        .filter(x => x.p.isOpen && !x.p.isComplete)
+        .map(x => x.i);
 
-      showModal(title, `<p class="modal-text">${text}</p>`, btns);
+      showLanePickerModal(title, text, laneIndices, onPick);
+    }
+
+    function pickPlayerRevivalLaneModal(title, text, eligible, onPick) {
+      showLanePickerModal(title, text, eligible, onPick);
     }
 
     // Eligible revival lanes: any "closed" = isOpen && isComplete (stood OR busted)
     function getEligibleRevivalLanes(m) {
       const eligible = [];
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < m.playerPositions.length; i++) {
         const p = m.playerPositions[i];
         if (p && p.isOpen && p.isComplete) eligible.push(i);
       }
       return eligible;
     }
+
+    window.chooseSplitDecision = function(choiceIdx) {
+      if (!blackjackMatch) return;
+      const choices = blackjackMatch.splitDecisionChoices;
+      if (!choices || !choices.a || !choices.b) return;
+
+      const a = choices.a;
+      const b = choices.b;
+
+      const playerCard = choiceIdx === 0 ? a : b;
+      const dealerCard = choiceIdx === 0 ? b : a;
+
+      delete blackjackMatch.splitDecisionChoices;
+
+      blackjackMatch.drawnCard = playerCard;
+      blackjackMatch.pending = { type: 'splitDecision', dealerGiftCard: dealerCard };
+
+      markActionUsed('splitDecision');
+      closeModal();
+      renderAll();
+      showToast('Place your chosen card');
+    };
 
     // Split Decision
     function activateSplitDecision() {
@@ -8612,6 +8656,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         return;
       }
 
+      blackjackMatch.splitDecisionChoices = { a, b };
+
       showModal('Split Decision', `
         <p class="modal-text">Choose a card to play. The other card will be played by the Dealer immediately after your placement.</p>
         <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
@@ -8623,21 +8669,16 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           </button>
         </div>
       `, [
-        { text: 'Cancel', action: () => { blackjackMatch.actionSelectionInProgress = false; closeModal(); renderAll(); } }
+        {
+          text: 'Cancel',
+          action: () => {
+            delete blackjackMatch.splitDecisionChoices;
+            blackjackMatch.actionSelectionInProgress = false;
+            closeModal();
+            renderAll();
+          }
+        }
       ]);
-
-      window.chooseSplitDecision = function(choiceIdx) {
-        const playerCard = choiceIdx === 0 ? a : b;
-        const dealerCard = choiceIdx === 0 ? b : a;
-
-        blackjackMatch.drawnCard = playerCard;
-        blackjackMatch.pending = { type: 'splitDecision', dealerGiftCard: dealerCard };
-
-        markActionUsed('splitDecision');
-        closeModal();
-        renderAll();
-        showToast('Place your chosen card');
-      };
     }
 
     // Second Opinion
@@ -8698,7 +8739,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
     // Spy Network
     function activateSpyGlass() {
-      for (let i = 0; i < 5; i++) blackjackMatch.spyReveals.add(i);
+      for (let i = 0; i < blackjackMatch.dealerPositions.length; i++) blackjackMatch.spyReveals.add(i);
       markActionUsed('spyGlass');
       closeModal();
       renderAll();
@@ -8837,112 +8878,144 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     // =============================================
     // CONTINUE / END CONDITIONS
     // =============================================
+    function skipResolutionAnimationsIfActive() {
+      if (!blackjackMatch) return;
+      if (!isResolutionAnimationActive()) return;
+
+      if (blackjackMatch.earningsSeq && blackjackMatch.earningsSeq.active) blackjackMatch.earningsSeq.active = false;
+      if (blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active) blackjackMatch.scoreSeq.active = false;
+
+      if (blackjackMatch.pendingRewardStart) {
+        blackjackMatch.pendingRewardStart = false;
+        startWinnerRewardFlow();
+      }
+
+      renderAll();
+    }
+
+    function handleContinueRewardPending() {
+      if (!blackjackMatch || !blackjackMatch.rewardPending) return false;
+
+      if (blackjackMatch.pendingRewardStart) {
+        blackjackMatch.pendingRewardStart = false;
+        startWinnerRewardFlow();
+      } else if (blackjackMatch.winnerReward) {
+        showToast('Choose a reward to continue.');
+      }
+      return true;
+    }
+
+    function handleContinuePostMatchGameOver() {
+      if (!blackjackMatch || !blackjackMatch.postMatchGameOver) return false;
+      triggerGameOver(blackjackMatch.postMatchGameOverReason || 'CHIPS_NEGATIVE');
+      return true;
+    }
+
+    function handleContinueWatcherMatch() {
+      if (!blackjackMatch || blackjackMatch.type !== 'WATCHER') return false;
+
+      const result = blackjackMatch.result;
+      const win = result && result.outcome === 'WIN';
+      logEvent(win ? 'WATCHER_CLEARED' : 'WATCHER_FAILED', { floor: run.floor });
+
+      blackjackMatch = null;
+
+      if (win) victory();
+      else gameOver('You were outplayed by The Watcher.', 'WATCHER_LOSS');
+
+      return true;
+    }
+
+    function handleContinueBossFightActive() {
+      if (!blackjackMatch || blackjackMatch.type !== 'BOSS' || !(run && run.bossFight && run.bossFight.active)) return false;
+
+      const bf = run.bossFight;
+      const result = blackjackMatch.result;
+
+      if (bf.hp <= 0) {
+        logEvent('BOSS_FIGHT_DEFEATED', { floor: run.floor, round: bf.round, maxRounds: bf.maxRounds });
+        run.bossWins = safeNumber(run.bossWins, 0) + 1;
+        run.bossFight = null;
+
+        logEvent('BOSS_CLEARED', { floor: run.floor, bossWins: run.bossWins, benchCapacity: getBenchCapacity() });
+
+        endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
+        blackjackMatch = null;
+
+        if (run.floor < 3) {
+          showBossAdvanceModal(run.floor + 1);
+        } else {
+          if (shouldStartWatcher()) startWatcherEncounter();
+          else victory();
+        }
+        return true;
+      }
+
+      bf.benchCarry = (blackjackMatch.bench || []).slice();
+      bf.roundsRemaining = Math.max(0, safeNumber(bf.roundsRemaining, bf.maxRounds) - 1);
+
+      if (bf.roundsRemaining <= 0 && bf.hp > 0) {
+        logEvent('BOSS_FIGHT_FAILED', { reason: 'TIME', floor: run.floor, boss: { hp: bf.hp, maxHp: bf.maxHp, round: bf.round, roundsRemaining: bf.roundsRemaining } });
+        gameOver("Time expired. The boss remains.", 'BOSS_TIMER_EXPIRED');
+        return true;
+      }
+
+      if (bf.round < bf.maxRounds) {
+        startBossRound(bf.round + 1);
+        renderAll();
+      } else {
+        logEvent('BOSS_FIGHT_FAILED', { reason: 'WITHSTOOD', floor: run.floor, boss: { hp: bf.hp, maxHp: bf.maxHp, round: bf.round } });
+        gameOver("The boss withstands the assault.", 'BOSS_WITHSTOOD');
+      }
+
+      return true;
+    }
+
+    function handleContinueBossSingleMatch() {
+      if (!blackjackMatch || blackjackMatch.type !== 'BOSS') return false;
+
+      const result = blackjackMatch.result;
+      if (result.outcome === 'WIN') {
+        run.bossWins = safeNumber(run.bossWins, 0) + 1;
+        logEvent('BOSS_CLEARED', { floor: run.floor, bossWins: run.bossWins, benchCapacity: getBenchCapacity() });
+
+        endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
+        blackjackMatch = null;
+
+        if (run.floor < 3) showBossAdvanceModal(run.floor + 1);
+        else {
+          if (shouldStartWatcher()) startWatcherEncounter();
+          else victory();
+        }
+      } else {
+        gameOver("You lost to the boss.", 'BOSS_LOSS');
+      }
+
+      return true;
+    }
+
+    function handleContinueStandardMatch() {
+      // default: return to board
+      blackjackMatch = null;
+      run.ui.mode = 'BOARD';
+      renderAll();
+      return true;
+    }
+
     window.blackjackContinue = function() {
       clearDealerTimers();
       if (!blackjackMatch) return;
 
-      if (isResolutionAnimationActive()) {
-        if (blackjackMatch.earningsSeq && blackjackMatch.earningsSeq.active) blackjackMatch.earningsSeq.active = false;
-        if (blackjackMatch.scoreSeq && blackjackMatch.scoreSeq.active) blackjackMatch.scoreSeq.active = false;
-        if (blackjackMatch.pendingRewardStart) {
-          blackjackMatch.pendingRewardStart = false;
-          startWinnerRewardFlow();
-        }
-        renderAll();
-      }
+      // Important: do NOT return here; original behavior continues into reward/gameover checks.
+      skipResolutionAnimationsIfActive();
 
-      if (blackjackMatch.rewardPending) {
-        if (blackjackMatch.pendingRewardStart) {
-          blackjackMatch.pendingRewardStart = false;
-          startWinnerRewardFlow();
-        } else if (blackjackMatch.winnerReward) {
-          showToast('Choose a reward to continue.');
-        }
-        return;
-      }
+      if (handleContinueRewardPending()) return;
+      if (handleContinuePostMatchGameOver()) return;
+      if (handleContinueWatcherMatch()) return;
+      if (handleContinueBossFightActive()) return;
+      if (handleContinueBossSingleMatch()) return;
 
-      if (blackjackMatch.postMatchGameOver) {
-        triggerGameOver(blackjackMatch.postMatchGameOverReason || 'CHIPS_NEGATIVE');
-        return;
-      }
-
-      const result = blackjackMatch.result;
-
-      if (blackjackMatch.type === 'WATCHER') {
-        const win = result && result.outcome === 'WIN';
-        logEvent(win ? 'WATCHER_CLEARED' : 'WATCHER_FAILED', { floor: run.floor });
-
-        blackjackMatch = null;
-
-        if (win) victory();
-        else gameOver('You were outplayed by The Watcher.', 'WATCHER_LOSS');
-
-        return;
-      }
-
-      if (blackjackMatch.type === 'BOSS' && run.bossFight && run.bossFight.active) {
-        const bf = run.bossFight;
-        if (bf.hp <= 0) {
-          logEvent('BOSS_FIGHT_DEFEATED', { floor: run.floor, round: bf.round, maxRounds: bf.maxRounds });
-          run.bossWins = safeNumber(run.bossWins, 0) + 1;
-          run.bossFight = null;
-          logEvent('BOSS_CLEARED', { floor: run.floor, bossWins: run.bossWins, benchCapacity: getBenchCapacity() });
-          if (run.floor < 3) {
-            endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
-            const nextFloor = run.floor + 1;
-            blackjackMatch = null;
-            showBossAdvanceModal(nextFloor);
-            return;
-          } else {
-            endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
-            blackjackMatch = null;
-            if (shouldStartWatcher()) startWatcherEncounter();
-            else victory();
-          }
-          return;
-        }
-
-        bf.benchCarry = (blackjackMatch.bench || []).slice();
-        bf.roundsRemaining = Math.max(0, safeNumber(bf.roundsRemaining, bf.maxRounds) - 1);
-        if (bf.roundsRemaining <= 0 && bf.hp > 0) {
-          logEvent('BOSS_FIGHT_FAILED', { reason: 'TIME', floor: run.floor, boss: { hp: bf.hp, maxHp: bf.maxHp, round: bf.round, roundsRemaining: bf.roundsRemaining } });
-          gameOver("Time expired. The boss remains.", 'BOSS_TIMER_EXPIRED');
-          return;
-        }
-        if (bf.round < bf.maxRounds) {
-          startBossRound(bf.round + 1);
-          renderAll();
-        } else {
-          logEvent('BOSS_FIGHT_FAILED', { reason: 'WITHSTOOD', floor: run.floor, boss: { hp: bf.hp, maxHp: bf.maxHp, round: bf.round } });
-          gameOver("The boss withstands the assault.", 'BOSS_WITHSTOOD');
-        }
-        return;
-      }
-
-      if (blackjackMatch.type === 'BOSS') {
-        if (result.outcome === 'WIN') {
-          run.bossWins = safeNumber(run.bossWins, 0) + 1;
-          logEvent('BOSS_CLEARED', { floor: run.floor, bossWins: run.bossWins, benchCapacity: getBenchCapacity() });
-          if (run.floor < 3) {
-            endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
-            const nextFloor = run.floor + 1;
-            blackjackMatch = null;
-            showBossAdvanceModal(nextFloor);
-            return;
-          } else {
-            endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
-            blackjackMatch = null;
-            if (shouldStartWatcher()) startWatcherEncounter();
-            else victory();
-          }
-        } else {
-          gameOver("You lost to the boss.", 'BOSS_LOSS');
-        }
-      } else {
-        blackjackMatch = null;
-        run.ui.mode = 'BOARD';
-        renderAll();
-      }
+      handleContinueStandardMatch();
     };
     function triggerGameOver(reason) {
       if (reason === 'CHIPS_NEGATIVE') {
@@ -10275,7 +10348,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const bi = blackjackMatch.armedBenchIdx;
       const armed = (bi !== null && bi !== undefined) ? bench[bi] : null;
 
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < blackjackMatch.playerPositions.length; i++) {
         const p = blackjackMatch.playerPositions[i];
         const d = blackjackMatch.dealerPositions[i];
 
