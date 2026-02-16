@@ -3920,6 +3920,19 @@ const CALLING_RANK_THRESHOLDS = [
       });
     }
 
+
+    function cloneCard(card) {
+      if (!card) return card;
+      if (isFused(card)) {
+        return {
+          ...card,
+          a: cloneCard(card.a),
+          b: cloneCard(card.b)
+        };
+      }
+      return { ...card };
+    }
+
     function randomCard() {
       if (Math.random() < MOD_OFFER_CHANCE) {
         const delta = MODIFIER_DELTAS[Math.floor(Math.random() * MODIFIER_DELTAS.length)];
