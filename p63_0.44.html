@@ -3712,8 +3712,7 @@ const CALLING_RANK_THRESHOLDS = [
       for (const c of cards || []) {
         if (!c || isModifier(c) || isKeyCard(c)) continue;
         if (isFused(c)) {
-          if (c.a) out.push(c.a);
-          if (c.b) out.push(c.b);
+          out.push(c);
         } else {
           out.push(c);
         }
@@ -3854,11 +3853,7 @@ const CALLING_RANK_THRESHOLDS = [
       if (isFused(card)) {
         const a = getCardValueOptions(card.a);
         const b = getCardValueOptions(card.b);
-        const sums = [];
-        for (const av of a) {
-          for (const bv of b) sums.push(av + bv);
-        }
-        return Array.from(new Set(sums));
+        return Array.from(new Set([...(a || []), ...(b || [])])).sort((x, y) => x - y);
       }
 
       if (card.__negValue !== undefined) return [safeNumber(card.__negValue, 0)];
@@ -4678,6 +4673,13 @@ function benchPush(card, source = '') {
       return offers;
     }
 
+
+    function modifyCounterBanner() {
+      const ctx = run && run.ui && run.ui.modifyContext;
+      const shopId = ctx && ctx.shopId;
+      return shopId ? renderShopPurchaseCounter(shopId) : '';
+    }
+
     function encounterModify() {
       const offers = buildModifyOffers();
       const eligibleCount = getEligibleStandardIndices().length;
@@ -4688,7 +4690,6 @@ function benchPush(card, source = '') {
         tileId,
         shopId,
         servicesOffered: offers,
-        serviceUsed: false,
         selectedServiceId: null,
         previewIndices: [],
         rankChoices: null,
@@ -4712,10 +4713,11 @@ function benchPush(card, source = '') {
       const ctx = run.ui.modifyContext || {};
       const eligibleCount = getEligibleStandardIndices().length;
       const offers = ctx.servicesOffered || [];
-      const inProgress = !!ctx.selectedServiceId && !ctx.serviceUsed;
+      const inProgress = !!ctx.selectedServiceId;
       const chipsNow = safeNumber(run.chips);
       const shopId = ctx.shopId;
       const counterHtml = renderShopPurchaseCounter(shopId);
+      const capReached = !canShopPurchase(shopId);
 
       let body = `
         ${counterHtml}
@@ -4723,7 +4725,7 @@ function benchPush(card, source = '') {
         <p class="modal-text">Chips: <strong>${chipsNow}</strong> | Eligible cards: <strong>${eligibleCount}</strong></p>
       `;
 
-      if (offers.length && !inProgress && !ctx.serviceUsed) {
+      if (offers.length && !inProgress) {
         body += `<div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">`;
         offers.forEach(serviceId => {
           const cost = getModifyServiceCost(serviceId, run.floor);
@@ -4744,19 +4746,21 @@ function benchPush(card, source = '') {
       } else if (inProgress) {
         const meta = MODIFY_SERVICES[ctx.selectedServiceId];
         body += `<p class="modal-text" style="color:var(--accent-gold); font-weight:700;">Service in progress: ${meta ? meta.name : ctx.selectedServiceId}</p>`;
-      } else if (ctx.serviceUsed) {
-        body += `<p class="modal-text" style="color:var(--accent-green); font-weight:700;">Service completed.</p>`;
+      }
+
+      if (capReached && !inProgress) {
+        body += `<p class="modal-text" style="color:var(--danger); font-weight:700;">Purchase cap reached for this shop.</p>`;
       }
 
       const buttons = [];
-      if (eligibleCount && !ctx.serviceUsed && !inProgress) {
+      if (eligibleCount && !inProgress) {
         offers.forEach(serviceId => {
           const meta = MODIFY_SERVICES[serviceId];
           const cost = getModifyServiceCost(serviceId, run.floor);
           buttons.push({
             text: `${meta ? meta.name : serviceId} (${cost})`,
             primary: true,
-            disabled: chipsNow < cost,
+            disabled: chipsNow < cost || capReached,
             action: () => selectModifyService(serviceId)
           });
         });
@@ -4789,7 +4793,7 @@ function benchPush(card, source = '') {
         showToast('Purchase cap reached for this shop.');
         return;
       }
-      if (!ctx || ctx.serviceUsed) return;
+      if (!ctx) return;
       const meta = MODIFY_SERVICES[serviceId];
       const cost = getModifyServiceCost(serviceId, run.floor);
       if (run.chips < cost) return;
@@ -4811,11 +4815,15 @@ function benchPush(card, source = '') {
 
     function rerollModifyCandidates(serviceId) {
       const ctx = run.ui.modifyContext;
-      if (!ctx || ctx.serviceUsed) return;
+      if (!ctx || !canShopPurchase(ctx.shopId)) {
+        showToast('Purchase cap reached for this shop.');
+        return;
+      }
       const cost = getModifyRerollCost();
       if (run.chips < cost) return;
       const chipsBefore = run.chips;
       run.chips -= cost;
+      recordShopPurchase(ctx.shopId, { shopType: 'MODIFY', kind: 'REROLL', serviceId });
 
       logEvent('MODIFY_REROLL', {
         serviceId,
@@ -4871,9 +4879,10 @@ function benchPush(card, source = '') {
       }).join('');
 
       const rerollCost = getModifyRerollCost();
-      const canReroll = run.chips >= rerollCost;
+      const canReroll = run.chips >= rerollCost && canShopPurchase(ctx.shopId);
 
       showModal(`Modify - ${title}`, `
+        ${modifyCounterBanner()}
         <p class="modal-text">Choose a card to modify.</p>
         <div class="merchant-cards">${cardsHtml}</div>
         <div style="display:flex; justify-content:center; margin-top:8px;">
@@ -4926,9 +4935,10 @@ function benchPush(card, source = '') {
       }).join('');
 
       const rerollCost = getModifyRerollCost();
-      const canReroll = run.chips >= rerollCost;
+      const canReroll = run.chips >= rerollCost && canShopPurchase(ctx.shopId);
 
       showModal('Modify - Rank Shift', `
+        ${modifyCounterBanner()}
         <p class="modal-text">Choose one card for rank shifting.</p>
         <div class="merchant-cards">${cardsHtml}</div>
         <div style="display:flex; justify-content:center; margin-top:8px;">
@@ -4971,6 +4981,7 @@ function benchPush(card, source = '') {
       const previewLabel = shiftedRank ? `${card.rank} → ${shiftedRank}` : `${card.rank} → (invalid)`;
 
       showModal('Modify - Rank Shift', `
+        ${modifyCounterBanner()}
         <p class="modal-text">Selected card:</p>
         <div class="merchant-cards" style="justify-content:center;">${renderCard(card, false)}</div>
         <p class="modal-text" style="margin-top:8px;">Rank preview: <strong>${previewLabel}</strong></p>
@@ -5031,6 +5042,7 @@ function benchPush(card, source = '') {
       if (!card || !isStandardCard(card)) return;
 
       showModal('Modify - Re-Suit', `
+        ${modifyCounterBanner()}
         <p class="modal-text">Choose a new suit for ${cardToString(card)}.</p>
         <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
           ${SUITS.map(suit => `<button class="modal-btn" onclick="applyModifyResuit(${deckIdx}, '${suit}')">${suit}</button>`).join('')}
@@ -5060,9 +5072,10 @@ function benchPush(card, source = '') {
       }).join('');
 
       const rerollCost = getModifyRerollCost();
-      const canReroll = run.chips >= rerollCost;
+      const canReroll = run.chips >= rerollCost && canShopPurchase(ctx.shopId);
 
       showModal('Modify - Calling Suit Sweep', `
+        ${modifyCounterBanner()}
         <p class="modal-text">Preview the cards that will be re-suited to ${run.callingCard ? run.callingCard.suit : ''}.</p>
         <div class="merchant-cards">${cardsHtml}</div>
         <div style="display:flex; justify-content:center; margin-top:8px;">
@@ -5107,9 +5120,10 @@ function benchPush(card, source = '') {
       }).join('');
 
       const rerollCost = getModifyRerollCost();
-      const canReroll = run.chips >= rerollCost;
+      const canReroll = run.chips >= rerollCost && canShopPurchase(ctx.shopId);
 
       showModal('Modify - Uniform Rank Press', `
+        ${modifyCounterBanner()}
         <p class="modal-text">Choose a rank to press onto these cards.</p>
         <div class="merchant-cards">${cardsHtml}</div>
         <div style="display:flex; justify-content:center; margin-top:8px;">
@@ -5155,7 +5169,6 @@ function benchPush(card, source = '') {
       recordDeckSnapshot('MODIFY_APPLY');
 
       if (ctx) {
-        ctx.serviceUsed = true;
         ctx.selectedServiceId = null;
         ctx.previewIndices = [];
         ctx.rankChoices = null;
