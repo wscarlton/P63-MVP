@@ -10060,6 +10060,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       if (isResolved && result) {
         const outcome = result.outcome;
         const titleCls = outcome === 'WIN' ? 'win' : (outcome === 'LOSS' ? 'lose' : 'tie');
+        const playerWins = safeNumber(result.playerWins, 0);
+        const dealerWins = safeNumber(result.dealerWins, 0);
+        const outcomeLine = `${outcome} (${playerWins}-${dealerWins})`;
 
         const transfer = blackjackMatch.transferChipsNet || 0;
         const bonus = blackjackMatch.bonusChipsEarned || 0;
@@ -10087,7 +10090,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         html += `
           <div class="bj-result">
             <div class="bj-result-row">
-              <div><b>Outcome:</b> <span class="${titleCls}">${outcome}</span></div>
+              <div><b>Outcome:</b> <span class="${titleCls}">${outcomeLine}</span></div>
               <div><b>Match Earnings:</b> <span class="${netCls}">${earningsNow >= 0 ? '+' : ''}${earningsNow}</span> <span style="color:var(--text-muted)">(Payout ${payout}, SideBet ${transfer >= 0 ? '+' : ''}${transfer}, Rake -${rake}, Bonus ${bonus})</span></div>
             </div>
             <div class="bj-result-row">
