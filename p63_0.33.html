@@ -108,6 +108,18 @@
     .end-chart-card { background: var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:12px; }
     .end-chart-title { font-family: var(--font-display); letter-spacing: 1px; color: var(--accent-gold); margin-bottom: 8px; }
     .sparkline { width: 100%; height: 120px; }
+    .run-end-card { width: min(980px, 96vw); background: var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:14px; margin: 14px 0 20px; }
+    .run-end-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .run-end-title { font-family: var(--font-display); letter-spacing: 1px; color: var(--accent-gold); font-size: 30px; line-height: 1; }
+    .run-end-sub { color: var(--text-muted); font-size: 12px; }
+    .run-end-lore { font-weight: 700; margin-bottom: 6px; }
+    .run-end-tiny { font-size: 12px; }
+    .run-end-muted { color: var(--text-muted); }
+    .run-end-cols { display:grid; grid-template-columns: repeat(2,minmax(220px,1fr)); gap:10px; margin:10px 0; }
+    .run-end-block { border: 1px solid var(--border-color); border-radius:10px; padding:8px 10px; background: rgba(0,0,0,0.15); }
+    .run-end-block div { margin:2px 0; }
+    #chartEndSummary { width:100%; height:260px; display:block; border:1px solid var(--border-color); border-radius:10px; background: rgba(0,0,0,0.12); }
+    @media (max-width: 760px){ .run-end-cols { grid-template-columns: 1fr; } }
     .bar-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap:8px; }
     .bar-item { text-align:center; }
     .bar-col { height: 88px; display:flex; align-items:flex-end; justify-content:center; }
@@ -2058,8 +2070,8 @@ const CALLING_RANK_THRESHOLDS = [
         exportedAt: null,
         app: {
           name: "Project 63",
-          build: "0.18",
-          variant: "p63_0.18.html",
+          build: "0.33",
+          variant: "p63_0.33.html",
           userAgent: navigator.userAgent
         },
         player: {
@@ -8858,6 +8870,338 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       }
     }
 
+    const PIT_MESSAGES = {
+      WIN: "You escaped this time, but the Pit remembers.",
+      LOSS: "You fell short. The only way out is back through.",
+      UNKNOWN: "The Pit watches. The ledger remains open."
+    };
+
+    const ARCHETYPE_EXEMPLARS = {
+      "The Surgeon":        { name: "Maria", epithet: "The Surgeon" },
+      "The Saboteur":       { name: "Rook",  epithet: "The Saboteur" },
+      "The High Roller":    { name: "Vance", epithet: "The High Roller" },
+      "The Engine Builder": { name: "Inez",  epithet: "The Engine Builder" },
+      "The Karma Chaser":   { name: "Sol",   epithet: "The Karma Chaser" },
+      "The Banker":         { name: "Edwin", epithet: "The Banker" }
+    };
+
+    function clamp01(v){ return Math.max(0, Math.min(1, safeNumber(v, 0))); }
+    function num(v){ return safeNumber(v, 0); }
+    function numOrNull(v){ const n = Number(v); return Number.isFinite(n) ? n : null; }
+    function avg(list){
+      const vals = (list || []).map(v => Number(v)).filter(v => Number.isFinite(v));
+      if (!vals.length) return null;
+      return vals.reduce((a,b)=>a+b,0) / vals.length;
+    }
+    function normRange(v, lo, hi){
+      if (v === null || v === undefined || Number.isNaN(v)) return 0;
+      if (hi === lo) return 0;
+      return clamp01((v - lo) / (hi - lo));
+    }
+    function countEvents(events, matcher){
+      if (!events || !events.length) return 0;
+      if (typeof matcher === 'function') return events.filter(matcher).length;
+      const m = String(matcher || '');
+      return events.filter(e => String((e && e.type) || '').toUpperCase().includes(m)).length;
+    }
+    function herfindahl(obj){
+      if (!obj || typeof obj !== 'object') return null;
+      const values = Object.values(obj).map(v => Number(v)).filter(v => !Number.isNaN(v));
+      const total = values.reduce((a,b)=>a+b,0);
+      if (!total) return null;
+      return values.reduce((a,v)=> a + Math.pow(v/total, 2), 0);
+    }
+    function formatArchetypeAttribution(primaryName){
+      const ex = ARCHETYPE_EXEMPLARS[primaryName];
+      if (!ex) return 'The play pattern most closely matches that of an Unknown hand.';
+      return `The play pattern most closely matches that of ${ex.name}, ${ex.epithet}.`;
+    }
+    function formatCompact(v){
+      const n = safeNumber(v, 0);
+      const abs = Math.abs(n);
+      if (abs >= 1000000) return `${(n/1000000).toFixed(1)}M`;
+      if (abs >= 1000) return `${(n/1000).toFixed(1)}k`;
+      return String(Math.round(n));
+    }
+    function setupCanvas(canvas){
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const rect = canvas.getBoundingClientRect();
+      const w = Math.max(320, Math.round(rect.width || canvas.clientWidth || 900));
+      const h = Math.max(220, Math.round(rect.height || canvas.clientHeight || 260));
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return ctx;
+    }
+    function clearChart(ctx, w, h){ ctx.clearRect(0,0,w,h); }
+    function drawAxes(ctx, w, h, pad, xLabel, yLabel, yMin, yMax){
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad, pad);
+      ctx.lineTo(pad, h-pad);
+      ctx.lineTo(w-pad, h-pad);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+      ctx.fillText(String(xLabel || ''), w - pad - 42, h - pad + 18);
+      ctx.fillText(String(yLabel || ''), 8, pad - 8);
+      ctx.fillText(formatCompact(yMax), 6, pad + 10);
+      ctx.fillText(formatCompact(yMin), 6, h - pad + 2);
+      ctx.restore();
+    }
+    function drawLineScaled(ctx, w, h, pad, xs, ys, yMin, yMax, color){
+      if (!xs || !ys || !xs.length || !ys.length) return;
+      const span = (yMax - yMin) || 1;
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ys.forEach((v, i) => {
+        const x = pad + clamp01(xs[i]) * (w - 2*pad);
+        const y = pad + (1 - ((safeNumber(v,0) - yMin) / span)) * (h - 2*pad);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.restore();
+    }
+    function drawPoint(ctx, x, y, r=3){
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    }
+    function drawTextBox(ctx, text, x, y){
+      ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+      const pad = 4;
+      const w = ctx.measureText(text).width + pad*2;
+      const h = 16;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(x, y-h, w, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillText(text, x+pad, y-4);
+    }
+    function computePlaystyle(summary, derived){
+      const matches = derived.matches || [];
+      const events = derived.events || [];
+      const lanes = derived.lanes || [];
+      const deckTimeline = derived.deckTimeline || [];
+      const matchesN = Math.max(1, summary.matches || matches.length || 1);
+      const highTables = matches.filter(m=>String(m.tableType||'').toUpperCase()==='HIGH_STAKES').length;
+      const bossTables = matches.filter(m=>String(m.tableType||'').toUpperCase()==='BOSS').length;
+      const tableIntensity = (0.65*highTables + 1.0*bossTables) / matchesN;
+      const avgTransferMult = avg(matches.map(m=>numOrNull(m.transferMultiplier)));
+      const tempoApplied = countEvents(events, 'TEMPO_STRIKE_APPLIED');
+      const tempoBlocked = countEvents(events, 'TEMPO_STRIKE_BLOCKED');
+      const tempoApplyRate = (tempoApplied + tempoBlocked) ? tempoApplied / (tempoApplied + tempoBlocked) : 0;
+      const tokensSpent = countEvents(events, 'TOKEN_SPENT');
+      const actionsUsed = countEvents(events, 'ACTION_USED');
+      const tokensPerMatch = tokensSpent / matchesN;
+      const actionsPerMatch = actionsUsed / matchesN;
+      const callingProcs = events.filter(e=>String((e && e.type) || '').startsWith('CALLING_PROC_')).length;
+      const karmaGainEvents = countEvents(events, 'KARMA_GAIN');
+      const callingPerMatch = callingProcs / matchesN;
+      const deckEdits = deckTimeline.length ? Math.max(0, deckTimeline.length-1) : 0;
+      const deckEditsPerMatch = deckEdits / matchesN;
+      const editReasons = deckTimeline.map(d=>String((d && d.reason) || '').toUpperCase());
+      const stampCount = editReasons.filter(r=>r==='STAMP_APPLY').length;
+      const sleeveCount = editReasons.filter(r=>r==='SLEEVE_APPLY').length;
+      const fuseCount = editReasons.filter(r=>r==='REWARD_FUSE').length;
+      const duplicateCount = editReasons.filter(r=>r==='REWARD_DUPLICATE').length;
+      const sinkAgg = summary.sinkAgg || {};
+      const totalSpend = summary.totalSpend || 0;
+      const merchantSpend = Math.abs((sinkAgg['Merchant removals']||0) + (sinkAgg['Merchant buys']||0) + (sinkAgg['Merchant rerolls']||0));
+      const collectorSpend = Math.abs(sinkAgg['Collector']||0);
+      const modifySpend = Math.abs(sinkAgg['Modify']||0);
+      const surgerySpendShare = totalSpend ? (merchantSpend + collectorSpend + modifySpend) / totalSpend : 0;
+      const bustRate = summary.playerBustRate ?? (lanes.length ? lanes.filter(l=>l.playerBust).length / lanes.length : 0);
+      const controlTotals = summary.avgPlayerTotalNoBust ?? summary.avgPlayerTotal ?? null;
+      const deckEnd = deckTimeline.length ? deckTimeline[deckTimeline.length-1] : null;
+      herfindahl((deckEnd && (deckEnd.bySuit || (deckEnd.summary && deckEnd.summary.bySuit))) || null);
+      const modDensity = summary.modDensityEnd ?? null;
+      const risk = 100 * (0.45*clamp01(tableIntensity) + 0.35*normRange(avgTransferMult, 1, 5) + 0.20*normRange(summary.profitStdDev, 0, 200));
+      const pressure = 100 * (0.55*normRange(tempoApplied / matchesN, 0, 6) + 0.25*normRange(actionsPerMatch, 0, 2) + 0.20*normRange(tempoApplyRate, 0.2, 0.6));
+      const control = 100 * (0.5*(1 - normRange(bustRate, 0, 0.35)) + 0.25*normRange(controlTotals, 17, 20) + 0.25*normRange(modDensity, 0, 0.25));
+      const surgery = 100 * (0.5*normRange(deckEditsPerMatch, 0, 1.5) + 0.25*normRange(surgerySpendShare, 0, 0.6) + 0.25*normRange(merchantSpend / Math.max(1, totalSpend), 0, 0.6));
+      const engine = 100 * (0.45*normRange(stampCount + sleeveCount, 0, 6) + 0.35*normRange(fuseCount + duplicateCount, 0, 6) + 0.20*normRange(summary.player21Rate, 0.15, 0.65));
+      const karma = 100 * (0.6*normRange(callingPerMatch, 0, 3) + 0.4*normRange(karmaGainEvents / matchesN, 0, 4));
+      const actions = 100 * (0.55*normRange(tokensPerMatch, 0, 2) + 0.45*normRange(actionsPerMatch, 0, 1.5));
+      const economy = 100 * (0.6*normRange((summary.chipsLow||0) / Math.max(1, summary.startChips||1), 0.2, 0.8) + 0.4*(1 - normRange(totalSpend / Math.max(1, Math.abs(summary.matchProfitTotal)||1), 0.5, 2)));
+      const axes = { risk, pressure, control, surgery, engine, karma, actions, economy };
+      const axes01 = Object.fromEntries(Object.entries(axes).map(([k,v])=>[k, clamp01(v/100)]));
+      const archetypes = [
+        {name:'The Surgeon', vec:{surgery:0.85, control:0.65, engine:0.4, economy:0.4}},
+        {name:'The Saboteur', vec:{pressure:0.85, actions:0.7, risk:0.5}},
+        {name:'The High Roller', vec:{risk:0.9, economy:0.2, control:0.2}},
+        {name:'The Engine Builder', vec:{engine:0.9, control:0.45, surgery:0.35}},
+        {name:'The Karma Chaser', vec:{karma:0.9, engine:0.5, control:0.35}},
+        {name:'The Banker', vec:{economy:0.9, control:0.7, risk:0.1}}
+      ];
+      function cosineScore(vec){
+        const keys = Object.keys(axes01);
+        const a = keys.map(k=>axes01[k] ?? 0);
+        const b = keys.map(k=>vec[k] ?? 0);
+        const dot = a.reduce((s,v,i)=>s + v*b[i], 0);
+        const magA = Math.sqrt(a.reduce((s,v)=>s+v*v, 0)) || 1;
+        const magB = Math.sqrt(b.reduce((s,v)=>s+v*v, 0)) || 1;
+        return dot / (magA * magB);
+      }
+      const scored = archetypes.map(a=>({name:a.name, score: cosineScore(a.vec)})).sort((a,b)=>b.score-a.score);
+      const primary = scored[0] || {name:'Unknown', score:0};
+      const secondary = scored[1] || {name:'None', score:0};
+      const confidence = clamp01((primary.score - secondary.score) / 0.2);
+      return { axes, primary, secondary, confidence, archetypeScores: scored };
+    }
+    function buildKarmaCumulative(matches, startKarma){
+      let k = (typeof startKarma === 'number') ? startKarma : 0;
+      return matches.map(m=>{ const g = (typeof m.karmaGained === 'number') ? m.karmaGained : 0; k += g; return k; });
+    }
+    function buildFloorEndMarkers(matches){
+      const byFloor = new Map();
+      matches.forEach((m, i)=>{ const f = (m.floor==null) ? null : Number(m.floor); if (f==null || Number.isNaN(f)) return; byFloor.set(f, i); });
+      const floors = [...byFloor.keys()].sort((a,b)=>a-b);
+      return floors.map(f=>{ const i = byFloor.get(f); const isBoss = String(matches[i] && matches[i].tableType || '').toUpperCase()==='BOSS'; return { floor:f, matchPos:i, isBoss }; });
+    }
+    function renderEndSummaryChart(summary, derived){
+      const canvas = document.getElementById('chartEndSummary');
+      if (!canvas) return;
+      const ctx = setupCanvas(canvas);
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      const pad = 42;
+      const matches = derived.matches || [];
+      if (!matches.length){ clearChart(ctx,w,h); return; }
+      const xs = matches.map((_,i)=> i/(Math.max(1, matches.length-1)));
+      const chips = matches.map(m=> (typeof m.chipsAfter === 'number') ? m.chipsAfter : 0);
+      const karma = buildKarmaCumulative(matches, summary.startKarma);
+      const yVals = [...chips, ...karma].filter(v=>typeof v === 'number');
+      const yMin = Math.min(0, ...yVals);
+      const yMax = Math.max(1, ...yVals);
+      clearChart(ctx,w,h);
+      drawAxes(ctx,w,h,pad,'Match','Value',yMin,yMax);
+      drawLineScaled(ctx,w,h,pad,xs,chips,yMin,yMax,'rgba(125,211,252,0.90)');
+      drawLineScaled(ctx,w,h,pad,xs,karma,yMin,yMax,'rgba(52,211,153,0.90)');
+      const markers = buildFloorEndMarkers(matches);
+      const labelStride = (markers.length > 8) ? 2 : 1;
+      markers.forEach((m, idx)=>{
+        const xN = xs[m.matchPos];
+        const x = pad + xN*(w-2*pad);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+        ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h-pad); ctx.stroke();
+        if (idx % labelStride === 0){
+          ctx.fillStyle = 'rgba(255,255,255,0.65)';
+          ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+          ctx.fillText(`F${m.floor}`, x+4, pad+12);
+        }
+        if (m.isBoss){ ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fillText('♛', x+4, pad+26); }
+        ctx.restore();
+        const chipV = chips[m.matchPos];
+        const karmaV = karma[m.matchPos];
+        const yChip = pad + (1-((chipV-yMin)/(yMax-yMin||1)))*(h-2*pad);
+        const yKarma = pad + (1-((karmaV-yMin)/(yMax-yMin||1)))*(h-2*pad);
+        ctx.save();
+        ctx.fillStyle = 'rgba(125,211,252,0.95)';
+        drawPoint(ctx, x, yChip, 3);
+        drawTextBox(ctx, `C ${formatCompact(chipV)}`, x+6, yChip-2);
+        ctx.restore();
+        ctx.save();
+        ctx.fillStyle = 'rgba(52,211,153,0.95)';
+        drawPoint(ctx, x, yKarma, 3);
+        drawTextBox(ctx, `K ${formatCompact(karmaV)}`, x+6, yKarma-2);
+        ctx.restore();
+      });
+      const cap = document.getElementById('endChartCaption');
+      if (cap) cap.textContent = 'Chips (C) and Karma (K) by match • floor ends marked • boss floors flagged ♛';
+    }
+    function getRunEndAnalysis(){
+      const events = (gameLog && gameLog.events) ? gameLog.events : [];
+      const matches = events.filter(e => e && e.type === 'MATCH_END').map(e => ({
+        floor: safeNumber(e.floor, e.ctx && e.ctx.floor),
+        tableType: (e.data && e.data.type) || null,
+        chipsAfter: safeNumber(e.chips, 0),
+        karmaGained: safeNumber(e.data && e.data.karmaGained, 0),
+        transferMultiplier: safeNumber(e.data && e.data.transferMultiplier, 0)
+      }));
+      const deckTimeline = (gameLog && Array.isArray(gameLog.deckHistory)) ? gameLog.deckHistory.slice() : [];
+      const summaryDeck = buildDeckSummary();
+      const initial = gameLog && gameLog.initialState ? gameLog.initialState : null;
+      const finalState = gameLog && gameLog.finalState ? gameLog.finalState : null;
+      const initialDeckSize = initial && initial.deckSnapshot ? safeNumber(initial.deckSnapshot.deckSize, null) : null;
+      const finalDeckSize = finalState && finalState.deckSnapshot ? safeNumber(finalState.deckSnapshot.deckSize, null) : summaryDeck.deckSize;
+      const finalModCount = finalState && finalState.deckSnapshot ? safeNumber(finalState.deckSnapshot.modCount, null) : summaryDeck.modCount;
+      const summary = {
+        matches: matches.length,
+        runOutcome: { result: ((gameLog && gameLog.runOutcome && gameLog.runOutcome.outcome) || 'unknown').toUpperCase() === 'WIN' ? 'WIN' : (((gameLog && gameLog.runOutcome && gameLog.runOutcome.outcome) || '').toLowerCase() === 'loss' ? 'LOSS' : ((run && run.ui && run.ui.mode==='VICTORY') ? 'WIN' : (run && run.ui && run.ui.mode==='GAMEOVER' ? 'LOSS' : 'UNKNOWN'))) },
+        appBuild: (gameLog && gameLog.app && gameLog.app.build) || null,
+        appVersion: (gameLog && gameLog.app && gameLog.app.version) || null,
+        sessionId: (gameLog && gameLog.sessionId) || null,
+        startedAtISO: (gameLog && gameLog.startedAt) || null,
+        startKarma: initial ? safeNumber(initial.karma, 0) : 0,
+        startChips: initial ? safeNumber(initial.chips, STARTING_CHIPS) : STARTING_CHIPS,
+        endChips: finalState ? safeNumber(finalState.chips, safeNumber(run && run.chips, 0)) : safeNumber(run && run.chips, 0),
+        chipsLow: gameLog && gameLog.stats ? safeNumber(gameLog.stats.chipsLow, 0) : 0,
+        matchProfitTotal: gameLog && gameLog.stats ? safeNumber(gameLog.stats.payoutReceived, 0) + safeNumber(gameLog.stats.transferNet, 0) - safeNumber(gameLog.stats.buyinSpent, 0) : 0,
+        totalSpend: gameLog && gameLog.stats ? safeNumber(gameLog.stats.buyinSpent, 0) + safeNumber(gameLog.stats.merchantBuys, 0) + safeNumber(gameLog.stats.merchantRemoves, 0) + safeNumber(gameLog.stats.merchantRerolls, 0) : 0,
+        sinkAgg: {
+          'Merchant buys': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.merchantBuys, 0) : 0),
+          'Merchant removals': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.merchantRemoves, 0) : 0),
+          'Merchant rerolls': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.merchantRerolls, 0) : 0),
+          'Collector': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.collectorPurchases, 0) : 0),
+          'Modify': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.modifyApplies, 0) : 0)
+        },
+        profitStdDev: 0,
+        player21Rate: 0,
+        playerBustRate: 0,
+        avgPlayerTotalNoBust: null,
+        avgPlayerTotal: null,
+        deckSizeStart: Number.isFinite(initialDeckSize) ? initialDeckSize : '—',
+        deckSizeEnd: Number.isFinite(finalDeckSize) ? finalDeckSize : '—',
+        modCountEnd: Number.isFinite(finalModCount) ? finalModCount : '—',
+        modDensityEnd: (Number.isFinite(finalDeckSize) && finalDeckSize > 0 && Number.isFinite(finalModCount)) ? (finalModCount / finalDeckSize) : null
+      };
+      const derived = { matches, events, lanes: [], deckTimeline };
+      summary.playstyle = computePlaystyle(summary, derived);
+      return { summary, derived };
+    }
+    function renderRunEndPanel(analysis){
+      const s = analysis.summary;
+      const d = analysis.derived;
+      const result = (((s.runOutcome && s.runOutcome.result) || 'UNKNOWN') + '').toUpperCase();
+      const endLore = document.getElementById('endLore');
+      if (endLore) endLore.textContent = PIT_MESSAGES[result] || PIT_MESSAGES.UNKNOWN;
+      const play = s.playstyle || computePlaystyle(s, d);
+      const archetypeLine = formatArchetypeAttribution(play.primary && play.primary.name);
+      const resonancePct = Math.round((play.confidence || 0) * 100);
+      const lineEl = document.getElementById('endArchetypeLine');
+      if (lineEl) lineEl.textContent = archetypeLine;
+      const resEl = document.getElementById('endResonance');
+      if (resEl) resEl.textContent = `${resonancePct}% Resonance`;
+      const build = s.appBuild ?? '—';
+      const deckStart = s.deckSizeStart ?? '—';
+      const deckEnd = s.deckSizeEnd ?? '—';
+      const modsEnd = s.modCountEnd ?? '—';
+      const modDens = (s.modDensityEnd != null) ? `${Math.round(s.modDensityEnd * 100)}%` : '—';
+      const sid = s.sessionId || '—';
+      const sidShort = (typeof sid === 'string' && sid.length > 10) ? sid.slice(0,10) + '…' : sid;
+      const statsEl = document.getElementById('endBuildDeckStats');
+      if (statsEl) {
+        statsEl.innerHTML = `
+          <div class="run-end-block run-end-tiny">
+            <div><b>Build:</b> ${escapeHtml(String(build))}</div>
+            <div><b>Config:</b> —</div>
+            <div><b>Session:</b> ${escapeHtml(String(sidShort))}</div>
+            <div><b>Start:</b> ${escapeHtml(String(s.startedAtISO || '—'))}</div>
+          </div>
+          <div class="run-end-block run-end-tiny">
+            <div><b>Deck:</b> ${escapeHtml(String(deckStart))} → ${escapeHtml(String(deckEnd))}</div>
+            <div><b>Mods:</b> ${escapeHtml(String(modsEnd))}</div>
+            <div><b>Mod density:</b> ${escapeHtml(String(modDens))}</div>
+            <div><b>Chips:</b> ${escapeHtml(String(formatCompact(s.startChips)))} → ${escapeHtml(String(formatCompact(s.endChips)))}</div>
+          </div>
+        `;
+      }
+      renderEndSummaryChart(s, d);
+    }
     function renderEndScreen() {
       const boardView = document.getElementById('boardView');
       const blackjackView = document.getElementById('blackjackView');
@@ -8877,57 +9221,24 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const titleCls = isVictory ? 'victory' : 'gameover';
       const msg = isVictory ? 'You cleared the tower.' : (run.ui.message || 'Your run has ended.');
 
-      const events = (gameLog && gameLog.events) ? gameLog.events : [];
-      const matches = events.filter(e => e && e.type === 'MATCH_END');
-      const chipsSeries = matches.map(e => safeNumber(e.chips, 0));
-      const karmaSeries = matches.map(e => safeNumber(e.ctx && e.ctx.karma, 0));
-      const makeSpark = (vals, color) => {
-        if (!vals.length) return '<svg class="sparkline" viewBox="0 0 300 120"></svg>';
-        const min = Math.min(...vals), max = Math.max(...vals);
-        const span = Math.max(1, max - min);
-        const pts = vals.map((v, i) => `${(i/(Math.max(1, vals.length-1)))*300},${110-((v-min)/span)*100}`).join(' ');
-        return `<svg class="sparkline" viewBox="0 0 300 120"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round"/><line x1="0" y1="110" x2="300" y2="110" stroke="var(--border-color)"/></svg>`;
-      };
-      const summary = buildDeckSummary();
-      const suitEntries = Object.entries(summary.bySuit || {}).filter(([k]) => ['♠','♥','♦','♣','★'].includes(k));
-      const rankEntries = Object.entries(summary.byRank || {});
-      const makeBars = (entries, color='var(--accent-blue)') => {
-        const max = Math.max(1, ...entries.map(([,v]) => safeNumber(v,0)));
-        return `<div class="bar-grid">${entries.map(([k,v]) => {
-          const h = Math.round((safeNumber(v,0)/max)*84);
-          return `<div class="bar-item"><div class="bar-col"><div class="bar-fill" style="height:${h}px; background:${color};"></div></div><div class="bar-label">${k} (${v})</div></div>`;
-        }).join('')}</div>`;
-      };
-
       endScreen.innerHTML = `
         <div class="end-screen">
           <div class="end-title ${titleCls}">${title}</div>
           <div class="end-message">${msg}</div>
 
-          <div class="end-stats">
-            <div class="end-stat">
-              <div class="end-stat-value">${run.floor}</div>
-              <div class="end-stat-label">Floor</div>
+          <div class="run-end-card" id="runEndCard">
+            <div class="run-end-head">
+              <div>
+                <div class="run-end-title">Run End</div>
+                <div class="run-end-sub" id="runEndSub">A compact summary for players.</div>
+              </div>
             </div>
-            <div class="end-stat">
-              <div class="end-stat-value">${safeNumber(run.chips)}</div>
-              <div class="end-stat-label">Chips</div>
-            </div>
-            <div class="end-stat">
-              <div class="end-stat-value">${run.playerDeck.length}</div>
-              <div class="end-stat-label">Deck Size</div>
-            </div>
-            <div class="end-stat">
-              <div class="end-stat-value">${safeNumber(run.karma)}</div>
-              <div class="end-stat-label">Karma</div>
-            </div>
-          </div>
-
-          <div class="end-chart-wrap">
-            <div class="end-chart-card"><div class="end-chart-title">Chips Over Time</div>${makeSpark(chipsSeries, 'var(--accent-green)')}</div>
-            <div class="end-chart-card"><div class="end-chart-title">Karma Over Time</div>${makeSpark(karmaSeries, 'var(--accent-purple)')}</div>
-            <div class="end-chart-card"><div class="end-chart-title">Deck by Suit</div>${makeBars(suitEntries, 'var(--accent-gold)')}</div>
-            <div class="end-chart-card"><div class="end-chart-title">Deck by Rank</div>${makeBars(rankEntries, 'var(--accent-blue)')}</div>
+            <div class="run-end-lore" id="endLore"></div>
+            <div class="run-end-tiny" id="endArchetypeLine"></div>
+            <div class="run-end-tiny run-end-muted" id="endResonance" style="margin-bottom:10px;"></div>
+            <div class="run-end-cols" id="endBuildDeckStats"></div>
+            <canvas id="chartEndSummary"></canvas>
+            <div class="run-end-tiny run-end-muted" id="endChartCaption" style="margin-top:8px;"></div>
           </div>
 
           <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
@@ -8937,6 +9248,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           </div>
         </div>
       `;
+
+      const analysis = getRunEndAnalysis();
+      renderRunEndPanel(analysis);
     }
 
     // =============================================
