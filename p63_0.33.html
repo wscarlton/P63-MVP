@@ -108,6 +108,18 @@
     .end-chart-card { background: var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:12px; }
     .end-chart-title { font-family: var(--font-display); letter-spacing: 1px; color: var(--accent-gold); margin-bottom: 8px; }
     .sparkline { width: 100%; height: 120px; }
+    .run-end-card { width: min(980px, 96vw); background: var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:14px; margin: 14px 0 20px; }
+    .run-end-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .run-end-title { font-family: var(--font-display); letter-spacing: 1px; color: var(--accent-gold); font-size: 30px; line-height: 1; }
+    .run-end-sub { color: var(--text-muted); font-size: 12px; }
+    .run-end-lore { font-weight: 700; margin-bottom: 6px; }
+    .run-end-tiny { font-size: 12px; }
+    .run-end-muted { color: var(--text-muted); }
+    .run-end-cols { display:grid; grid-template-columns: repeat(2,minmax(220px,1fr)); gap:10px; margin:10px 0; }
+    .run-end-block { border: 1px solid var(--border-color); border-radius:10px; padding:8px 10px; background: rgba(0,0,0,0.15); }
+    .run-end-block div { margin:2px 0; }
+    #chartEndSummary { width:100%; height:260px; display:block; border:1px solid var(--border-color); border-radius:10px; background: rgba(0,0,0,0.12); }
+    @media (max-width: 760px){ .run-end-cols { grid-template-columns: 1fr; } }
     .bar-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap:8px; }
     .bar-item { text-align:center; }
     .bar-col { height: 88px; display:flex; align-items:flex-end; justify-content:center; }
@@ -318,16 +330,26 @@
       animation: pulse-glow 1.5s ease-in-out infinite;
     }
 
-    .hex-tile.key-roller .hex-bg {
-      stroke: rgba(240, 192, 64, 0.9);
-      stroke-width: 4;
-      animation: key-roller-glow 1.6s ease-in-out infinite;
-      filter: drop-shadow(0 0 10px rgba(240, 192, 64, 0.25));
+    .hex-tile.key-roller .hex-bg { }
+
+    .hex-key-overlay {
+      stroke: #b57bff;
+      stroke-width: 3;
+      stroke-dasharray: 6 5;
+      filter: drop-shadow(0 0 6px rgba(181,123,255,0.55));
+      animation: keyPulse 1.4s ease-in-out infinite;
     }
 
-    @keyframes key-roller-glow {
-      0%, 100% { filter: drop-shadow(0 0 6px rgba(240, 192, 64, 0.18)); }
-      50% { filter: drop-shadow(0 0 18px rgba(240, 192, 64, 0.42)); }
+    .hex-key-badge {
+      font-size: 14px;
+      filter: drop-shadow(0 0 6px rgba(255,255,255,0.25));
+      pointer-events: none;
+    }
+
+    @keyframes keyPulse {
+      0% { opacity: 0.65; }
+      50% { opacity: 1; }
+      100% { opacity: 0.65; }
     }
 
     @keyframes pulse-glow {
@@ -761,6 +783,7 @@
         var(--bg-secondary);
       border-radius: 14px;
       border: 1px solid var(--border-color);
+      position: relative;
     }
 
     .bj-turn-info {
@@ -1016,6 +1039,7 @@
       background: var(--bg-card);
       border-radius: 14px;
       border: 1px solid var(--border-color);
+      position: relative;
     }
 
     .bj-result-title {
@@ -1057,6 +1081,7 @@
       overflow: hidden;
       margin: 6px auto 0;
       border: 1px solid var(--border-color);
+      position: relative;
     }
 
     .boss-hp-fill {
@@ -1068,6 +1093,36 @@
     .boss-phase2 .boss-hp-fill {
       background: linear-gradient(90deg, #ff6b6b, #ff4757);
       box-shadow: 0 0 12px rgba(255, 71, 87, 0.6);
+    }
+
+    .boss-hp-flash {
+      animation: bossHpFlash 0.25s ease-in-out 5;
+      box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.25);
+    }
+
+    .boss-dmg {
+      position: absolute;
+      right: 10px;
+      top: -18px;
+      font-weight: 900;
+      font-size: 12px;
+      color: var(--accent-gold);
+      text-shadow: 0 0 8px rgba(240, 192, 64, 0.45);
+      animation: bossDmgFloat 1.1s ease-out forwards;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    @keyframes bossHpFlash {
+      0% { filter: brightness(1); }
+      50% { filter: brightness(1.35); }
+      100% { filter: brightness(1); }
+    }
+
+    @keyframes bossDmgFloat {
+      0% { opacity: 0; transform: translateY(6px); }
+      20% { opacity: 1; }
+      100% { opacity: 0; transform: translateY(-10px); }
     }
 
     .boss-target {
@@ -1458,6 +1513,184 @@
     .intro-suit-btn { text-align: left; }
     .intro-large-card { transform: scale(1.4); margin: 18px auto; }
 
+
+/* =========================
+   Calling Card Reveal (cc-)
+   ========================= */
+
+.cc-reveal-root{
+  width: 100%;
+  min-height: calc(100vh - var(--hud-offset) - 40px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 12px 12px 26px;
+}
+
+.cc-card-stage{
+  width: min(520px, 92vw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1100px;
+}
+
+.cc-bounce{ transform: translateZ(0); }
+.cc-bounce.cc-pop { animation: ccPop 420ms ease-out; }
+
+.cc-float{
+  animation: ccFloat 3.8s ease-in-out infinite;
+  transform: translateZ(0);
+}
+
+.cc-tilt{
+  width: min(460px, 88vw);
+  aspect-ratio: 300 / 420;
+  border-radius: 22px;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.cc-flip{
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 22px;
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.2, 0.9, 0.25, 1);
+  cursor: pointer;
+}
+
+.cc-flip.is-flipped{ transform: rotateY(180deg); }
+
+.cc-face{
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  backface-visibility: hidden;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px;
+}
+
+.cc-back{
+  transform: rotateY(180deg);
+}
+
+.cc-neon{
+  background: #0a0a0a;
+  color: #00ffff;
+  border: 2px solid #00ffff;
+  box-shadow:
+    0 0 20px rgba(0,255,255,0.55),
+    inset 0 0 20px rgba(0,255,255,0.18),
+    0 25px 55px rgba(0,0,0,0.55);
+  text-shadow: 0 0 10px rgba(0,255,255,0.65), 0 0 24px rgba(0,255,255,0.55);
+}
+
+.cc-face::before{
+  content:'';
+  position:absolute;
+  inset:-30%;
+  pointer-events:none;
+  background:
+    linear-gradient(130deg,
+      rgba(255,255,255,0.00) 10%,
+      rgba(255,255,255,0.10) 35%,
+      rgba(255,255,255,0.00) 60%);
+  transform: translate3d(calc((var(--mx, 50) - 50) * -0.25%), calc((var(--my, 50) - 50) * -0.25%), 40px) rotate(8deg);
+  opacity: 0.35;
+  mix-blend-mode: screen;
+}
+
+.cc-face::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background: radial-gradient(circle at calc(var(--mx, 50) * 1%) calc(var(--my, 50) * 1%),
+    rgba(0,255,255,0.22) 0%,
+    rgba(0,255,255,0.10) 18%,
+    transparent 55%);
+}
+
+.cc-corner{
+  font-family: 'Fira Code', monospace;
+  font-weight: 900;
+  font-size: 46px;
+  line-height: 1;
+}
+.cc-corner.bottom{
+  transform: rotate(180deg);
+  align-self: flex-end;
+}
+
+.cc-suit{
+  font-size: 150px;
+  line-height: 1;
+  margin: auto;
+  transform: translateZ(30px);
+}
+
+.cc-back-title{
+  font-weight: 900;
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+.cc-back-lines{
+  color: rgba(219, 234, 254, 0.92);
+  text-shadow: none;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.cc-back-lines .k{
+  color: #00ffff;
+  font-weight: 800;
+}
+
+.cc-reveal-meta{
+  width: min(620px, 92vw);
+  text-align: center;
+}
+
+.cc-name{
+  font-size: 20px;
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+.cc-summary{
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.cc-reveal-actions{
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+@keyframes ccFloat{
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes ccPop{
+  0% { transform: translateY(0px); }
+  40% { transform: translateY(-18px); }
+  100% { transform: translateY(0px); }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .cc-float{ animation: none !important; }
+  .cc-flip{ transition: none !important; }
+}
+
     .score-flash {
       animation: scorePulse 1.05s ease-in-out;
       box-shadow: 0 0 0 2px rgba(255, 215, 128, 0.72), 0 0 22px rgba(255, 215, 128, 0.44);
@@ -1488,7 +1721,9 @@
       font-weight: 900;
       color: var(--accent-gold);
       text-shadow: 0 0 8px rgba(240, 192, 64, 0.45);
-      animation: karmaFloatUp 1s ease-out forwards;
+      animation-name: karmaFloatUp;
+      animation-timing-function: ease-out;
+      animation-fill-mode: forwards;
       pointer-events: none;
     }
     @keyframes karmaFloatUp {
@@ -1560,7 +1795,7 @@
     <div class="start-shell">
       <div class="start-title">
         <div class="start-h1">Project 63</div>
-        <div class="start-h2">The Tower</div>
+        <div class="start-h2">The Pit</div>
         <div class="start-lore">A casino with no address. An indecipherable ledger. Will you test fate?</div>
       </div>
 
@@ -1737,7 +1972,7 @@ const CALLING_RANK_THRESHOLDS = [
       },
       spyGlass: {
         name: "Spy Network",
-        desc: "Reveal the current totals of all Dealer lanes for the rest of the match.",
+        desc: "Reveal totals for Dealer lanes that are currently open.",
         isUsable: (m) => isPlayerActionContextOK(m) && anyOpenIncomplete(m.dealerPositions),
         activate: () => activateSpyGlass()
       },
@@ -2058,8 +2293,8 @@ const CALLING_RANK_THRESHOLDS = [
         exportedAt: null,
         app: {
           name: "Project 63",
-          build: "0.18",
-          variant: "p63_0.18.html",
+          build: "0.33",
+          variant: "p63_0.33.html",
           userAgent: navigator.userAgent
         },
         player: {
@@ -2975,7 +3210,7 @@ const CALLING_RANK_THRESHOLDS = [
       <div class="rules-wrap">
         <h3 class="rules-h">Goal of the Run</h3>
         <ul class="rules-ul">
-          <li>Climb the Tower floor by floor.</li>
+          <li>Descend the Pit floor by floor.</li>
           <li>Win tables to earn chips, improve your deck, and advance.</li>
           <li>Clear the <b>Floor Boss</b> to move on.</li>
         </ul>
@@ -3428,6 +3663,16 @@ const CALLING_RANK_THRESHOLDS = [
       };
     }
 
+    function showCallingCardRankUpModal(fromRank, toRank, card) {
+      const effect = getCallingCardEffectText(card || run.callingCard || { suit: '♠' });
+      const suitCard = card || run.callingCard || { rank: toRank || '2', suit: '♠' };
+      showModal('Calling Card Ranked Up', `
+        <div class="modal-text"><strong>${escapeHtml(String(fromRank || '—'))} → ${escapeHtml(String(toRank || '—'))}</strong></div>
+        <div class="modal-text">${escapeHtml(String((suitCard.rank || toRank || '2') + (suitCard.suit || '♠')))}</div>
+        <div class="modal-text">${escapeHtml(effect.title)}: ${escapeHtml(effect.summary)}</div>
+      `, [{ text: 'Continue', primary: true, action: () => closeModal() }]);
+    }
+
     function maybeLevelUpCallingCardFromKarma() {
       if (!run || !run.callingCard) return null;
       const fromRank = run.callingCard.rank || '2';
@@ -3449,6 +3694,7 @@ const CALLING_RANK_THRESHOLDS = [
         karmaAtLevelUp: run.karma
       });
       showToast(`Calling Card leveled up: ${fromRank} → ${toRank}`);
+      showCallingCardRankUpModal(fromRank, toRank, run.callingCard);
       renderHUD();
       return { fromRank, toRank, levelsGained: gained };
     }
@@ -6027,6 +6273,7 @@ body += `
       seq.focusSide = step.lane ? 'player' : null;
       seq.focusCardUids = step.cardUids || [];
       seq.message = step.message || 'Karma tally…';
+      const delay = seq.isFast ? seq.fastMs : seq.speedMs;
       if (step.delta > 0) {
         seq.accrued += step.delta;
         seq.float = {
@@ -6034,14 +6281,14 @@ body += `
           laneIdx: step.lane ? step.lane.idx : null,
           side: step.lane ? 'player' : null,
           text: `+${step.delta}`,
-          kind: step.type
+          kind: step.type,
+          durationMs: delay
         };
       } else {
         seq.float = null;
       }
       seq.stepIndex += 1;
       renderAll();
-      const delay = seq.isFast ? seq.fastMs : seq.speedMs;
       setTimeout(advanceScoreSequence, delay);
     }
 
@@ -6364,6 +6611,16 @@ body += `
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
       updateThreatTargetLane(false, 'player_end_turn_close');
       if (checkMatchEnd()) return;
+      endPlayerTurn();
+    };
+
+    window.playerPassTurn = function() {
+      if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (blackjackMatch.turn !== 'player') return;
+      if (blackjackMatch.drawnCard) return;
+      if (countOpenPositions(blackjackMatch.playerPositions) > 0) return;
+
+      logEvent('PLAYER_PASS_TURN', { source: 'PASS_BUTTON' });
       endPlayerTurn();
     };
 
@@ -6909,6 +7166,11 @@ function dealerStandPhase(diff, maxPasses = 6) {
           lanesWon,
           transferMultiplier: tm
         };
+
+        run.ui = run.ui || {};
+        run.ui.bossHpFlashUntil = Date.now() + 1200;
+        run.ui.bossHpLastDamage = totalDamage;
+        run.ui.bossHpDamageId = `${Date.now()}_${totalDamage}`;
 
         logEvent('BOSS_DAMAGE', blackjackMatch.bossDamage);
       }
@@ -7662,11 +7924,18 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
     // Spy Network
     function activateSpyGlass() {
-      for (let i = 0; i < 5; i++) blackjackMatch.spyReveals.add(i);
+      let revealed = 0;
+      for (let i = 0; i < 5; i++) {
+        const p = blackjackMatch.dealerPositions[i];
+        if (p && p.isOpen) {
+          blackjackMatch.spyReveals.add(i);
+          revealed += 1;
+        }
+      }
       markActionUsed('spyGlass');
       closeModal();
       renderAll();
-      showToast('Revealed all Dealer lanes');
+      showToast(revealed ? `Revealed ${revealed} open Dealer lane(s)` : 'No open Dealer lanes to reveal');
     }
 
     // Forced Play
@@ -7792,6 +8061,19 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         if (win) victory();
         else gameOver('You were outplayed by The Watcher.');
 
+        return;
+      }
+
+      const chipsNow = safeNumber(run && run.chips, 0);
+      if (chipsNow < 0) {
+        logEvent('RUN_ENDED_NEGATIVE_CHIPS', {
+          chips: chipsNow,
+          floor: run.floor,
+          tableType: blackjackMatch.type,
+          buyIn: blackjackMatch.buyIn
+        });
+        blackjackMatch = null;
+        gameOver('You fell into debt you can’t cover.');
         return;
       }
 
@@ -7949,8 +8231,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
               <span class="hud-stat-value karma">${safeNumber(run.karma, 0)}</span>
             </div>
             <div class="hud-stat">
-              <span class="hud-stat-label">Tokens</span>
-              <span class="hud-stat-value tokens">${getHudTokensValue()}</span>
+              <span class="hud-stat-label">Calling Card</span>
+              <span class="hud-stat-value">${callingText}</span>
             </div>
           </div>
 
@@ -8078,6 +8360,13 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           && tile.id === run.secret.keys.highStakes.tileId) tileClass += ' key-roller';
 
         const clickHandler = isAvailable ? `onclick="onTileClick(${tile.id})"` : '';
+        const isKeyRoller = tileClass.includes('key-roller');
+        const keyOverlay = isKeyRoller
+          ? `<path class="hex-key-overlay" d="${tile.svgPath}" fill="none" />`
+          : '';
+        const keyBadge = isKeyRoller
+          ? `<text class="hex-key-badge" x="${tile.center[0] + 18}" y="${tile.center[1] - 14}">🔑</text>`
+          : '';
         let subLabel = '';
         if (tile.npc && tile.npc.callingCard) {
           const calling = `${tile.npc.callingCard.rank}${tile.npc.callingCard.suit}`;
@@ -8089,7 +8378,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         svg += `
           <g class="${tileClass}" ${clickHandler}>
             <path class="hex-bg" d="${tile.svgPath}" fill="${tile.color}" stroke="#1a2436" stroke-width="2"/>
+            ${keyOverlay}
             <text class="hex-label" x="${tile.center[0]}" y="${tile.center[1]}">${tile.label}</text>
+            ${keyBadge}
             ${subLabel}
           </g>
         `;
@@ -8103,23 +8394,244 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       `;
     }
 
+
+    function getCallingCardEffectText(card){
+      const suit = card?.suit || '♠';
+      const map = {
+        '♥': {
+          name: 'Calling Card — Hearts',
+          title: 'Triage',
+          summary: 'When a Calling Proc triggers, any newly busted lane can discard its last card.',
+          details: [
+            { k:'Trigger', v:'Calling Proc triggers' },
+            { k:'Effect',  v:'Choose a newly busted lane; discard its last card and recompute the total.' }
+          ]
+        },
+        '♠': {
+          name: 'Calling Card — Spades',
+          title: 'Spyglass',
+          summary: 'Calling Proc reveals one dealer lane’s hidden total for the match.',
+          details: [
+            { k:'Trigger', v:'Calling Proc triggers' },
+            { k:'Effect',  v:'Reveal one dealer lane total (including hidden info) until match ends.' }
+          ]
+        },
+        '♦': {
+          name: 'Calling Card — Diamonds',
+          title: 'Dividend',
+          summary: 'Calling Proc grants +26 chips (scaled by proc multiplier).',
+          details: [
+            { k:'Trigger', v:'Calling Proc triggers' },
+            { k:'Effect',  v:'+26 chips × proc multiplier (if applicable).' }
+          ]
+        },
+        '♣': {
+          name: 'Calling Card — Clubs',
+          title: 'Pressure',
+          summary: 'Calling Proc lets you apply +1 or -1 to a dealer lane total.',
+          details: [
+            { k:'Trigger', v:'Calling Proc triggers' },
+            { k:'Effect',  v:'Choose a dealer lane and apply +1 or -1 to its total.' }
+          ]
+        }
+      };
+      return map[suit] || map['♠'];
+    }
+
+    function renderCallingCardReveal(card){
+      const effect = getCallingCardEffectText(card);
+      const rank = card?.rank || '2';
+      const suit = card?.suit || '♠';
+      const flipped = !!(run?.intro && run.intro.revealFlipped);
+
+      return `
+        <div class="cc-reveal-root">
+          <div class="cc-card-stage">
+            <div class="cc-bounce" id="ccBounce">
+              <div class="cc-float" id="ccFloat">
+                <div class="cc-tilt" id="ccTilt">
+                  <div class="cc-flip ${flipped ? 'is-flipped' : ''}" id="ccFlip" role="button" tabindex="0" aria-label="Calling card. Click to flip for details.">
+                    <div class="cc-face cc-neon cc-front">
+                      <div class="cc-corner">${escapeHtml(rank)}</div>
+                      <div class="cc-suit">${escapeHtml(suit)}</div>
+                      <div class="cc-corner bottom">${escapeHtml(rank)}</div>
+                    </div>
+
+                    <div class="cc-face cc-neon cc-back">
+                      <div>
+                        <div class="cc-back-title">${escapeHtml(effect.title)}</div>
+                        <div class="cc-back-lines">
+                          ${effect.details.map(d => `<div><span class="k">${escapeHtml(d.k)}:</span> ${escapeHtml(d.v)}</div>`).join('')}
+                        </div>
+                      </div>
+                      <div class="cc-back-lines" style="opacity:0.85;">Tap / click to flip back</div>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="cc-reveal-meta">
+            <div class="cc-name">${escapeHtml(effect.name)}</div>
+            <div class="cc-summary">${escapeHtml(effect.summary)}</div>
+
+            <div class="cc-reveal-actions">
+              <button class="modal-btn" id="ccDetailsBtn">${flipped ? 'Hide details' : 'View details'}</button>
+              <button class="modal-btn success" onclick="introEnterPit()">Enter Floor 1</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    let __ccReveal = { active:false, raf:0, cleanup:null };
+
+    function setupCallingCardRevealInteractions(){
+      const tiltEl = document.getElementById('ccTilt');
+      const flipEl = document.getElementById('ccFlip');
+      const detailsBtn = document.getElementById('ccDetailsBtn');
+      const bounceEl = document.getElementById('ccBounce');
+
+      if (!tiltEl || !flipEl) return;
+
+      if (__ccReveal.cleanup) __ccReveal.cleanup();
+
+      const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      let targetX = 0, targetY = 0;
+      let curX = 0, curY = 0;
+      let hovering = false;
+
+      const setVars = (mxPct, myPct) => {
+        flipEl.style.setProperty('--mx', mxPct);
+        flipEl.style.setProperty('--my', myPct);
+      };
+
+      const tick = () => {
+        curX = curX + (targetX - curX) * 0.14;
+        curY = curY + (targetY - curY) * 0.14;
+        tiltEl.style.transform = `rotateX(${curX}deg) rotateY(${curY}deg)`;
+        __ccReveal.raf = requestAnimationFrame(tick);
+      };
+
+      const startRAF = () => {
+        if (__ccReveal.active) return;
+        __ccReveal.active = true;
+        __ccReveal.raf = requestAnimationFrame(tick);
+      };
+
+      const stopRAF = () => {
+        if (!__ccReveal.active) return;
+        cancelAnimationFrame(__ccReveal.raf);
+        __ccReveal.active = false;
+      };
+
+      const onMove = (e) => {
+        if (reduceMotion) return;
+        if (e.pointerType && e.pointerType !== 'mouse') return;
+
+        const rect = tiltEl.getBoundingClientRect();
+        const x = (e.clientX - rect.left);
+        const y = (e.clientY - rect.top);
+        const cx = rect.width / 2;
+        const cy = rect.height / 2;
+
+        const rotateX = (y - cy) / 10;
+        const rotateY = (cx - x) / 10;
+
+        targetX = -rotateX;
+        targetY = rotateY;
+
+        const mxPct = Math.max(0, Math.min(100, (x / rect.width) * 100));
+        const myPct = Math.max(0, Math.min(100, (y / rect.height) * 100));
+        setVars(mxPct, myPct);
+      };
+
+      const onEnter = () => {
+        hovering = true;
+        if (!reduceMotion) startRAF();
+      };
+
+      const onLeave = () => {
+        hovering = false;
+        targetX = 0; targetY = 0;
+        setVars(50, 50);
+        if (!reduceMotion) {
+          setTimeout(() => { if (!hovering) stopRAF(); }, 220);
+        }
+      };
+
+      const toggleFlip = () => {
+        if (run && run.intro) run.intro.revealFlipped = !run.intro.revealFlipped;
+        flipEl.classList.toggle('is-flipped');
+
+        if (detailsBtn) {
+          detailsBtn.textContent = flipEl.classList.contains('is-flipped') ? 'Hide details' : 'View details';
+        }
+
+        if (bounceEl) {
+          bounceEl.classList.add('cc-pop');
+          setTimeout(() => bounceEl.classList.remove('cc-pop'), 440);
+        }
+      };
+
+      const onFlipClick = (e) => {
+        e.preventDefault();
+        toggleFlip();
+      };
+
+      const onFlipKey = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleFlip();
+        }
+      };
+
+      const onDetailsClick = (e) => {
+        e.preventDefault();
+        toggleFlip();
+      };
+
+      tiltEl.addEventListener('pointermove', onMove);
+      tiltEl.addEventListener('pointerenter', onEnter);
+      tiltEl.addEventListener('pointerleave', onLeave);
+      flipEl.addEventListener('click', onFlipClick);
+      flipEl.addEventListener('keydown', onFlipKey);
+      if (detailsBtn) detailsBtn.addEventListener('click', onDetailsClick);
+
+      setVars(50, 50);
+      tiltEl.style.transform = 'rotateX(0deg) rotateY(0deg)';
+
+      __ccReveal.cleanup = () => {
+        stopRAF();
+        tiltEl.removeEventListener('pointermove', onMove);
+        tiltEl.removeEventListener('pointerenter', onEnter);
+        tiltEl.removeEventListener('pointerleave', onLeave);
+        flipEl.removeEventListener('click', onFlipClick);
+        flipEl.removeEventListener('keydown', onFlipKey);
+        if (detailsBtn) detailsBtn.removeEventListener('click', onDetailsClick);
+      };
+    }
+
     function renderIntro() {
       const boardView = document.getElementById('boardView');
       const step = run.intro?.step || 'name';
       const name = run.intro?.name || '';
 
       const suitDescriptions = {
-        '♥': 'Hearts — Triage: When a Calling Proc triggers, any newly busted lane can discard its last card.',
-        '♠': 'Spades — Spyglass: Calling Proc reveals one dealer lane’s hidden total for the match.',
-        '♦': 'Diamonds — Dividend: Calling Proc grants +26 chips (scaled by proc multiplier).',
-        '♣': 'Clubs — Pressure: Calling Proc lets you apply +1 or -1 to a dealer lane total.'
+        '♥': 'Hearts — Triage: If a play would bust a lane, discard that card instead.',
+        '♠': 'Spades — Spyglass: Reveal one open Dealer lane total for the match.',
+        '♦': 'Diamonds — Dividend: Gain +26 chips when your suit triggers.',
+        '♣': 'Clubs — Pressure: Apply +1 or -1 to an open Dealer lane total.'
       };
 
       let body = '';
       if (step === 'name') {
         body = `
           <div class="intro-panel">
-            <div class="intro-title">Project 63: The Tower</div>
+            <div class="intro-title">Project 63: The Pit</div>
             <div class="intro-text">
               A casino with no address. A ledger that records more than debt. Each floor is a story — each table a test.
             </div>
@@ -8135,7 +8647,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         body = `
           <div class="intro-panel">
             <div class="intro-title">Choose Your Calling Suit</div>
-            <div class="intro-text">Each suit shapes your Calling Proc.</div>
+            <div class="intro-text">Unique actions that may trigger when playing a card from your chosen suit.</div>
             <div class="intro-suits">
               ${['♥','♠','♦','♣'].map(suit => `
                 <button class="modal-btn intro-suit-btn" onclick="introChooseSuit('${suit}')">
@@ -8146,21 +8658,26 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             </div>
           </div>
         `;
-      } else {
+      } else if (step === 'reveal') {
         const card = run.callingCard || run.intro?.callingCard;
-        body = `
+        body = card ? renderCallingCardReveal(card) : `
           <div class="intro-panel">
             <div class="intro-title">Your Calling Card</div>
-            <div class="intro-text">Entering the Tower as ${escapeHtml(run.playerName || 'Unknown')}.</div>
-            <div class="intro-large-card">${card ? renderCard(card, false, 'intro-large-card') : ''}</div>
+            <div class="intro-text">Missing calling card data.</div>
             <div class="intro-actions">
-              <button class="modal-btn success" onclick="introEnterTower()">Enter the Tower</button>
+              <button class="modal-btn" onclick="run.intro.step='suit'; renderAll();">Back</button>
             </div>
           </div>
         `;
       }
 
       boardView.innerHTML = body;
+
+      if (step === 'reveal') {
+        requestAnimationFrame(() => setupCallingCardRevealInteractions());
+      } else {
+        if (__ccReveal && __ccReveal.cleanup) __ccReveal.cleanup();
+      }
     }
 
     window.introSetName = function() {
@@ -8192,7 +8709,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       renderAll();
     };
 
-    window.introEnterTower = function() {
+    window.introEnterPit = function() {
+      if (__ccReveal && __ccReveal.cleanup) __ccReveal.cleanup();
       logEvent('CALLING_CARD_SET', { callingCard: run.callingCard });
       logEvent('GAME_START', {
         startingChips: STARTING_CHIPS,
@@ -8473,7 +8991,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     : `<div class="bj-position-num">MOD: —</div>`;
   const f = blackjackMatch && blackjackMatch.scoreSeq ? blackjackMatch.scoreSeq.float : null;
   const floatHtml = (f && f.side === side && f.laneIdx === idx)
-    ? `<div class="karma-float" data-float-id="${f.id}">${escapeHtml(f.text || '')}</div>`
+    ? `<div class="karma-float" style="animation-duration:${safeNumber(f.durationMs, 1000)}ms;" data-float-id="${f.id}">${escapeHtml(f.text || '')}</div>`
     : '';
 
   return `
@@ -8523,11 +9041,17 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const isBossFight = blackjackMatch.type === 'BOSS' && bossFight && bossFight.active;
       const bossHpPct = isBossFight ? Math.max(0, Math.min(100, Math.round((bossFight.hp / bossFight.maxHp) * 100))) : 0;
       const bossPhaseClass = isBossFight && bossFight.phase === 2 ? 'boss-phase2' : '';
+      const flashBoss = isBossFight && Date.now() < safeNumber(run.ui && run.ui.bossHpFlashUntil, 0);
+      const dmg = safeNumber(run.ui && run.ui.bossHpLastDamage, 0);
+      const dmgHtml = (flashBoss && dmg > 0)
+        ? `<div class="boss-dmg" data-id="${escapeHtml((run.ui && run.ui.bossHpDamageId) || '')}">-${dmg} HP</div>`
+        : '';
       const bossMeta = isBossFight ? `
         <div class="bj-status ${bossPhaseClass}">
           Round ${bossFight.round} / ${bossFight.maxRounds} · Time ${bossFight.roundsRemaining || 0} · HP ${bossFight.hp} / ${bossFight.maxHp}
-          <div class="boss-hp ${bossPhaseClass}">
+          <div class="boss-hp ${bossPhaseClass} ${flashBoss ? 'boss-hp-flash' : ''}">
             <div class="boss-hp-fill" style="width:${bossHpPct}%"></div>
+            ${dmgHtml}
           </div>
         </div>
       ` : '';
@@ -8749,7 +9273,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
               <div class="bj-action-btns">
                 <button class="bj-btn" onclick="playerDrawCard()" ${(!isPlayerTurn || !!drawn || countOpenPositions(blackjackMatch.playerPositions) === 0) ? 'disabled' : ''}>Draw</button>
-                <button class="bj-btn" onclick="playerEndTurn()" ${(!isPlayerTurn || !!drawn) ? 'disabled' : ''}>Close & End</button>
+                <button class="bj-btn" onclick="playerEndTurn()" ${(!isPlayerTurn || !!drawn) ? 'disabled' : ''}>End Turn</button>
+                ${(() => { const noOpenLanes = countOpenPositions(blackjackMatch.playerPositions) === 0; return noOpenLanes ? `<button class="bj-btn" onclick="playerPassTurn()" ${(!isPlayerTurn || !!drawn || !noOpenLanes) ? 'disabled' : ''}>Pass Turn</button>` : ''; })()}
               </div>
 
               <div class="controls-row">
@@ -8858,6 +9383,338 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       }
     }
 
+    const PIT_MESSAGES = {
+      WIN: "You escaped this time, but the Pit remembers.",
+      LOSS: "You fell short. The only way out is back through.",
+      UNKNOWN: "The Pit watches. The ledger remains open."
+    };
+
+    const ARCHETYPE_EXEMPLARS = {
+      "The Surgeon":        { name: "Maria", epithet: "The Surgeon" },
+      "The Saboteur":       { name: "Rook",  epithet: "The Saboteur" },
+      "The High Roller":    { name: "Vance", epithet: "The High Roller" },
+      "The Engine Builder": { name: "Inez",  epithet: "The Engine Builder" },
+      "The Karma Chaser":   { name: "Sol",   epithet: "The Karma Chaser" },
+      "The Banker":         { name: "Edwin", epithet: "The Banker" }
+    };
+
+    function clamp01(v){ return Math.max(0, Math.min(1, safeNumber(v, 0))); }
+    function num(v){ return safeNumber(v, 0); }
+    function numOrNull(v){ const n = Number(v); return Number.isFinite(n) ? n : null; }
+    function avg(list){
+      const vals = (list || []).map(v => Number(v)).filter(v => Number.isFinite(v));
+      if (!vals.length) return null;
+      return vals.reduce((a,b)=>a+b,0) / vals.length;
+    }
+    function normRange(v, lo, hi){
+      if (v === null || v === undefined || Number.isNaN(v)) return 0;
+      if (hi === lo) return 0;
+      return clamp01((v - lo) / (hi - lo));
+    }
+    function countEvents(events, matcher){
+      if (!events || !events.length) return 0;
+      if (typeof matcher === 'function') return events.filter(matcher).length;
+      const m = String(matcher || '');
+      return events.filter(e => String((e && e.type) || '').toUpperCase().includes(m)).length;
+    }
+    function herfindahl(obj){
+      if (!obj || typeof obj !== 'object') return null;
+      const values = Object.values(obj).map(v => Number(v)).filter(v => !Number.isNaN(v));
+      const total = values.reduce((a,b)=>a+b,0);
+      if (!total) return null;
+      return values.reduce((a,v)=> a + Math.pow(v/total, 2), 0);
+    }
+    function formatArchetypeAttribution(primaryName){
+      const ex = ARCHETYPE_EXEMPLARS[primaryName];
+      if (!ex) return 'The play pattern most closely matches that of an Unknown hand.';
+      return `The play pattern most closely matches that of ${ex.name}, ${ex.epithet}.`;
+    }
+    function formatCompact(v){
+      const n = safeNumber(v, 0);
+      const abs = Math.abs(n);
+      if (abs >= 1000000) return `${(n/1000000).toFixed(1)}M`;
+      if (abs >= 1000) return `${(n/1000).toFixed(1)}k`;
+      return String(Math.round(n));
+    }
+    function setupCanvas(canvas){
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const rect = canvas.getBoundingClientRect();
+      const w = Math.max(320, Math.round(rect.width || canvas.clientWidth || 900));
+      const h = Math.max(220, Math.round(rect.height || canvas.clientHeight || 260));
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return ctx;
+    }
+    function clearChart(ctx, w, h){ ctx.clearRect(0,0,w,h); }
+    function drawAxes(ctx, w, h, pad, xLabel, yLabel, yMin, yMax){
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad, pad);
+      ctx.lineTo(pad, h-pad);
+      ctx.lineTo(w-pad, h-pad);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+      ctx.fillText(String(xLabel || ''), w - pad - 42, h - pad + 18);
+      ctx.fillText(String(yLabel || ''), 8, pad - 8);
+      ctx.fillText(formatCompact(yMax), 6, pad + 10);
+      ctx.fillText(formatCompact(yMin), 6, h - pad + 2);
+      ctx.restore();
+    }
+    function drawLineScaled(ctx, w, h, pad, xs, ys, yMin, yMax, color){
+      if (!xs || !ys || !xs.length || !ys.length) return;
+      const span = (yMax - yMin) || 1;
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ys.forEach((v, i) => {
+        const x = pad + clamp01(xs[i]) * (w - 2*pad);
+        const y = pad + (1 - ((safeNumber(v,0) - yMin) / span)) * (h - 2*pad);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.restore();
+    }
+    function drawPoint(ctx, x, y, r=3){
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    }
+    function drawTextBox(ctx, text, x, y){
+      ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+      const pad = 4;
+      const w = ctx.measureText(text).width + pad*2;
+      const h = 16;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(x, y-h, w, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillText(text, x+pad, y-4);
+    }
+    function computePlaystyle(summary, derived){
+      const matches = derived.matches || [];
+      const events = derived.events || [];
+      const lanes = derived.lanes || [];
+      const deckTimeline = derived.deckTimeline || [];
+      const matchesN = Math.max(1, summary.matches || matches.length || 1);
+      const highTables = matches.filter(m=>String(m.tableType||'').toUpperCase()==='HIGH_STAKES').length;
+      const bossTables = matches.filter(m=>String(m.tableType||'').toUpperCase()==='BOSS').length;
+      const tableIntensity = (0.65*highTables + 1.0*bossTables) / matchesN;
+      const avgTransferMult = avg(matches.map(m=>numOrNull(m.transferMultiplier)));
+      const tempoApplied = countEvents(events, 'TEMPO_STRIKE_APPLIED');
+      const tempoBlocked = countEvents(events, 'TEMPO_STRIKE_BLOCKED');
+      const tempoApplyRate = (tempoApplied + tempoBlocked) ? tempoApplied / (tempoApplied + tempoBlocked) : 0;
+      const tokensSpent = countEvents(events, 'TOKEN_SPENT');
+      const actionsUsed = countEvents(events, 'ACTION_USED');
+      const tokensPerMatch = tokensSpent / matchesN;
+      const actionsPerMatch = actionsUsed / matchesN;
+      const callingProcs = events.filter(e=>String((e && e.type) || '').startsWith('CALLING_PROC_')).length;
+      const karmaGainEvents = countEvents(events, 'KARMA_GAIN');
+      const callingPerMatch = callingProcs / matchesN;
+      const deckEdits = deckTimeline.length ? Math.max(0, deckTimeline.length-1) : 0;
+      const deckEditsPerMatch = deckEdits / matchesN;
+      const editReasons = deckTimeline.map(d=>String((d && d.reason) || '').toUpperCase());
+      const stampCount = editReasons.filter(r=>r==='STAMP_APPLY').length;
+      const sleeveCount = editReasons.filter(r=>r==='SLEEVE_APPLY').length;
+      const fuseCount = editReasons.filter(r=>r==='REWARD_FUSE').length;
+      const duplicateCount = editReasons.filter(r=>r==='REWARD_DUPLICATE').length;
+      const sinkAgg = summary.sinkAgg || {};
+      const totalSpend = summary.totalSpend || 0;
+      const merchantSpend = Math.abs((sinkAgg['Merchant removals']||0) + (sinkAgg['Merchant buys']||0) + (sinkAgg['Merchant rerolls']||0));
+      const collectorSpend = Math.abs(sinkAgg['Collector']||0);
+      const modifySpend = Math.abs(sinkAgg['Modify']||0);
+      const surgerySpendShare = totalSpend ? (merchantSpend + collectorSpend + modifySpend) / totalSpend : 0;
+      const bustRate = summary.playerBustRate ?? (lanes.length ? lanes.filter(l=>l.playerBust).length / lanes.length : 0);
+      const controlTotals = summary.avgPlayerTotalNoBust ?? summary.avgPlayerTotal ?? null;
+      const deckEnd = deckTimeline.length ? deckTimeline[deckTimeline.length-1] : null;
+      herfindahl((deckEnd && (deckEnd.bySuit || (deckEnd.summary && deckEnd.summary.bySuit))) || null);
+      const modDensity = summary.modDensityEnd ?? null;
+      const risk = 100 * (0.45*clamp01(tableIntensity) + 0.35*normRange(avgTransferMult, 1, 5) + 0.20*normRange(summary.profitStdDev, 0, 200));
+      const pressure = 100 * (0.55*normRange(tempoApplied / matchesN, 0, 6) + 0.25*normRange(actionsPerMatch, 0, 2) + 0.20*normRange(tempoApplyRate, 0.2, 0.6));
+      const control = 100 * (0.5*(1 - normRange(bustRate, 0, 0.35)) + 0.25*normRange(controlTotals, 17, 20) + 0.25*normRange(modDensity, 0, 0.25));
+      const surgery = 100 * (0.5*normRange(deckEditsPerMatch, 0, 1.5) + 0.25*normRange(surgerySpendShare, 0, 0.6) + 0.25*normRange(merchantSpend / Math.max(1, totalSpend), 0, 0.6));
+      const engine = 100 * (0.45*normRange(stampCount + sleeveCount, 0, 6) + 0.35*normRange(fuseCount + duplicateCount, 0, 6) + 0.20*normRange(summary.player21Rate, 0.15, 0.65));
+      const karma = 100 * (0.6*normRange(callingPerMatch, 0, 3) + 0.4*normRange(karmaGainEvents / matchesN, 0, 4));
+      const actions = 100 * (0.55*normRange(tokensPerMatch, 0, 2) + 0.45*normRange(actionsPerMatch, 0, 1.5));
+      const economy = 100 * (0.6*normRange((summary.chipsLow||0) / Math.max(1, summary.startChips||1), 0.2, 0.8) + 0.4*(1 - normRange(totalSpend / Math.max(1, Math.abs(summary.matchProfitTotal)||1), 0.5, 2)));
+      const axes = { risk, pressure, control, surgery, engine, karma, actions, economy };
+      const axes01 = Object.fromEntries(Object.entries(axes).map(([k,v])=>[k, clamp01(v/100)]));
+      const archetypes = [
+        {name:'The Surgeon', vec:{surgery:0.85, control:0.65, engine:0.4, economy:0.4}},
+        {name:'The Saboteur', vec:{pressure:0.85, actions:0.7, risk:0.5}},
+        {name:'The High Roller', vec:{risk:0.9, economy:0.2, control:0.2}},
+        {name:'The Engine Builder', vec:{engine:0.9, control:0.45, surgery:0.35}},
+        {name:'The Karma Chaser', vec:{karma:0.9, engine:0.5, control:0.35}},
+        {name:'The Banker', vec:{economy:0.9, control:0.7, risk:0.1}}
+      ];
+      function cosineScore(vec){
+        const keys = Object.keys(axes01);
+        const a = keys.map(k=>axes01[k] ?? 0);
+        const b = keys.map(k=>vec[k] ?? 0);
+        const dot = a.reduce((s,v,i)=>s + v*b[i], 0);
+        const magA = Math.sqrt(a.reduce((s,v)=>s+v*v, 0)) || 1;
+        const magB = Math.sqrt(b.reduce((s,v)=>s+v*v, 0)) || 1;
+        return dot / (magA * magB);
+      }
+      const scored = archetypes.map(a=>({name:a.name, score: cosineScore(a.vec)})).sort((a,b)=>b.score-a.score);
+      const primary = scored[0] || {name:'Unknown', score:0};
+      const secondary = scored[1] || {name:'None', score:0};
+      const confidence = clamp01((primary.score - secondary.score) / 0.2);
+      return { axes, primary, secondary, confidence, archetypeScores: scored };
+    }
+    function buildKarmaCumulative(matches, startKarma){
+      let k = (typeof startKarma === 'number') ? startKarma : 0;
+      return matches.map(m=>{ const g = (typeof m.karmaGained === 'number') ? m.karmaGained : 0; k += g; return k; });
+    }
+    function buildFloorEndMarkers(matches){
+      const byFloor = new Map();
+      matches.forEach((m, i)=>{ const f = (m.floor==null) ? null : Number(m.floor); if (f==null || Number.isNaN(f)) return; byFloor.set(f, i); });
+      const floors = [...byFloor.keys()].sort((a,b)=>a-b);
+      return floors.map(f=>{ const i = byFloor.get(f); const isBoss = String(matches[i] && matches[i].tableType || '').toUpperCase()==='BOSS'; return { floor:f, matchPos:i, isBoss }; });
+    }
+    function renderEndSummaryChart(summary, derived){
+      const canvas = document.getElementById('chartEndSummary');
+      if (!canvas) return;
+      const ctx = setupCanvas(canvas);
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      const pad = 42;
+      const matches = derived.matches || [];
+      if (!matches.length){ clearChart(ctx,w,h); return; }
+      const xs = matches.map((_,i)=> i/(Math.max(1, matches.length-1)));
+      const chips = matches.map(m=> (typeof m.chipsAfter === 'number') ? m.chipsAfter : 0);
+      const karma = buildKarmaCumulative(matches, summary.startKarma);
+      const yVals = [...chips, ...karma].filter(v=>typeof v === 'number');
+      const yMin = Math.min(0, ...yVals);
+      const yMax = Math.max(1, ...yVals);
+      clearChart(ctx,w,h);
+      drawAxes(ctx,w,h,pad,'Match','Value',yMin,yMax);
+      drawLineScaled(ctx,w,h,pad,xs,chips,yMin,yMax,'rgba(125,211,252,0.90)');
+      drawLineScaled(ctx,w,h,pad,xs,karma,yMin,yMax,'rgba(52,211,153,0.90)');
+      const markers = buildFloorEndMarkers(matches);
+      const labelStride = (markers.length > 8) ? 2 : 1;
+      markers.forEach((m, idx)=>{
+        const xN = xs[m.matchPos];
+        const x = pad + xN*(w-2*pad);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+        ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h-pad); ctx.stroke();
+        if (idx % labelStride === 0){
+          ctx.fillStyle = 'rgba(255,255,255,0.65)';
+          ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+          ctx.fillText(`F${m.floor}`, x+4, pad+12);
+        }
+        if (m.isBoss){ ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fillText('♛', x+4, pad+26); }
+        ctx.restore();
+        const chipV = chips[m.matchPos];
+        const karmaV = karma[m.matchPos];
+        const yChip = pad + (1-((chipV-yMin)/(yMax-yMin||1)))*(h-2*pad);
+        const yKarma = pad + (1-((karmaV-yMin)/(yMax-yMin||1)))*(h-2*pad);
+        ctx.save();
+        ctx.fillStyle = 'rgba(125,211,252,0.95)';
+        drawPoint(ctx, x, yChip, 3);
+        drawTextBox(ctx, `C ${formatCompact(chipV)}`, x+6, yChip-2);
+        ctx.restore();
+        ctx.save();
+        ctx.fillStyle = 'rgba(52,211,153,0.95)';
+        drawPoint(ctx, x, yKarma, 3);
+        drawTextBox(ctx, `K ${formatCompact(karmaV)}`, x+6, yKarma-2);
+        ctx.restore();
+      });
+      const cap = document.getElementById('endChartCaption');
+      if (cap) cap.textContent = 'Chips (C) and Karma (K) by match • floor ends marked • boss floors flagged ♛';
+    }
+    function getRunEndAnalysis(){
+      const events = (gameLog && gameLog.events) ? gameLog.events : [];
+      const matches = events.filter(e => e && e.type === 'MATCH_END').map(e => ({
+        floor: safeNumber(e.floor, e.ctx && e.ctx.floor),
+        tableType: (e.data && e.data.type) || null,
+        chipsAfter: safeNumber(e.chips, 0),
+        karmaGained: safeNumber(e.data && e.data.karmaGained, 0),
+        transferMultiplier: safeNumber(e.data && e.data.transferMultiplier, 0)
+      }));
+      const deckTimeline = (gameLog && Array.isArray(gameLog.deckHistory)) ? gameLog.deckHistory.slice() : [];
+      const summaryDeck = buildDeckSummary();
+      const initial = gameLog && gameLog.initialState ? gameLog.initialState : null;
+      const finalState = gameLog && gameLog.finalState ? gameLog.finalState : null;
+      const initialDeckSize = initial && initial.deckSnapshot ? safeNumber(initial.deckSnapshot.deckSize, null) : null;
+      const finalDeckSize = finalState && finalState.deckSnapshot ? safeNumber(finalState.deckSnapshot.deckSize, null) : summaryDeck.deckSize;
+      const finalModCount = finalState && finalState.deckSnapshot ? safeNumber(finalState.deckSnapshot.modCount, null) : summaryDeck.modCount;
+      const summary = {
+        matches: matches.length,
+        runOutcome: { result: ((gameLog && gameLog.runOutcome && gameLog.runOutcome.outcome) || 'unknown').toUpperCase() === 'WIN' ? 'WIN' : (((gameLog && gameLog.runOutcome && gameLog.runOutcome.outcome) || '').toLowerCase() === 'loss' ? 'LOSS' : ((run && run.ui && run.ui.mode==='VICTORY') ? 'WIN' : (run && run.ui && run.ui.mode==='GAMEOVER' ? 'LOSS' : 'UNKNOWN'))) },
+        appBuild: (gameLog && gameLog.app && gameLog.app.build) || null,
+        appVersion: (gameLog && gameLog.app && gameLog.app.version) || null,
+        sessionId: (gameLog && gameLog.sessionId) || null,
+        startedAtISO: (gameLog && gameLog.startedAt) || null,
+        startKarma: initial ? safeNumber(initial.karma, 0) : 0,
+        startChips: initial ? safeNumber(initial.chips, STARTING_CHIPS) : STARTING_CHIPS,
+        endChips: finalState ? safeNumber(finalState.chips, safeNumber(run && run.chips, 0)) : safeNumber(run && run.chips, 0),
+        chipsLow: gameLog && gameLog.stats ? safeNumber(gameLog.stats.chipsLow, 0) : 0,
+        matchProfitTotal: gameLog && gameLog.stats ? safeNumber(gameLog.stats.payoutReceived, 0) + safeNumber(gameLog.stats.transferNet, 0) - safeNumber(gameLog.stats.buyinSpent, 0) : 0,
+        totalSpend: gameLog && gameLog.stats ? safeNumber(gameLog.stats.buyinSpent, 0) + safeNumber(gameLog.stats.merchantBuys, 0) + safeNumber(gameLog.stats.merchantRemoves, 0) + safeNumber(gameLog.stats.merchantRerolls, 0) : 0,
+        sinkAgg: {
+          'Merchant buys': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.merchantBuys, 0) : 0),
+          'Merchant removals': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.merchantRemoves, 0) : 0),
+          'Merchant rerolls': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.merchantRerolls, 0) : 0),
+          'Collector': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.collectorPurchases, 0) : 0),
+          'Modify': -(gameLog && gameLog.stats ? safeNumber(gameLog.stats.modifyApplies, 0) : 0)
+        },
+        profitStdDev: 0,
+        player21Rate: 0,
+        playerBustRate: 0,
+        avgPlayerTotalNoBust: null,
+        avgPlayerTotal: null,
+        deckSizeStart: Number.isFinite(initialDeckSize) ? initialDeckSize : '—',
+        deckSizeEnd: Number.isFinite(finalDeckSize) ? finalDeckSize : '—',
+        modCountEnd: Number.isFinite(finalModCount) ? finalModCount : '—',
+        modDensityEnd: (Number.isFinite(finalDeckSize) && finalDeckSize > 0 && Number.isFinite(finalModCount)) ? (finalModCount / finalDeckSize) : null
+      };
+      const derived = { matches, events, lanes: [], deckTimeline };
+      summary.playstyle = computePlaystyle(summary, derived);
+      return { summary, derived };
+    }
+    function renderRunEndPanel(analysis){
+      const s = analysis.summary;
+      const d = analysis.derived;
+      const result = (((s.runOutcome && s.runOutcome.result) || 'UNKNOWN') + '').toUpperCase();
+      const endLore = document.getElementById('endLore');
+      if (endLore) endLore.textContent = PIT_MESSAGES[result] || PIT_MESSAGES.UNKNOWN;
+      const play = s.playstyle || computePlaystyle(s, d);
+      const archetypeLine = formatArchetypeAttribution(play.primary && play.primary.name);
+      const resonancePct = Math.round((play.confidence || 0) * 100);
+      const lineEl = document.getElementById('endArchetypeLine');
+      if (lineEl) lineEl.textContent = archetypeLine;
+      const resEl = document.getElementById('endResonance');
+      if (resEl) resEl.textContent = `${resonancePct}% Resonance`;
+      const build = s.appBuild ?? '—';
+      const deckStart = s.deckSizeStart ?? '—';
+      const deckEnd = s.deckSizeEnd ?? '—';
+      const modsEnd = s.modCountEnd ?? '—';
+      const modDens = (s.modDensityEnd != null) ? `${Math.round(s.modDensityEnd * 100)}%` : '—';
+      const sid = s.sessionId || '—';
+      const sidShort = (typeof sid === 'string' && sid.length > 10) ? sid.slice(0,10) + '…' : sid;
+      const statsEl = document.getElementById('endBuildDeckStats');
+      if (statsEl) {
+        statsEl.innerHTML = `
+          <div class="run-end-block run-end-tiny">
+            <div><b>Build:</b> ${escapeHtml(String(build))}</div>
+            <div><b>Config:</b> —</div>
+            <div><b>Session:</b> ${escapeHtml(String(sidShort))}</div>
+            <div><b>Start:</b> ${escapeHtml(String(s.startedAtISO || '—'))}</div>
+          </div>
+          <div class="run-end-block run-end-tiny">
+            <div><b>Deck:</b> ${escapeHtml(String(deckStart))} → ${escapeHtml(String(deckEnd))}</div>
+            <div><b>Mods:</b> ${escapeHtml(String(modsEnd))}</div>
+            <div><b>Mod density:</b> ${escapeHtml(String(modDens))}</div>
+            <div><b>Chips:</b> ${escapeHtml(String(formatCompact(s.startChips)))} → ${escapeHtml(String(formatCompact(s.endChips)))}</div>
+          </div>
+        `;
+      }
+      renderEndSummaryChart(s, d);
+    }
     function renderEndScreen() {
       const boardView = document.getElementById('boardView');
       const blackjackView = document.getElementById('blackjackView');
@@ -8875,59 +9732,26 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const isVictory = run.ui.mode === 'VICTORY';
       const title = isVictory ? 'Victory' : 'Game Over';
       const titleCls = isVictory ? 'victory' : 'gameover';
-      const msg = isVictory ? 'You cleared the tower.' : (run.ui.message || 'Your run has ended.');
-
-      const events = (gameLog && gameLog.events) ? gameLog.events : [];
-      const matches = events.filter(e => e && e.type === 'MATCH_END');
-      const chipsSeries = matches.map(e => safeNumber(e.chips, 0));
-      const karmaSeries = matches.map(e => safeNumber(e.ctx && e.ctx.karma, 0));
-      const makeSpark = (vals, color) => {
-        if (!vals.length) return '<svg class="sparkline" viewBox="0 0 300 120"></svg>';
-        const min = Math.min(...vals), max = Math.max(...vals);
-        const span = Math.max(1, max - min);
-        const pts = vals.map((v, i) => `${(i/(Math.max(1, vals.length-1)))*300},${110-((v-min)/span)*100}`).join(' ');
-        return `<svg class="sparkline" viewBox="0 0 300 120"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round"/><line x1="0" y1="110" x2="300" y2="110" stroke="var(--border-color)"/></svg>`;
-      };
-      const summary = buildDeckSummary();
-      const suitEntries = Object.entries(summary.bySuit || {}).filter(([k]) => ['♠','♥','♦','♣','★'].includes(k));
-      const rankEntries = Object.entries(summary.byRank || {});
-      const makeBars = (entries, color='var(--accent-blue)') => {
-        const max = Math.max(1, ...entries.map(([,v]) => safeNumber(v,0)));
-        return `<div class="bar-grid">${entries.map(([k,v]) => {
-          const h = Math.round((safeNumber(v,0)/max)*84);
-          return `<div class="bar-item"><div class="bar-col"><div class="bar-fill" style="height:${h}px; background:${color};"></div></div><div class="bar-label">${k} (${v})</div></div>`;
-        }).join('')}</div>`;
-      };
+      const msg = isVictory ? 'You cleared the Pit.' : (run.ui.message || 'Your run has ended.');
 
       endScreen.innerHTML = `
         <div class="end-screen">
           <div class="end-title ${titleCls}">${title}</div>
           <div class="end-message">${msg}</div>
 
-          <div class="end-stats">
-            <div class="end-stat">
-              <div class="end-stat-value">${run.floor}</div>
-              <div class="end-stat-label">Floor</div>
+          <div class="run-end-card" id="runEndCard">
+            <div class="run-end-head">
+              <div>
+                <div class="run-end-title">Run End</div>
+                <div class="run-end-sub" id="runEndSub">A compact summary for players.</div>
+              </div>
             </div>
-            <div class="end-stat">
-              <div class="end-stat-value">${safeNumber(run.chips)}</div>
-              <div class="end-stat-label">Chips</div>
-            </div>
-            <div class="end-stat">
-              <div class="end-stat-value">${run.playerDeck.length}</div>
-              <div class="end-stat-label">Deck Size</div>
-            </div>
-            <div class="end-stat">
-              <div class="end-stat-value">${safeNumber(run.karma)}</div>
-              <div class="end-stat-label">Karma</div>
-            </div>
-          </div>
-
-          <div class="end-chart-wrap">
-            <div class="end-chart-card"><div class="end-chart-title">Chips Over Time</div>${makeSpark(chipsSeries, 'var(--accent-green)')}</div>
-            <div class="end-chart-card"><div class="end-chart-title">Karma Over Time</div>${makeSpark(karmaSeries, 'var(--accent-purple)')}</div>
-            <div class="end-chart-card"><div class="end-chart-title">Deck by Suit</div>${makeBars(suitEntries, 'var(--accent-gold)')}</div>
-            <div class="end-chart-card"><div class="end-chart-title">Deck by Rank</div>${makeBars(rankEntries, 'var(--accent-blue)')}</div>
+            <div class="run-end-lore" id="endLore"></div>
+            <div class="run-end-tiny" id="endArchetypeLine"></div>
+            <div class="run-end-tiny run-end-muted" id="endResonance" style="margin-bottom:10px;"></div>
+            <div class="run-end-cols" id="endBuildDeckStats"></div>
+            <canvas id="chartEndSummary"></canvas>
+            <div class="run-end-tiny run-end-muted" id="endChartCaption" style="margin-top:8px;"></div>
           </div>
 
           <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
@@ -8937,6 +9761,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           </div>
         </div>
       `;
+
+      const analysis = getRunEndAnalysis();
+      renderRunEndPanel(analysis);
     }
 
     // =============================================
