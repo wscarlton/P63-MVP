@@ -533,7 +533,6 @@
         </div>
         <div class="tabs">
           <div class="tab active" id="tabPlay">Play</div>
-          <div class="tab" id="tabTune">Tune</div>
         </div>
       </div>
 
@@ -575,7 +574,7 @@
 
         <!-- Exit action requested: button below cards -->
         <div class="endRow">
-          <button class="btn btn-ghost" id="btnEndGame">End Game</button>
+          <button class="btn btn-ghost" id="btnEndGame">END GAME</button>
         </div>
       </div>
 
@@ -591,44 +590,6 @@
           <div>
             <span class="pill" id="pillAnte">Next hand: −25</span>
             <span class="pill" id="pillHeatRule">Heat +10% on safe overclock</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TUNE TAB (dev only) -->
-    <div class="tuneWrap" id="tuneTab">
-      <div class="tGrid">
-        <div class="tCard">
-          <div class="tTitle">Session</div>
-          <label>Start chips <input id="inStartChips" type="number" min="0" step="1" value="100"></label>
-          <label>Ante <input id="inAnte" type="number" min="1" step="1" value="25"></label>
-          <label>Free spins <input id="inFreeSpins" type="number" min="0" step="1" value="2"></label>
-          <div class="tActions">
-            <button class="btn btn-primary" id="btnApply">Apply</button>
-            <button class="btn btn-ghost" id="btnReset">Reset Run</button>
-          </div>
-          <div class="hint">
-            This tab is for tuning only. The Play tab shows the player-facing screen.
-          </div>
-        </div>
-
-        <div class="tCard">
-          <div class="tTitle">Overclock</div>
-          <label>Base burn (%) <input id="inBaseBurn" type="number" min="0" max="95" step="1" value="15"></label>
-          <label>Heat step (%) <input id="inHeatStep" type="number" min="0" max="95" step="1" value="10"></label>
-          <div class="hint">
-            Overclock burn <b>only wipes the current hand’s winnings</b>. Your existing chips remain safe.
-          </div>
-        </div>
-
-        <div class="tCard" style="grid-column:1/-1">
-          <div class="tTitle">Paytable (mult × ante)</div>
-          <div class="hint" style="margin-top:0">
-            Royal 20×, Straight Flush 10×, 4K 8×, FH 6×, Flush 5×, Straight 4×, Trips 3×, 2P 2×, Pair 1×.
-          </div>
-          <div class="hint">
-            (Hands are fully evaluated: Royal / Straight Flush / Four / Full House / Flush / Straight / Trips / Two Pair / Pair / High.)
           </div>
         </div>
       </div>
@@ -656,6 +617,17 @@
 
 <script>
 (() => {
+  // ---------------- P63 Embed Bridge ----------------
+  const P63_EMBED = (window.parent && window.parent !== window);
+  const P63 = {
+    send(type, payload={}) {
+      if (!P63_EMBED) return;
+      window.parent.postMessage({ __p63: 1, type, ...payload }, "*");
+    }
+  };
+  // Tell parent we’re alive (optional but helpful)
+  P63.send("P63_MINIGAME_READY", { kind: "POKER_SLOTS" });
+
   // ---------------- Runtime settings (tunable in TUNE tab) ----------------
   let CFG = {
     startChips: 100,
@@ -795,9 +767,7 @@
   const $ = (id)=>document.getElementById(id);
   const els = {
     tabPlay: $("tabPlay"),
-    tabTune: $("tabTune"),
     playTab: $("playTab"),
-    tuneTab: $("tuneTab"),
 
     credits: $("credits"),
     spinsLeft: $("spinsLeft"),
@@ -824,14 +794,6 @@
     btnCloseModal: $("btnCloseModal"),
     paytableBody: $("paytableBody"),
 
-    // Tune inputs
-    inStartChips: $("inStartChips"),
-    inAnte: $("inAnte"),
-    inFreeSpins: $("inFreeSpins"),
-    inBaseBurn: $("inBaseBurn"),
-    inHeatStep: $("inHeatStep"),
-    btnApply: $("btnApply"),
-    btnReset: $("btnReset"),
   };
 
   // ---------------- State ----------------
@@ -937,6 +899,15 @@
     }
 
     rebuildButtons();
+
+    // Embedded rule: if you hit 0 chips, the machine run ends.
+    // (Don’t end mid-hand; allow a hand already in play to resolve.)
+    if (P63_EMBED && SESSION.chips <= 0 && HAND.phase !== "HOLDING" && HAND.phase !== "SPINNING"){
+      // Avoid double-fire if updateHUD runs again during close
+      els.btnEndGame.disabled = true;
+      endGame("broke");
+      return;
+    }
   }
 
   function rebuildButtons(){
@@ -1223,19 +1194,10 @@
   // ---------------- Tabs ----------------
   function showPlay(){
     els.tabPlay.classList.add("active");
-    els.tabTune.classList.remove("active");
     els.playTab.style.display = "";
-    els.tuneTab.style.display = "none";
-  }
-  function showTune(){
-    els.tabTune.classList.add("active");
-    els.tabPlay.classList.remove("active");
-    els.playTab.style.display = "none";
-    els.tuneTab.style.display = "";
   }
 
   els.tabPlay.addEventListener("click", showPlay);
-  els.tabTune.addEventListener("click", showTune);
 
   // ---------------- Modal ----------------
   function openPaytable(){ els.modalBack.style.display = "flex"; renderPaytable(); }
@@ -1246,44 +1208,23 @@
   els.modalBack.addEventListener("click", (e)=>{ if (e.target === els.modalBack) closePaytable(); });
   document.addEventListener("keydown", (e)=>{ if (e.key==="Escape") closePaytable(); });
 
-  // ---------------- End Game (stub) ----------------
-  els.btnEndGame.addEventListener("click", ()=>{
-    // In the real game, this returns you to the floor with your current machine chips.
+  // ---------------- End Game ----------------
+  function endGame(reason){
     const cashOut = SESSION.chips;
+
+    if (P63_EMBED){
+      // Parent owns what happens next (chips credit + close overlay)
+      P63.send("P63_MINIGAME_END", { kind:"POKER_SLOTS", reason, cashOut });
+      return;
+    }
+
+    // Standalone fallback behavior:
     SESSION.chips = CFG.startChips;
     SESSION.heat = 0;
     resetToReady(`Ended game. Cashed out ${cashOut}.`);
-  });
-
-  // ---------------- Tune actions ----------------
-  function applyTune(){
-    const startChips = Math.max(0, parseInt(els.inStartChips.value||"0",10));
-    const ante = Math.max(1, parseInt(els.inAnte.value||"25",10));
-    const freeSpins = Math.max(0, parseInt(els.inFreeSpins.value||"2",10));
-    const baseBurn = clamp(parseInt(els.inBaseBurn.value||"15",10), 0, 95);
-    const heatStep = clamp(parseInt(els.inHeatStep.value||"10",10), 0, 95);
-
-    CFG = {
-      startChips,
-      ante,
-      freeSpins,
-      baseBurn,
-      heatStep,
-    };
-
-    SESSION.chips = startChips;
-    SESSION.heat = 0;
-
-    resetToReady("Settings applied. Ready.");
-    showPlay();
   }
 
-  els.btnApply.addEventListener("click", applyTune);
-  els.btnReset.addEventListener("click", ()=>{
-    SESSION.chips = CFG.startChips;
-    SESSION.heat = 0;
-    resetToReady("Run reset. Ready.");
-  });
+  els.btnEndGame.addEventListener("click", ()=> endGame("cashout"));
 
   // ---------------- Boot ----------------
   renderReels([false,false,false,false,false]);
