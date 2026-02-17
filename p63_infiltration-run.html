@@ -710,6 +710,34 @@
     return a;
   }
 
+  // ---------------- P63 Embed Bridge ----------------
+  const P63_EMBED = (window.parent && window.parent !== window);
+  const P63 = {
+    send(type, payload = {}) {
+      if (!P63_EMBED) return;
+      window.parent.postMessage({ __p63: 1, type, ...payload }, "*");
+    }
+  };
+
+  let rewardSetId = null;
+
+  function isRedSuit(sym){ return sym === '♥' || sym === '♦'; }
+
+  // Receive reward set from parent
+  window.addEventListener("message", (e) => {
+    const d = e.data;
+    if (!d || d.__p63 !== 1) return;
+
+    if (d.type === "P63_REWARD_SET" && d.kind === "INFILTRATION") {
+      rewardSetId = d.rewardSetId || null;
+      rewardChoices = Array.isArray(d.rewards) ? d.rewards : [];
+      renderRewardChoices(); // will render actual cards now
+    }
+  });
+
+  // Tell parent we're alive (optional but helpful)
+  P63.send("P63_MINIGAME_READY", { kind: "INFILTRATION" });
+
   // ================================================================
   //  DECK CONFIGS (mechanics unchanged; just reskinned terminology)
   // ================================================================
@@ -770,10 +798,8 @@
   let selectedRewardIdx = null;
 
   function buildPlaceholderRewards() {
-    // Placeholder pool. In the full game, these will map to real stamped/sleeved cards and modifiers.
-    const pool  = Array.from({ length: 24 }, (_, i) => i);
-    const picks = shuffle(pool).slice(0, 3);
-    return picks.map(id => ({ id }));
+    // Standalone fallback only: empty placeholders
+    return [{}, {}, {}];
   }
 
   function renderRewardChoices() {
@@ -783,17 +809,57 @@
 
     items.innerHTML = '';
     selectedRewardIdx = null;
+    actionBtn.disabled = true;
 
-    rewardChoices.forEach((r, idx) => {
+    const list = (rewardChoices && rewardChoices.length) ? rewardChoices : buildPlaceholderRewards();
+
+    list.forEach((r, idx) => {
       const d = document.createElement('div');
       d.className = 'reward-card';
-      d.title = 'Select reward';
-      d.onclick = () => selectReward(idx);
+      d.title = rewardChoices.length ? 'Select reward' : 'Loading reward…';
+
+      // Build a display from flexible fields:
+      // Expected from parent:
+      // { rank:'A', suit:'S', suitSym:'♠', stampShort:'+10', sleeveShort:'STEEL' } (fields can vary)
+      const suitSym = r.suitSym || r.suit || '♠';
+      const rank    = r.rank || r.value || '—';
+      const red     = isRedSuit(suitSym);
+
+      const stamp = r.stampShort || r.stampLabel || r.stampId || 'STAMP';
+      const sleeve = r.sleeveShort || r.sleeveLabel || r.sleeveId || 'SLEEVE';
+
+      d.innerHTML = `
+        <div style="position:absolute; inset:12px; display:flex; flex-direction:column; justify-content:space-between;">
+          <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-weight:800; font-size:14px; line-height:1; color:${red?'var(--card-red)':'#e8e8ea'};">
+            <div>${rank}${suitSym}</div>
+            <div style="transform:rotate(180deg)">${rank}${suitSym}</div>
+          </div>
+
+          <div style="text-align:center; font-family:var(--font-display); letter-spacing:2px; text-transform:uppercase; color:rgba(212,175,55,0.95); font-size:16px;">
+            ${rewardChoices.length ? 'REWARD' : 'LOADING'}
+          </div>
+
+          <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+            <span style="font-family:var(--font-mono); font-size:12px; padding:6px 8px; border-radius:999px; border:1px solid rgba(148,163,184,0.22); background:rgba(0,0,0,0.22); color:rgba(255,255,255,0.85);">
+              ${rewardChoices.length ? stamp : '…'}
+            </span>
+            <span style="font-family:var(--font-mono); font-size:12px; padding:6px 8px; border-radius:999px; border:1px solid rgba(148,163,184,0.22); background:rgba(0,0,0,0.22); color:rgba(255,255,255,0.85);">
+              ${rewardChoices.length ? sleeve : '…'}
+            </span>
+          </div>
+        </div>
+      `;
+
+      if (rewardChoices.length){
+        d.onclick = () => selectReward(idx);
+      } else {
+        d.style.cursor = "default";
+      }
+
       items.appendChild(d);
     });
 
     lootBox.classList.remove('hidden');
-    actionBtn.disabled = true;
   }
 
   function selectReward(idx) {
@@ -804,13 +870,28 @@
   }
 
   function endgameAction() {
-    if (endgameMode === 'win') {
-      if (selectedRewardIdx === null) return;
-      // Placeholder: in the full game, we'd add rewardChoices[selectedRewardIdx] to the run.
-      initGame();
-    } else {
-      initGame();
+    if (P63_EMBED){
+      if (endgameMode === 'win'){
+        if (selectedRewardIdx === null) return;
+        P63.send("P63_MINIGAME_END", {
+          kind: "INFILTRATION",
+          outcome: "win",
+          rewardSetId,
+          chosenIdx: selectedRewardIdx
+        });
+        return;
+      }
+
+      // dead
+      P63.send("P63_MINIGAME_END", {
+        kind: "INFILTRATION",
+        outcome: "dead"
+      });
+      return;
     }
+
+    // Standalone fallback
+    initGame();
   }
 
 
@@ -825,6 +906,13 @@
   }
 
   function initGame() {
+    if (P63_EMBED){
+      selectedLength = "medium"; // Standard only
+      const lb = document.querySelector(".length-bar");
+      if (lb) lb.style.display = "none";
+      setLength("medium");
+    }
+
     deck = shuffle(buildDeck(selectedLength));
     runner = { exposure: 0, maxExposure: 20 };
     tool = null;
@@ -1204,13 +1292,22 @@
       titleEl.textContent = 'SUCCESS';
       msgEl.innerHTML = 'Trace cleared.<br><strong>The Pit holds no record.</strong>';
 
-      rewardChoices = buildPlaceholderRewards();
       lootItems.innerHTML = '';
       lootBox.classList.remove('hidden');
-      renderRewardChoices();
 
-      actionBtn.textContent = 'Claim Reward';
+      actionBtn.textContent = 'CLAIM REWARD';
       actionBtn.disabled = true;
+
+      if (P63_EMBED){
+        // Show loading placeholders, then request real rewards from parent
+        rewardChoices = [];
+        rewardSetId = null;
+        renderRewardChoices();
+        P63.send("P63_REQUEST_REWARD_SET", { kind:"INFILTRATION" });
+      } else {
+        rewardChoices = buildPlaceholderRewards();
+        renderRewardChoices();
+      }
     } else {
       titleEl.textContent = 'TRACE BREACHED';
       msgEl.innerHTML =
@@ -1220,7 +1317,7 @@
       lootBox.classList.add('hidden');
       lootItems.innerHTML = '';
 
-      actionBtn.textContent = 'New Run';
+      actionBtn.textContent = P63_EMBED ? 'END GAME' : 'New Run';
       actionBtn.disabled = false;
     }
 
