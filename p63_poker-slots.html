@@ -533,6 +533,7 @@
         </div>
         <div class="tabs">
           <div class="tab active" id="tabPlay">Play</div>
+          <button class="btn btn-ghost" id="btnRules" type="button">Rules</button>
         </div>
       </div>
 
@@ -611,6 +612,26 @@
           </thead>
           <tbody id="paytableBody"></tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Rules modal -->
+  <div class="modalBack" id="rulesBack">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Rules">
+      <div class="modalHead">
+        <h2>Rules</h2>
+        <button class="btn btn-ghost" id="btnCloseRules">Close</button>
+      </div>
+      <div class="modalBody">
+        <ul style="margin:0; padding-left:18px; line-height:1.5; color:var(--text-secondary)">
+          <li>Start a hand by paying the ante.</li>
+          <li>Hold cards and use free spins to reroll unheld cards.</li>
+          <li>Bank at any time to collect the current payout.</li>
+          <li>When free spins are gone, you may overclock for one risky final reroll.</li>
+          <li>Burnout resets heat; if embedded, your run ends when chips hit 0.</li>
+        </ul>
       </div>
     </div>
   </div>
@@ -769,6 +790,7 @@
   const $ = (id)=>document.getElementById(id);
   const els = {
     tabPlay: $("tabPlay"),
+    btnRules: $("btnRules"),
     playTab: $("playTab"),
 
     credits: $("credits"),
@@ -796,6 +818,9 @@
     btnCloseModal: $("btnCloseModal"),
     paytableBody: $("paytableBody"),
 
+    rulesBack: $("rulesBack"),
+    btnCloseRules: $("btnCloseRules"),
+
   };
 
   // ---------------- State ----------------
@@ -808,9 +833,7 @@
     spinsLeft: 0,
     deck: [],
     eval: null,
-    lastWinnings: 0,   // winnings from THIS hand only (used for double)
-    doubleAvailable: false,
-    doubleUsed: false,
+    lastWinnings: 0,   // winnings from THIS hand only
   };
 
   function burnChance(){
@@ -881,6 +904,7 @@
     // Disable global buttons during spin
     const disabledGlobal = (HAND.phase === "SPINNING");
     els.btnPaytable.disabled = disabledGlobal;
+    els.btnRules.disabled = disabledGlobal;
     els.btnEndGame.disabled = disabledGlobal;
 
     if (HAND.eval){
@@ -946,9 +970,6 @@
 
     if (HAND.phase === "RESOLVED"){
       els.leftButtons.appendChild(mk(`Next Hand (\u2212${CFG.ante})`, "btn-primary", startHand, SESSION.chips < CFG.ante));
-      if (HAND.doubleAvailable && !HAND.doubleUsed){
-        els.leftButtons.appendChild(mk("Double or Nothing", "btn-warn", doubleOrNothing));
-      }
       return;
     }
 
@@ -977,8 +998,6 @@
     HAND.deck = [];
     HAND.eval = null;
     HAND.lastWinnings = 0;
-    HAND.doubleAvailable = false;
-    HAND.doubleUsed = false;
 
     renderReels([false,false,false,false,false]);
     setStateText(msg);
@@ -1052,8 +1071,6 @@
     HAND.held = [false,false,false,false,false];
     HAND.spinsLeft = CFG.freeSpins;
     HAND.lastWinnings = 0;
-    HAND.doubleAvailable = false;
-    HAND.doubleUsed = false;
 
     for (let i=0;i<5;i++) HAND.cards[i] = dealFromDeck();
 
@@ -1095,8 +1112,6 @@
 
     SESSION.chips += pay;
     HAND.lastWinnings = pay;
-    HAND.doubleAvailable = pay > 0;
-    HAND.doubleUsed = false;
 
     HAND.phase = "RESOLVED";
     HAND.held = [false,false,false,false,false];
@@ -1122,16 +1137,12 @@
 
       if (shownPay > 0){
         HAND.lastWinnings = 0;
-        HAND.doubleAvailable = false;
-        HAND.doubleUsed = true;
         HAND.phase = "BURNED";
         HAND.held = [false,false,false,false,false];
         setStateText("Burnout. Payout wiped. Heat reset.");
       } else {
         SESSION.chips = Math.max(0, SESSION.chips - penalty);
         HAND.lastWinnings = 0;
-        HAND.doubleAvailable = false;
-        HAND.doubleUsed = true;
         HAND.phase = "BURNED";
         HAND.held = [false,false,false,false,false];
         setStateText(`Burnout. Lost ${penalty} chips. Heat reset.`);
@@ -1158,8 +1169,6 @@
       SESSION.chips += pay;
 
       HAND.lastWinnings = pay;
-      HAND.doubleAvailable = pay > 0;
-      HAND.doubleUsed = false;
 
       HAND.phase = "RESOLVED";
       HAND.held = [false,false,false,false,false];
@@ -1167,30 +1176,6 @@
       setStateText(pay > 0 ? `Overclock banked +${pay}. Heat rose.` : "Overclock banked 0. Heat rose.");
       updateHUD();
     });
-  }
-
-  function doubleOrNothing(){
-    if (HAND.phase !== "RESOLVED") return;
-    if (!HAND.doubleAvailable || HAND.doubleUsed) return;
-
-    const stake = HAND.lastWinnings;
-    if (stake <= 0) return;
-
-    HAND.doubleUsed = true;
-
-    const win = rng() >= 0.5;
-    if (win){
-      SESSION.chips += stake;
-      HAND.lastWinnings = stake * 2;
-      setStateText(`Double win. +${HAND.lastWinnings}.`);
-    } else {
-      // only pulls back THIS hand\u2019s winnings
-      SESSION.chips = Math.max(0, SESSION.chips - stake);
-      HAND.lastWinnings = 0;
-      HAND.doubleAvailable = false;
-      setStateText("Double loss. Winnings erased.");
-    }
-    updateHUD();
   }
 
   // ---------------- Tabs ----------------
@@ -1204,11 +1189,22 @@
   // ---------------- Modal ----------------
   function openPaytable(){ els.modalBack.style.display = "flex"; renderPaytable(); }
   function closePaytable(){ els.modalBack.style.display = "none"; }
+  function openRules(){ els.rulesBack.style.display = "flex"; }
+  function closeRules(){ els.rulesBack.style.display = "none"; }
 
   els.btnPaytable.addEventListener("click", openPaytable);
   els.btnCloseModal.addEventListener("click", closePaytable);
   els.modalBack.addEventListener("click", (e)=>{ if (e.target === els.modalBack) closePaytable(); });
-  document.addEventListener("keydown", (e)=>{ if (e.key==="Escape") closePaytable(); });
+
+  els.btnRules.addEventListener("click", openRules);
+  els.btnCloseRules.addEventListener("click", closeRules);
+  els.rulesBack.addEventListener("click", (e)=>{ if (e.target === els.rulesBack) closeRules(); });
+
+  document.addEventListener("keydown", (e)=>{
+    if (e.key!=="Escape") return;
+    closePaytable();
+    closeRules();
+  });
 
   // ---------------- End Game ----------------
   function endGame(reason){
