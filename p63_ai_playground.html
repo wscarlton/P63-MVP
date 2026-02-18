@@ -1661,50 +1661,25 @@
   background: rgba(18,26,42,0.55);
 }
 
+
+#pgShell{display:grid;grid-template-columns:320px minmax(640px,1fr) 360px;gap:12px;min-height:100vh;padding:12px;background:var(--bg-primary);}
+.pg-column{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:12px;overflow:auto;}
+#pgCenter{display:flex;flex-direction:column;}
+.pg-center-header{font-size:12px;letter-spacing:0.08em;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;}
+#blackjackView{display:block !important;}
+@media (max-width: 1400px){#pgShell{grid-template-columns:280px minmax(540px,1fr) 320px;}}
+@media (max-width: 1100px){#pgShell{grid-template-columns:1fr;}#pgLeft,#pgRight{order:2;}#pgCenter{order:1;}}
 </style>
 </head>
 
 <body>
-  <div id="startScreen" class="start-screen">
-    <canvas id="startPlasma" class="start-plasma" aria-hidden="true"></canvas>
-
-    <div class="start-shell">
-      <div class="start-title">
-        <div class="start-h1">Project 63</div>
-        <div class="start-h2">The Tower</div>
-        <div class="start-lore">A casino with no address. An indecipherable ledger. Will you test fate?</div>
-      </div>
-
-      <div class="start-card" id="startRunCard">
-        <div class="start-card-top">Run</div>
-        <div class="start-card-row" id="startRunSummary"></div>
-
-        <div class="start-actions">
-          <button class="hud-btn primary" id="btnContinue">Continue</button>
-          <button class="hud-btn" id="btnNewRun">New Run</button>
-        </div>
-      </div>
-
-      <div class="start-grid">
-        <button class="hud-btn" id="btnRules">Rules</button>
-        <button class="hud-btn" id="btnStats">Run Stats</button>
-        <button class="hud-btn" id="btnSettings">Settings</button>
-        <button class="hud-btn" id="btnFeedback">Feedback</button>
-      </div>
-    </div>
-  </div>
-
-  <header id="hud"></header>
-
-  <!-- AI Playground controls (dev tool) -->
-  <div id="pgBar" class="pg-bar hidden"></div>
-  <div id="pgPanel" class="pg-panel hidden"></div>
-
-
-  <main id="app">
-    <section id="boardView"></section>
-    <section id="blackjackView" class="hidden"></section>
-    <section id="endScreen" class="hidden"></section>
+  <main id="pgShell">
+    <aside id="pgLeft" class="pg-column"></aside>
+    <section id="pgCenter" class="pg-column">
+      <div class="pg-center-header">AI Playground</div>
+      <section id="blackjackView"></section>
+    </section>
+    <aside id="pgRight" class="pg-column"></aside>
   </main>
 
   <div id="modalOverlay" class="hidden">
@@ -1715,10 +1690,15 @@
   <div id="cardTooltip" class="card-tooltip hidden"></div>
   <div id="actionTooltip" class="card-tooltip hidden"></div>
 
-  <!-- Log Panel -->
-  <aside id="logPanel" aria-label="Run Log"></aside>
+  <!-- legacy mount points retained for engine compatibility -->
+  <header id="hud" class="hidden"></header>
+  <section id="boardView" class="hidden"></section>
+  <section id="endScreen" class="hidden"></section>
+  <aside id="logPanel" class="hidden" aria-label="Run Log"></aside>
 
   <script>
+    window.P63_AI_PLAYGROUND = true;
+
     // =============================================
     // CONSTANTS
     // =============================================
@@ -3243,15 +3223,19 @@ const CALLING_RANK_THRESHOLDS = [
     // =============================================
     let __modalButtons = [];
     let __modalTitle = '';
+    let __modalLocked = false;
+    let __modalOnClose = null;
     window.__modalAction = function(i) {
       const b = __modalButtons[i];
       if (!b || b.disabled) return;
       if (typeof b.action === 'function') b.action();
     };
 
-    function showModal(title, bodyHtml, buttons = []) {
+    function showModal(title, bodyHtml, buttons = [], opts = {}) {
       __modalButtons = buttons.map(b => ({ ...b }));
       __modalTitle = title || '';
+      __modalLocked = !!opts.lock;
+      __modalOnClose = typeof opts.onClose === 'function' ? opts.onClose : null;
       const overlay = document.getElementById('modalOverlay');
       const modal = document.getElementById('modal');
       const footer = buttons.length ? `
@@ -3276,15 +3260,20 @@ const CALLING_RANK_THRESHOLDS = [
       overlay.classList.remove('hidden');
     }
 
-    function closeModal() {
+    function closeModal(force = false) {
+      if (__modalLocked && !force) return;
       if (__modalTitle === 'Merchant' && run && run.floor === 2 && run.secret && run.secret.keys && run.secret.keys.merchant) {
         const mk = run.secret.keys.merchant;
         if (mk.state === 'offered') mk.state = 'missed';
       }
+      const onClose = __modalOnClose;
       __modalTitle = '';
+      __modalLocked = false;
+      __modalOnClose = null;
       document.getElementById('modalOverlay').classList.add('hidden');
       document.getElementById('modal').innerHTML = '';
       __modalButtons = [];
+      if (onClose) onClose();
     }
 
     let toastTimer = null;
@@ -3329,6 +3318,7 @@ const CALLING_RANK_THRESHOLDS = [
     // ESC closes modal or log panel
     window.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
+      if (__modalLocked) return;
       const overlay = document.getElementById('modalOverlay');
       if (overlay && !overlay.classList.contains('hidden')) closeModal();
       else if (logPanelOpen) closeLogPanel();
@@ -5363,9 +5353,12 @@ body += `
         // Action tokens + action usage
         tokensTotal,
         tokensSpent: 0,
+        dealerTokensSpent: 0,
         usedActions: {},
         actionUsedThisTurn: false,
         actionSelectionInProgress: false,
+        inputLocked: false,
+        inputLockReason: null,
 
         // Action effects state
         spyReveals: new Set(),
@@ -6178,6 +6171,7 @@ body += `
 
     window.applyBenchTo = function(side, posIdx) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (isMatchInputLocked()) return;
       if (blackjackMatch.turn !== 'player') return;
       if (blackjackMatch.drawnCard) return;
       if (blackjackMatch.actionUsedThisTurn) return;
@@ -6294,26 +6288,33 @@ body += `
             <button class="modal-btn" onclick="applyCallingClubs(${laneIdx}, 1)">+1</button>
             <button class="modal-btn danger" onclick="applyCallingClubs(${laneIdx}, -1)">-1</button>
           </div>
-        `, []);
+        `, [], { lock: true });
 
+        blackjackMatch.inputLocked = true;
+        blackjackMatch.inputLockReason = 'CALLING_CLUBS';
         window.applyCallingClubs = function(targetIdx, delta) {
-          const target = blackjackMatch.dealerPositions[targetIdx];
-          if (target && target.isOpen && !target.isComplete) {
-            target.mods = target.mods || [];
-            for (let i = 0; i < procMult; i++) target.mods.push(delta);
-            logEvent('CALLING_PROC_CLUBS', {
-              laneIdx: targetIdx + 1,
-              delta,
-              callingCard: run.callingCard,
-              playedCard: placedCard,
-              multiplier: procMult
-            });
-            showToast(`Power: Dealer lane #${targetIdx + 1} ${delta > 0 ? '+1' : '-1'}`);
+          try {
+            const target = blackjackMatch.dealerPositions[targetIdx];
+            if (target && target.isOpen && !target.isComplete) {
+              target.mods = target.mods || [];
+              for (let i = 0; i < procMult; i++) target.mods.push(delta);
+              logEvent('CALLING_PROC_CLUBS', {
+                laneIdx: targetIdx + 1,
+                delta,
+                callingCard: run.callingCard,
+                playedCard: placedCard,
+                multiplier: procMult
+              });
+              showToast(`Power: Dealer lane #${targetIdx + 1} ${delta > 0 ? '+1' : '-1'}`);
+            }
+            blackjackMatch.inputLocked = false;
+            blackjackMatch.inputLockReason = null;
+            closeModal(true);
+            delete window.applyCallingClubs;
+            onComplete();
+          } finally {
+            renderAll();
           }
-          closeModal();
-          delete window.applyCallingClubs;
-          renderAll();
-          onComplete();
         };
         return true;
       }
@@ -6323,6 +6324,7 @@ body += `
 
     window.playerPlaceBenchCard = function(posIdx) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (isMatchInputLocked()) return;
       if (blackjackMatch.turn !== 'player') return;
       if (blackjackMatch.drawnCard) return;
       if (blackjackMatch.actionUsedThisTurn) return;
@@ -6362,6 +6364,7 @@ body += `
     // =============================================
     window.playerDrawCard = function() {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (isMatchInputLocked()) return;
       if (blackjackMatch.drawnCard || blackjackMatch.turn !== 'player') return;
       if (countOpenPositions(blackjackMatch.playerPositions) === 0) return;
 
@@ -6400,6 +6403,7 @@ body += `
 
     window.playerPlaceCard = function(posIdx) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (isMatchInputLocked()) return;
       if (!blackjackMatch.drawnCard || blackjackMatch.turn !== 'player') return;
 
       const pos = blackjackMatch.playerPositions[posIdx];
@@ -6431,6 +6435,7 @@ body += `
 
     window.playerStand = function(posIdx) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (isMatchInputLocked()) return;
       if (blackjackMatch.drawnCard || blackjackMatch.turn !== 'player') return;
 
       const pos = blackjackMatch.playerPositions[posIdx];
@@ -6483,6 +6488,10 @@ body += `
       endPlayerTurn();
     };
 
+    function shouldUseInstantDealerTurn() {
+      return !!(window.P63_AITUNING && window.P63_AITUNING.instantDealer);
+    }
+
     function endPlayerTurn() {
       blackjackMatch.metrics.turns += 1;
 
@@ -6530,7 +6539,8 @@ body += `
       renderBlackjack();
 
       clearDealerTimers();
-      dealerTimerA = setTimeout(dealerTurn, 800);
+      if (shouldUseInstantDealerTurn()) dealerTurn();
+      else dealerTimerA = setTimeout(dealerTurn, 800);
     }
 
     // =============================================
@@ -6909,7 +6919,8 @@ function dealerStandPhase(diff, maxPasses = 6) {
         blackjackMatch.turn = 'dealer';
         renderBlackjack();
         clearDealerTimers();
-        dealerTimerA = setTimeout(dealerTurn, 800);
+        if (shouldUseInstantDealerTurn()) dealerTurn();
+        else dealerTimerA = setTimeout(dealerTurn, 800);
         return true;
       }
 
@@ -7471,6 +7482,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       return Math.max(0, (blackjackMatch.tokensTotal || 0) - (blackjackMatch.tokensSpent || 0));
     }
 
+    function isMatchInputLocked() {
+      return !!(blackjackMatch && blackjackMatch.inputLocked);
+    }
+
     function canClickToken() {
       if (!blackjackMatch) return false;
       if (!isPlayerActionContextOK(blackjackMatch)) return false;
@@ -7479,6 +7494,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       if (tokensRemaining() <= 0) return false;
       if (!run.ownedActions || run.ownedActions.length === 0) return false;
       if (blackjackMatch.drawnCard) return false;
+      if (isMatchInputLocked()) return false;
       return true;
     }
 
@@ -7497,6 +7513,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
     window.useActionFromBar = function(actionId) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
+      if (isMatchInputLocked()) return;
       if (blackjackMatch.turn !== 'player') return;
       if (!run.ownedActions || !run.ownedActions.includes(actionId)) return;
 
@@ -7573,6 +7590,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
     window.attemptUseAction = function(actionId) {
       if (!blackjackMatch || blackjackMatch.phase !== 'playing' || blackjackMatch.turn !== 'player') return;
+      if (isMatchInputLocked()) return;
       const def = ACTIONS[actionId];
       if (!def) return;
 
@@ -8022,10 +8040,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     });
 
     function renderAll() {
-      renderHUD();
-      renderBoard();
+      if (typeof window.renderPlaygroundLeft === 'function') window.renderPlaygroundLeft();
       renderBlackjack();
-      renderEndScreen();
+      if (typeof window.renderPlaygroundRight === 'function') window.renderPlaygroundRight();
     }
 
     function renderHUD() {
@@ -8864,7 +8881,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
               ${drawnHtml}
 
               <div class="bj-action-btns">
-                <button class="bj-btn" onclick="playerDrawCard()" ${(!isPlayerTurn || !!drawn || countOpenPositions(blackjackMatch.playerPositions) === 0) ? 'disabled' : ''}>Draw</button>
+                <button class="bj-btn" onclick="playerDrawCard()" ${(!isPlayerTurn || !!drawn || isMatchInputLocked() || countOpenPositions(blackjackMatch.playerPositions) === 0) ? 'disabled' : ''}>Draw</button>
                 <button class="bj-btn" onclick="playerEndTurn()" ${(!isPlayerTurn || !!drawn) ? 'disabled' : ''}>Close & End</button>
               </div>
 
@@ -9074,7 +9091,6 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     // BOOT
     // =============================================
     (function boot() {
-      // Try to keep last log available after refresh (doesn't overwrite current run)
       try {
         const saved = localStorage.getItem(LOG_STORAGE_KEY);
         if (saved) {
@@ -9083,18 +9099,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         }
       } catch (e) {}
 
+      if (window.P63_AI_PLAYGROUND) return;
       setupCardTooltip();
       setupActionTooltip();
-      initStartPlasma();
       initRun();
-      const c=document.getElementById('btnContinue'); if (c) c.onclick = () => { hideStartScreen(); renderAll(); };
-      const n=document.getElementById('btnNewRun'); if (n) n.onclick = () => { initRun(); hideStartScreen(); };
-      const r=document.getElementById('btnRules'); if (r) r.onclick = () => openRulesPanel();
-      const st=document.getElementById('btnStats'); if (st) st.onclick = () => openLogPanel('stats');
-      const se=document.getElementById('btnSettings'); if (se) se.onclick = () => openSettingsPanel();
-      const fb=document.getElementById('btnFeedback'); if (fb) fb.onclick = () => openFeedbackModal();
-      updateStartRunCard();
-      showStartScreen();
       renderAll();
     })();
   
@@ -9224,17 +9232,13 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
   }
 
   function pgSetPanelVisible(on){
-    const panel = document.getElementById('pgPanel');
-    if (!panel) return;
-    panel.classList.toggle('hidden', !on);
-    aiTuning.showPanelOnLoad = on;
+    aiTuning.showPanelOnLoad = !!on;
     saveJSON(TUNING_KEY, aiTuning);
+    renderAll();
   }
 
   function pgTogglePanel(){
-    const panel = document.getElementById('pgPanel');
-    if (!panel) return;
-    pgSetPanelVisible(panel.classList.contains('hidden'));
+    pgSetPanelVisible(!aiTuning.showPanelOnLoad);
   }
 
   // ---------- Deck persistence ----------
@@ -9396,6 +9400,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       if (blackjackMatch && blackjackMatch.phase === 'betting') {
         finishTransferBetting?.();
       }
+    }
+
+    if (blackjackMatch) {
+      blackjackMatch.dealerTokensSpent = 0;
     }
 
     // Trace buffer per match
@@ -9652,120 +9660,70 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
   // ---------- Playground UI ----------
   function pgRenderBar(){
-    const bar = document.getElementById('pgBar');
-    if (!bar) return;
-
+    const left = document.getElementById('pgLeft');
+    if (!left) return;
     const agg = pgComputeAgg();
     const diff = (typeof uiSettings !== 'undefined' && uiSettings.opponentDifficulty) ? uiSettings.opponentDifficulty : 'medium';
-
-    bar.innerHTML = `
-      <div class="pg-left">
-        <span class="pg-chip"><b>AI Playground</b></span>
-        <button class="pg-btn primary" onclick="P63_PG_newMatch()">New Match</button>
-        <button class="pg-btn" onclick="P63_PG_openDeck()">Deck & Tools</button>
-        <button class="pg-btn" onclick="P63_PG_togglePanel()">Tuning</button>
-        <button class="pg-btn" onclick="P63_PG_export()">Export JSON</button>
-        <button class="pg-btn danger" onclick="P63_PG_resetSession()">Reset Session</button>
-      </div>
-      <div class="pg-right">
-        <span class="pg-chip">Matches: <b>${agg.n}</b></span>
-        <span class="pg-chip">P(win): <b>${(agg.winRate*100).toFixed(1)}%</b></span>
-        <span class="pg-chip">Avg turns: <b>${agg.avgTurns.toFixed(2)}</b></span>
-
-        <label class="pg-chip">Opp AI:
+    const playing = !!(blackjackMatch && blackjackMatch.phase === 'playing');
+    left.innerHTML = `
+      <h3 style="margin:0 0 8px 0;">Setup & Deck</h3>
+      <div class="pg-grid">
+        <div class="pg-kv"><label>Difficulty</label>
           <select class="pg-select" onchange="P63_PG_setDiff(this.value)">
-            <option value="easy" ${diff==='easy'?'selected':''}>easy</option>
-            <option value="medium" ${diff==='medium'?'selected':''}>medium</option>
-            <option value="hard" ${diff==='hard'?'selected':''}>hard</option>
+            <option value="easy" ${diff==='easy'?'selected':''}>Easy</option>
+            <option value="medium" ${diff==='medium'?'selected':''}>Medium</option>
+            <option value="hard" ${diff==='hard'?'selected':''}>Hard</option>
           </select>
-        </label>
+        </div>
+        <div class="pg-kv"><label>Dealer Deck</label><div class="pg-small">Standard (52)</div></div>
       </div>
+      <div class="pg-row" style="margin-top:8px;">
+        <button class="pg-btn primary" onclick="P63_PG_newMatch()">${blackjackMatch ? 'Start Next Match':'Start Match'}</button>
+        <button class="pg-btn" onclick="P63_PG_openDeck()" ${playing?'disabled':''}>Deck Editor</button>
+      </div>
+      <div class="pg-sep"></div>
+      <div class="pg-small">Matches: <b>${agg.n}</b> · P wins: <b>${agg.pw}</b> · D wins: <b>${agg.dw}</b> · Ties: <b>${agg.ties}</b></div>
+      <div class="pg-small" style="margin-top:6px;">Avg turns: <b>${agg.avgTurns.toFixed(2)}</b></div>
     `;
-
-    bar.classList.remove('hidden');
   }
 
   function pgRenderPanel(){
-    const panel = document.getElementById('pgPanel');
-    if (!panel) return;
-
+    const right = document.getElementById('pgRight');
+    if (!right) return;
     const agg = pgComputeAgg();
-
-    panel.innerHTML = `
-      <div class="pg-row">
-        <h3 style="margin:0;">AI Tuning</h3>
-        <button class="pg-btn" onclick="P63_PG_togglePanel()">Close</button>
-      </div>
-
-      <div class="pg-sep"></div>
-
+    const latest = pgSession.matches.length ? pgSession.matches[pgSession.matches.length-1] : null;
+    right.innerHTML = `
+      <h3 style="margin:0 0 8px 0;">AI Tuning & Trace</h3>
       <div class="pg-grid">
-        <div class="pg-kv"><label>Parity Mode</label>
+        <div class="pg-kv"><label>Parity mode</label>
           <select class="pg-select" onchange="P63_PG_setTuning('parityMode', this.value==='true')">
-            <option value="true" ${aiTuning.parityMode?'selected':''}>on</option>
-            <option value="false" ${!aiTuning.parityMode?'selected':''}>off</option>
+            <option value="true" ${aiTuning.parityMode?'selected':''}>On</option>
+            <option value="false" ${!aiTuning.parityMode?'selected':''}>Off</option>
           </select>
         </div>
-
-        <div class="pg-kv"><label>Instant Dealer</label>
-          <select class="pg-select" onchange="P63_PG_setTuning('instantDealer', this.value==='true')">
-            <option value="true" ${aiTuning.instantDealer?'selected':''}>on</option>
-            <option value="false" ${!aiTuning.instantDealer?'selected':''}>off</option>
-          </select>
-        </div>
-
-        <div class="pg-kv"><label>Auto Bet</label>
-          <select class="pg-select" onchange="P63_PG_setTuning('autoBet', this.value==='true')">
-            <option value="true" ${aiTuning.autoBet?'selected':''}>on</option>
-            <option value="false" ${!aiTuning.autoBet?'selected':''}>off</option>
-          </select>
-        </div>
-
-        <div class="pg-kv"><label>Bet Mult</label>
-          <select class="pg-select" onchange="P63_PG_setTuning('autoBetMultiplier', this.value)">
-            <option value="min" ${aiTuning.autoBetMultiplier==='min'?'selected':''}>min</option>
-            <option value="max" ${aiTuning.autoBetMultiplier==='max'?'selected':''}>max</option>
-            <option value="2" ${aiTuning.autoBetMultiplier==='2'?'selected':''}>2</option>
-            <option value="3" ${aiTuning.autoBetMultiplier==='3'?'selected':''}>3</option>
-            <option value="4" ${aiTuning.autoBetMultiplier==='4'?'selected':''}>4</option>
-            <option value="5" ${aiTuning.autoBetMultiplier==='5'?'selected':''}>5</option>
-          </select>
-        </div>
-
-        <div class="pg-kv"><label>Trace AI</label>
+        <div class="pg-kv"><label>Trace</label>
           <select class="pg-select" onchange="P63_PG_setTuning('traceAI', this.value==='true')">
-            <option value="true" ${aiTuning.traceAI?'selected':''}>on</option>
-            <option value="false" ${!aiTuning.traceAI?'selected':''}>off</option>
+            <option value="true" ${aiTuning.traceAI?'selected':''}>On</option>
+            <option value="false" ${!aiTuning.traceAI?'selected':''}>Off</option>
           </select>
-        </div>
-
-        <div class="pg-kv"><label>Miscalc Rate (hard)</label>
-          <input class="pg-input" type="number" min="0" max="1" step="0.01" value="${aiTuning.miscalcRate.hard}" onchange="P63_PG_setMiscalcHard(this.value)"/>
         </div>
       </div>
-
+      <div class="pg-row" style="margin-top:8px;">
+        <button class="pg-btn" onclick="P63_PG_export()">Export Session JSON</button>
+        <button class="pg-btn danger" onclick="P63_PG_resetSession()">Clear Session</button>
+      </div>
       <div class="pg-sep"></div>
-
-      <h3>Session Summary</h3>
       <table class="pg-table">
         <tr><th>Matches</th><td>${agg.n}</td></tr>
-        <tr><th>Player wins</th><td>${agg.pw}</td></tr>
-        <tr><th>Dealer wins</th><td>${agg.dw}</td></tr>
-        <tr><th>Ties</th><td>${agg.ties}</td></tr>
-        <tr><th>Avg turns</th><td>${agg.avgTurns.toFixed(2)}</td></tr>
+        <tr><th>P win rate</th><td>${(agg.winRate*100).toFixed(1)}%</td></tr>
         <tr><th>Avg P draws</th><td>${agg.avgPlayerDraws.toFixed(2)}</td></tr>
         <tr><th>Avg D draws</th><td>${agg.avgDealerDraws.toFixed(2)}</td></tr>
-        <tr><th>Avg P stands</th><td>${agg.avgPlayerStands.toFixed(2)}</td></tr>
-        <tr><th>Avg D stands</th><td>${agg.avgDealerStands.toFixed(2)}</td></tr>
       </table>
-
       <div class="pg-sep"></div>
-
-      <h3>Latest Match</h3>
-      <div class="pg-small">${(pgSession.matches.length ? pgDescribeMatch(pgSession.matches[pgSession.matches.length-1]) : 'No matches yet.')}</div>
+      <div class="pg-small"><b>Latest:</b> ${latest ? pgDescribeMatch(latest) : 'No matches yet.'}</div>
+      <div class="pg-sep"></div>
+      <div class="pg-small" style="max-height:220px; overflow:auto;">${(pgActiveMatchTrace||[]).slice(-8).map(t=>`<div class='pg-mono'>${escapeHtml(JSON.stringify(t))}</div>`).join('') || 'Trace is empty.'}</div>
     `;
-
-    panel.classList.toggle('hidden', !aiTuning.showPanelOnLoad);
   }
 
   function pgDescribeMatch(m){
@@ -9798,6 +9756,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     pgRenderPanel();
     showToast('Tuning updated.');
   };
+  window.renderPlaygroundLeft = pgRenderBar;
+  window.renderPlaygroundRight = pgRenderPanel;
+
   window.P63_PG_setMiscalcHard = function(val){
     const n = Math.max(0, Math.min(1, Number(val)));
     aiTuning.miscalcRate.hard = n;
@@ -9965,19 +9926,22 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       const diff = getOpponentDifficulty();
       const parity = !!aiTuning.parityMode;
+      const dealerFallbackDeck = blackjackMatch.dealerBaseDeck || makeStandardDeck52();
+      maintainOpenPositions(blackjackMatch.dealerPositions, blackjackMatch.dealerDrawPile, dealerFallbackDeck, 'dealer');
+      if (checkMatchEnd()) return;
 
       // Pre-draw: apply strategic bench mods (same as player: before draw)
       const bench = blackjackMatch.dealerBench || [];
-      let benchBudget = aiTuning.benchBudget?.[diff] ?? ((diff==='hard')?2:1);
       const aggro = aiTuning.benchAggression?.[diff] ?? 0.8;
 
       let usedBench = 0;
-      if (benchBudget > 0 && bench.length && Math.random() < aggro) {
-        for (let k = 0; k < benchBudget; k++) {
-          const move = dealerFindBestBenchMove(diff, 'strategic');
-          if (!move) break;
+      const dealerTokensRemaining = Math.max(0, safeNumber(blackjackMatch.tokensTotal, 0) - safeNumber(blackjackMatch.dealerTokensSpent || 0, 0));
+      if (dealerTokensRemaining > 0 && bench.length && Math.random() < aggro) {
+        const move = dealerFindBestBenchMove(diff, 'strategic');
+        if (move) {
           dealerApplyBenchMod(move);
-          usedBench += 1;
+          blackjackMatch.dealerTokensSpent = safeNumber(blackjackMatch.dealerTokensSpent, 0) + 1;
+          usedBench = 1;
         }
       }
 
@@ -9998,14 +9962,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       // End dealer turn immediately in parity mode (no post-draw salvage).
       if (parity) {
-        // finalize busts at end of dealer turn (mirrors player finalize at end turn)
-        finalizeBusts?.(blackjackMatch.dealerPositions, 'dealer');
-        if (checkMatchEnd()) return;
-
-        blackjackMatch.turn = 'player';
-        blackjackMatch.actionUsedThisTurn = false;
-        renderBlackjack();
         pgMaybeTrace({ type:'turn_end', who:'dealer', diff, usedBench });
+        endDealerTurn();
         return;
       }
 
@@ -10026,8 +9984,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
   // ---------- Match hooks ----------
   const _origResolveMatch = (typeof resolveMatch === 'function') ? resolveMatch : null;
   if (_origResolveMatch) {
-    resolveMatch = function(){
-      _origResolveMatch();
+    resolveMatch = function(options){
+      _origResolveMatch(options);
 
       // Capture summary for session
       try {
