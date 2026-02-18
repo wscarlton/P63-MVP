@@ -581,6 +581,55 @@
     .modal-btn.danger:hover:not(:disabled) { background: var(--wash-red); }
 
 
+    .help-block{
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--bg-secondary);
+    }
+    .help-block summary{
+      cursor: pointer;
+      font-weight: 800;
+      color: var(--text-primary);
+      user-select: none;
+    }
+    .help-block ul{
+      margin: 8px 0 0 18px;
+      padding: 0;
+    }
+    .help-block li{
+      margin: 4px 0;
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .settings-section{
+      padding: 10px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      margin: 10px 0;
+    }
+    .settings-section summary{
+      cursor:pointer;
+      font-weight: 900;
+      color: var(--text-primary);
+      user-select:none;
+      margin-bottom: 8px;
+    }
+
+    .reduce-motion *,
+    .reduce-motion *::before,
+    .reduce-motion *::after{
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+
+
     /* Unified button surface */
     .hud-btn, .modal-btn, .bj-btn, .log-mini-btn, .hud-icon-btn, .action-chip, .token-icon{
       background:
@@ -4695,6 +4744,47 @@ const CALLING_RANK_THRESHOLDS = [
     };
 
 
+    const HELP_TILES = {
+      STANDARD: { title: 'Standard Table', lines: [`Buy-in: ${BUYIN_STANDARD} chips`, 'Play a normal 5-lane match.', 'Win the match for a deck reward.'] },
+      HIGH_STAKES: { title: 'High Stakes Table', lines: [`Buy-in: ${BUYIN_HIGH} chips`, 'Harder tables, bigger swings.', 'Win the match for a deck reward.'] },
+      BOSS: { title: 'Boss Table', lines: [`Buy-in: ${BUYIN_BOSS} chips`, 'Multi-round boss match.', 'Clear it to advance floors.'] },
+      MERCHANT: { title: 'Merchant', lines: ['Buy cards and modifiers.', 'Reroll inventory for a fee.', 'Optional paid card removal.'] },
+      MODIFY: { title: 'Modify', lines: ['Pay to re-suit / re-rank cards.', 'Premium presses can affect sets.', 'Rerolls cost chips.'] },
+      COLLECTOR: { title: 'Collector', lines: ['Buy stamps & sleeves.', 'Apply to eligible base cards.', 'Slots refresh after purchase.'] },
+      LOAN_SHARK: { title: 'Loan Shark', lines: [`Borrow ${LOAN_AMOUNT} chips now`, `Repay ${LOAN_REPAY} before Floor 3 boss`, 'Can block boss entry if unpaid.'] },
+      REST_STOP: { title: 'Rest Stop', lines: ['Choose 1 benefit (free).', 'Also gain +1 banked Action Token.', 'Good for stabilizing runs.'] },
+      BARTENDER: { title: 'Bartender', lines: [`Take +${BARTENDER_REWARD} chips`, `Or buy a Cocktail for ${COCKTAIL_COST}`, 'Cocktails unlock Actions.'] },
+      MINIGAME: { title: 'Minigame', lines: [`Poker Slots: entry ${MINIGAME_POKER_ENTRY_COST}`, 'Infiltration Run: play for cards.', 'Does not advance the floor.'] }
+    };
+
+    const HELP_MODALS = {
+      'Settings': { lines: ['These settings persist on this device/browser.', 'Help toggles control tips + tooltips.', 'Advanced/Testing is optional and usually unnecessary for normal play.'] },
+      'Rules': { lines: ['Goal: beat the Dealer by winning lanes with totals ≤ 21.', 'Close a lane to lock it (you can’t add more cards).', 'On touch devices: long-press cards/tiles to see tooltips.'] },
+      'Deck Viewer': { lines: ['Shows your current deck contents (including badges).', 'Use this to understand how stamps/sleeves are shaping your run.', 'Deck changes happen through rewards + shops.'] },
+      'Feedback': { lines: ['Notes saved here attach to the current run.', 'Use “Bugs” for reproducible issues; “Comments” for balance/UX notes.', 'This is designed to export cleanly in the analyzer.'] },
+      'Rest Stop': { lines: ['Choose ONE: Free Removal or Chips.', 'You ALSO gain +1 banked Action Token no matter what you choose.', 'Free Removal will offer a small set of cards to delete.'] },
+      'Bartender': { lines: ['You can always take the free chips.', 'Cocktail unlocks 1 random Action (until you own them all).', 'Actions are spent during matches using Action Tokens.'] },
+      'Minigame': { lines: [`Poker Slots costs ${MINIGAME_POKER_ENTRY_COST} to enter.`, 'Poker Slots: you can cash out anytime; the run ends if you hit 0.', 'Infiltration Run: win to choose a card reward.'] },
+      'Loan Shark': { lines: [`Take ${LOAN_AMOUNT} now, but you must repay ${LOAN_REPAY}.`, 'If unpaid at the Floor 3 boss gate, you may be blocked from entering.', 'Repaying clears the loan immediately.'] },
+      'Merchant': { lines: ['Buy cards/modifiers to strengthen your deck.', 'Removal mode lets you pay to delete a card (when offered).', 'Rerolls refresh inventory at a cost.'] },
+      'Modify': { lines: ['Each purchase consumes chips immediately and counts toward the shop cap.', 'Core services affect single cards (re-suit / rank shift).', 'Premium services can affect sets (shown in the UI).'] },
+      'Collector': { lines: ['Buy a Stamp or Sleeve, then apply it to an eligible base card.', 'Cards that already have a stamp/sleeve may be ineligible.', 'After applying, the purchased slot refreshes.'] },
+      'Debt Due': { lines: ['You must repay your loan to proceed into the final boss.', 'If you can’t repay, you’ll be turned away.', 'Borrowing is powerful but can become a hard gate.'] },
+      'Boss Cleared': { lines: ['Clearing a boss advances the run to the next floor.', 'You gain tokens (floor base) and your bench capacity may change.', 'Continue to generate the next board.'] },
+      'A New Opponent': { lines: ['This is a special encounter with unique behavior.', 'Your current Calling Card influences some interactions.', 'Prepare for higher pressure and different timing.'] },
+      'Winner Reward': { lines: ['You won the match — choose a deck reward.', 'Remove: delete a card from offered options.', 'Duplicate: add a copy of a chosen offered card.'] },
+      'Fuse Cards': { lines: ['Select exactly 2 eligible cards to fuse into 1.', 'A fused card counts as a single card for effect scanning.', 'Fusion is permanent for the run.'] },
+      'Actions': { lines: ['Choose an action to perform during the match.', 'Opening this list consumes the token even if you cancel (per current rules).', 'Some actions prompt follow-up choices (lane/card).'] },
+      'Split Decision': { lines: ['Choose 1 card to play now.', 'The other card will be played by the Dealer immediately after.', 'Use this to force timing and lane pressure.'] },
+      'Second Opinion': { lines: ['Choose 1 card to play now.', 'The other card is discarded.', 'Use this to filter bad draws into acceptable plays.'] },
+      'Power Proc': { lines: ['A triggered power is asking for your choice.', 'Your selection applies immediately to the specified lane.', 'Use this to push totals across/away from 21 thresholds.'] },
+      'Test Games': { lines: ['Sandbox mode: runs minigames in a loop.', 'No progression or rewards carry into normal runs.', 'Use “END TEST” to return.'] },
+      'Collector - Apply': { lines: ['Pick a card from the offered sample.', 'Only eligible cards are shown.', 'After selecting, you return to the Collector main view.'] },
+      'Modify - Service': { lines: ['Pick a target card from the shown candidates.', 'Reroll refreshes candidates at a cost.', 'Confirming applies immediately and updates your deck.'] },
+      'Quick Start': { lines: ['You win lanes by beating the Dealer total without busting.', 'Close lanes to lock totals; you can’t add more cards.', 'Use Action Tokens to access powerful tactical plays.'] }
+    };
+
+
     // =============================================
     // COCKTAIL ACTION REGISTRY
     // =============================================
@@ -4879,6 +4969,12 @@ const CALLING_RANK_THRESHOLDS = [
     const PLAYER_NAME_KEY = 'p63_player_name';
     const SFX_ENABLED_KEY = 'p63_sfx_enabled';
     const SFX_VOLUME_KEY = 'p63_sfx_volume';
+    const HELP_ENABLED_KEY = 'p63_help_enabled';
+    const HELP_DEFAULT_OPEN_KEY = 'p63_help_default_open';
+    const TOOLTIPS_ENABLED_KEY = 'p63_tooltips_enabled';
+    const TUTORIALS_ENABLED_KEY = 'p63_tutorials_enabled';
+    const REDUCE_MOTION_KEY = 'p63_reduce_motion';
+    const TUTORIAL_SEEN_KEY = 'p63_tutorial_seen_table';
     let uiSettings = {
       autoOpenLogOnEnd: true,
 
@@ -4896,7 +4992,14 @@ const CALLING_RANK_THRESHOLDS = [
 
       // SFX (NEW)
       sfxEnabled: true,
-      sfxVolume: 0.70
+      sfxVolume: 0.70,
+
+      // NEW — player help
+      helpEnabled: true,
+      helpDefaultOpen: true,
+      tooltipsEnabled: true,
+      tutorialsEnabled: true,
+      reduceMotion: false
     };
 
     // Back-compat: if you had older saves/edits that set uiSettings.difficulty
@@ -4936,6 +5039,47 @@ const CALLING_RANK_THRESHOLDS = [
         localStorage.setItem(SFX_ENABLED_KEY, (uiSettings.sfxEnabled !== false) ? '1' : '0');
         localStorage.setItem(SFX_VOLUME_KEY, String(Math.max(0, Math.min(1, parseFloat(uiSettings.sfxVolume)))));
       } catch (err) {}
+    }
+
+    function loadHelpPrefs() {
+      try {
+        const vHelp = localStorage.getItem(HELP_ENABLED_KEY);
+        if (vHelp !== null) uiSettings.helpEnabled = (vHelp === '1');
+
+        const vOpen = localStorage.getItem(HELP_DEFAULT_OPEN_KEY);
+        if (vOpen !== null) uiSettings.helpDefaultOpen = (vOpen === '1');
+
+        const vTips = localStorage.getItem(TOOLTIPS_ENABLED_KEY);
+        if (vTips !== null) uiSettings.tooltipsEnabled = (vTips === '1');
+
+        const vTut = localStorage.getItem(TUTORIALS_ENABLED_KEY);
+        if (vTut !== null) uiSettings.tutorialsEnabled = (vTut === '1');
+
+        const vRM = localStorage.getItem(REDUCE_MOTION_KEY);
+        if (vRM !== null) uiSettings.reduceMotion = (vRM === '1');
+      } catch (e) {}
+    }
+
+    function saveHelpPrefs() {
+      try {
+        localStorage.setItem(HELP_ENABLED_KEY, uiSettings.helpEnabled ? '1' : '0');
+        localStorage.setItem(HELP_DEFAULT_OPEN_KEY, uiSettings.helpDefaultOpen ? '1' : '0');
+        localStorage.setItem(TOOLTIPS_ENABLED_KEY, uiSettings.tooltipsEnabled ? '1' : '0');
+        localStorage.setItem(TUTORIALS_ENABLED_KEY, uiSettings.tutorialsEnabled ? '1' : '0');
+        localStorage.setItem(REDUCE_MOTION_KEY, uiSettings.reduceMotion ? '1' : '0');
+      } catch (e) {}
+    }
+
+    function applyReduceMotion() {
+      document.body.classList.toggle('reduce-motion', !!uiSettings.reduceMotion);
+    }
+
+    function hasSeenTableTutorial() {
+      try { return localStorage.getItem(TUTORIAL_SEEN_KEY) === '1'; } catch (e) { return false; }
+    }
+
+    function markSeenTableTutorial() {
+      try { localStorage.setItem(TUTORIAL_SEEN_KEY, '1'); } catch (e) {}
     }
 
 
@@ -5995,95 +6139,92 @@ const CALLING_RANK_THRESHOLDS = [
     function openSettingsPanel() {
       const checked = !!uiSettings.autoOpenLogOnEnd;
       const revealOnClose = (uiSettings.revealTotalsOnClose !== false);
-
       const oppDiff = getOpponentDifficulty();
       const rakeMode = (uiSettings.rakeMode || 'hard');
-
       const benchCap = String(safeNumber(uiSettings.benchHardCap, 3));
       const sfxEnabled = (uiSettings.sfxEnabled !== false);
       const sfxPct = Math.round(safeNumber(uiSettings.sfxVolume, 0.70) * 100);
+      const helpEnabled = (uiSettings.helpEnabled !== false);
+      const helpDefaultOpen = (uiSettings.helpDefaultOpen !== false);
+      const tooltipsEnabled = (uiSettings.tooltipsEnabled !== false);
+      const tutorialsEnabled = (uiSettings.tutorialsEnabled !== false);
+      const reduceMotion = !!uiSettings.reduceMotion;
 
       const body = `
-        <p class="modal-text">Lightweight runtime options for testing.</p>
+        <p class="modal-text">Player settings + optional testing tools.</p>
 
-        <div style="display:flex; flex-direction:column; gap:12px;">
+        <details open class="settings-section">
+          <summary>Gameplay</summary>
+          <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">Opponent Difficulty</div>
+          <select id="setting_opponentDifficulty" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
+            <option value="easy" ${oppDiff === 'easy' ? 'selected' : ''}>Easy — safer play, rarely uses bench mods</option>
+            <option value="medium" ${oppDiff === 'medium' ? 'selected' : ''}>Medium — situational bench use, normal standing</option>
+            <option value="hard" ${oppDiff === 'hard' ? 'selected' : ''}>Hard — counterplay-focused, proactive bench use</option>
+          </select>
+        </details>
 
-          <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
-            <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer;">
-              <input id="setting_autoOpenLog" type="checkbox" ${checked ? 'checked' : ''} style="margin-top:3px;"/>
-              <div>
-                <div style="font-weight:800; color:var(--text-primary);">Auto-open Run Log on Game Over / Victory</div>
-                <div style="color:var(--text-secondary); font-size:12px; line-height:1.4; margin-top:4px;">
-                  Helpful for rapid playtesting and immediate review.
-                </div>
-              </div>
-            </label>
-          </div>
+        <details open class="settings-section">
+          <summary>Help</summary>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:8px;">
+            <input id="setting_helpEnabled" type="checkbox" ${helpEnabled ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Enable tips in modals</div></div>
+          </label>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:8px;">
+            <input id="setting_helpDefaultOpen" type="checkbox" ${helpDefaultOpen ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Tips expanded by default</div></div>
+          </label>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:8px;">
+            <input id="setting_tooltipsEnabled" type="checkbox" ${tooltipsEnabled ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Enable tooltips</div></div>
+          </label>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:8px;">
+            <input id="setting_tutorialsEnabled" type="checkbox" ${tutorialsEnabled ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Enable first-time tutorials</div></div>
+          </label>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer;">
+            <input id="setting_reduceMotion" type="checkbox" ${reduceMotion ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Reduce motion</div></div>
+          </label>
+        </details>
 
-          <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
-            <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer;">
-              <input id="setting_revealTotalsOnClose" type="checkbox" ${revealOnClose ? 'checked' : ''} style="margin-top:3px;"/>
-              <div>
-                <div style="font-weight:800; color:var(--text-primary);">Reveal Dealer totals + hole card when a lane closes</div>
-                <div style="color:var(--text-secondary); font-size:12px; line-height:1.4; margin-top:4px;">
-                  If off, Dealer totals + hole card reveal only at match resolution (Spy Network still works).
-                </div>
-              </div>
-            </label>
-          </div>
-
-          <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
-            <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">Opponent Difficulty</div>
-            <select id="setting_opponentDifficulty" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
-              <option value="easy" ${oppDiff === 'easy' ? 'selected' : ''}>Easy — safer play, rarely uses bench mods</option>
-              <option value="medium" ${oppDiff === 'medium' ? 'selected' : ''}>Medium — situational bench use, normal standing</option>
-              <option value="hard" ${oppDiff === 'hard' ? 'selected' : ''}>Hard — counterplay-focused, proactive bench use</option>
-            </select>
-          </div>
-
-          <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
-            <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">House Rake</div>
-            <select id="setting_rakeMode" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
-              <option value="easy" ${rakeMode === 'easy' ? 'selected' : ''}>Off — 0%</option>
-              <option value="medium" ${rakeMode === 'medium' ? 'selected' : ''}>Flat — 10% all floors</option>
-              <option value="hard" ${rakeMode === 'hard' ? 'selected' : ''}>Scaled — 10% / 20% / 30%</option>
-            </select>
-          </div>
-
-          <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
-            <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">Bench hard cap</div>
-            <select id="setting_benchHardCap" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
-              <option value="2" ${benchCap === '2' ? 'selected' : ''}>2 slots</option>
-              <option value="3" ${benchCap === '3' ? 'selected' : ''}>3 slots</option>
-              <option value="0" ${benchCap === '0' ? 'selected' : ''}>No cap (dev)</option>
-            </select>
-            <div style="color:var(--text-secondary); font-size:12px; line-height:1.4; margin-top:8px;">
-              Capacity still starts at ${BENCH_BASE_CAPACITY} and grows by boss wins, but won’t exceed the cap.
+        <details open class="settings-section">
+          <summary>Audio</summary>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:10px;">
+            <input id="setting_sfxEnabled" type="checkbox" ${sfxEnabled ? 'checked' : ''} style="margin-top:3px;"/>
+            <div>
+              <div style="font-weight:800; color:var(--text-primary);">Enable SFX</div>
+              <div style="color:var(--text-secondary); font-size:12px; line-height:1.4; margin-top:4px;">Warm UI + gameplay sounds (no music in MVP).</div>
             </div>
+          </label>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input id="setting_sfxVolume" type="range" min="0" max="100" value="${sfxPct}" ${sfxEnabled ? '' : 'disabled'} style="width:100%;" />
+            <div id="setting_sfxVolumeReadout" style="min-width:52px; text-align:right; font-weight:800; color:var(--text-primary);">${sfxPct}%</div>
           </div>
+        </details>
 
-          <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
-            <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">Sound Effects</div>
-
-            <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:10px;">
-              <input id="setting_sfxEnabled" type="checkbox" ${sfxEnabled ? 'checked' : ''} style="margin-top:3px;"/>
-              <div>
-                <div style="font-weight:800; color:var(--text-primary);">Enable SFX</div>
-                <div style="color:var(--text-secondary); font-size:12px; line-height:1.4; margin-top:4px;">
-                  Warm UI + gameplay sounds (no music in MVP).
-                </div>
-              </div>
-            </label>
-
-            <div style="display:flex; align-items:center; gap:10px;">
-              <input id="setting_sfxVolume" type="range" min="0" max="100" value="${sfxPct}" ${sfxEnabled ? '' : 'disabled'} style="width:100%;" />
-              <div id="setting_sfxVolumeReadout" style="min-width:52px; text-align:right; font-weight:800; color:var(--text-primary);">
-                ${sfxPct}%
-              </div>
-            </div>
-          </div>
-
-        </div>
+        <details class="settings-section">
+          <summary>Advanced / Testing</summary>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:10px;">
+            <input id="setting_autoOpenLog" type="checkbox" ${checked ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Auto-open Run Log on Game Over / Victory</div></div>
+          </label>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:10px;">
+            <input id="setting_revealTotalsOnClose" type="checkbox" ${revealOnClose ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Reveal Dealer totals + hole card when a lane closes</div></div>
+          </label>
+          <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">House Rake</div>
+          <select id="setting_rakeMode" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); margin-bottom:10px;">
+            <option value="easy" ${rakeMode === 'easy' ? 'selected' : ''}>Off — 0%</option>
+            <option value="medium" ${rakeMode === 'medium' ? 'selected' : ''}>Flat — 10% all floors</option>
+            <option value="hard" ${rakeMode === 'hard' ? 'selected' : ''}>Scaled — 10% / 20% / 30%</option>
+          </select>
+          <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">Bench hard cap</div>
+          <select id="setting_benchHardCap" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
+            <option value="2" ${benchCap === '2' ? 'selected' : ''}>2 slots</option>
+            <option value="3" ${benchCap === '3' ? 'selected' : ''}>3 slots</option>
+            <option value="0" ${benchCap === '0' ? 'selected' : ''}>No cap (dev)</option>
+          </select>
+        </details>
       `;
 
       showModal('Settings', body, [
@@ -6099,14 +6240,18 @@ const CALLING_RANK_THRESHOLDS = [
             const selCap = document.getElementById('setting_benchHardCap');
             const cbSfx = document.getElementById('setting_sfxEnabled');
             const volSfx = document.getElementById('setting_sfxVolume');
+            const cbHelp = document.getElementById('setting_helpEnabled');
+            const cbHelpOpen = document.getElementById('setting_helpDefaultOpen');
+            const cbTips = document.getElementById('setting_tooltipsEnabled');
+            const cbTut = document.getElementById('setting_tutorialsEnabled');
+            const cbReduce = document.getElementById('setting_reduceMotion');
 
             uiSettings.autoOpenLogOnEnd = !!(cbLog && cbLog.checked);
             uiSettings.revealTotalsOnClose = !!(cbReveal && cbReveal.checked);
-
             uiSettings.opponentDifficulty = (selOpp && selOpp.value) ? selOpp.value : 'hard';
             uiSettings.rakeMode = (selRake && selRake.value) ? selRake.value : 'hard';
-
             uiSettings.benchHardCap = safeNumber(selCap && selCap.value, 3);
+
             uiSettings.sfxEnabled = !!(cbSfx && cbSfx.checked);
             uiSettings.sfxVolume = Math.max(0, Math.min(1, safeNumber(volSfx && volSfx.value, 70) / 100));
             saveSfxPrefs();
@@ -6114,6 +6259,14 @@ const CALLING_RANK_THRESHOLDS = [
               SFX.setEnabled(uiSettings.sfxEnabled !== false);
               SFX.setVolume(uiSettings.sfxVolume);
             }
+
+            uiSettings.helpEnabled = !!(cbHelp && cbHelp.checked);
+            uiSettings.helpDefaultOpen = !!(cbHelpOpen && cbHelpOpen.checked);
+            uiSettings.tooltipsEnabled = !!(cbTips && cbTips.checked);
+            uiSettings.tutorialsEnabled = !!(cbTut && cbTut.checked);
+            uiSettings.reduceMotion = !!(cbReduce && cbReduce.checked);
+            saveHelpPrefs();
+            applyReduceMotion();
 
             const nextSettings = getSettingsSnapshot();
             logEvent('SETTINGS_CHANGED', { prev: prevSettings, next: nextSettings });
@@ -6156,8 +6309,6 @@ const CALLING_RANK_THRESHOLDS = [
         applyEnabledUI();
       }, 0);
     }
-
-
 
     function openRulesPanel() {
       const html = `
@@ -6332,13 +6483,32 @@ const CALLING_RANK_THRESHOLDS = [
       });
     })();
 
+    function renderHelpBlock(helpKey) {
+      if (uiSettings.helpEnabled === false) return '';
+      const h = HELP_MODALS[helpKey];
+      if (!h || !h.lines || !h.lines.length) return '';
+
+      const openAttr = (uiSettings.helpDefaultOpen !== false) ? 'open' : '';
+      const items = h.lines.map(line => `<li>${line}</li>`).join('');
+
+      return `
+        <details class="help-block" ${openAttr}>
+          <summary>How this works</summary>
+          <ul>${items}</ul>
+        </details>
+      `;
+    }
+
     function showModal(title, bodyHtml, buttons = [], opts = {}) {
+
       __modalButtons = buttons.map(b => ({ ...b }));
       __modalTitle = title || '';
       __modalOnClose = (opts && typeof opts.onClose === 'function') ? opts.onClose : null;
 
       const overlay = document.getElementById('modalOverlay');
       const modal = document.getElementById('modal');
+      const helpKey = opts.helpKey || title;
+      const helpHtml = renderHelpBlock(helpKey);
 
       const footer = buttons.length ? `
         <div class="modal-footer">
@@ -6356,7 +6526,7 @@ const CALLING_RANK_THRESHOLDS = [
 
       modal.innerHTML = `
         <div class="modal-header">${title}</div>
-        <div class="modal-body">${bodyHtml}</div>
+        <div class="modal-body">${helpHtml + bodyHtml}</div>
         ${footer}
       `;
       overlay.classList.remove('hidden');
@@ -7330,6 +7500,25 @@ function benchPush(card, source = '') {
     // =============================================
     // ENCOUNTERS
     // =============================================
+    function maybeShowTableTutorial(continueFn) {
+      if (uiSettings.tutorialsEnabled === false) return continueFn();
+      if (hasSeenTableTutorial()) return continueFn();
+
+      showModal('Quick Start', `
+        <p class="modal-text">A fast primer before your first table.</p>
+      `, [
+        {
+          text: 'Continue',
+          primary: true,
+          action: () => { markSeenTableTutorial(); closeModal(); continueFn(); }
+        },
+        {
+          text: "Don't show again",
+          action: () => { uiSettings.tutorialsEnabled = false; saveHelpPrefs(); markSeenTableTutorial(); closeModal(); continueFn(); }
+        }
+      ], { helpKey: 'Quick Start' });
+    }
+
     function resolveTileEncounter(tileType) {
       switch (tileType) {
         case 'REST_STOP': encounterRest(); break;
@@ -7339,9 +7528,9 @@ function benchPush(card, source = '') {
         case 'MERCHANT': encounterMerchant(); break;
         case 'MODIFY': encounterModify(); break;
         case 'COLLECTOR': encounterCollector(); break;
-        case 'STANDARD': encounterBlackjackStandard(); break;
-        case 'HIGH_STAKES': encounterBlackjackHigh(); break;
-        case 'BOSS': encounterBoss(); break;
+        case 'STANDARD': maybeShowTableTutorial(() => encounterBlackjackStandard()); break;
+        case 'HIGH_STAKES': maybeShowTableTutorial(() => encounterBlackjackHigh()); break;
+        case 'BOSS': maybeShowTableTutorial(() => encounterBoss()); break;
       }
     }
 
@@ -8154,7 +8343,7 @@ function benchPush(card, source = '') {
         </div>
       `, [
         { text: 'Back', action: () => renderModifyMenu() }
-      ]);
+      ], { helpKey: 'Modify - Service' });
 
 
       window.selectModifyCoreCard = function(deckIdx) {
@@ -8207,7 +8396,7 @@ function benchPush(card, source = '') {
         </div>
       `, [
         { text: 'Back', action: () => renderModifyMenu() }
-      ]);
+      ], { helpKey: 'Modify - Service' });
 
 
       window.selectModifyRankShiftCard = function(deckIdx) {
@@ -8257,7 +8446,7 @@ function benchPush(card, source = '') {
           disabled: delta === 0 || !shiftedRank || !canAfford,
           action: () => confirmModifyRankShift()
         }
-      ]);
+      ], { helpKey: 'Modify - Service' });
 
       window.adjustRankShiftDelta = function(step) {
         const state = run.ui.modifyContext && run.ui.modifyContext.rankShift;
@@ -8307,7 +8496,7 @@ function benchPush(card, source = '') {
         </div>
       `, [
         { text: 'Back', action: () => openModifyCorePicker('Re-Suit', MODIFY_SERVICES.RESUIT.id) }
-      ]);
+      ], { helpKey: 'Modify - Service' });
     }
 
     window.applyModifyResuit = function(deckIdx, suit) {
@@ -8353,7 +8542,7 @@ function benchPush(card, source = '') {
           }
         },
         { text: 'Back', action: () => renderModifyMenu() }
-      ]);
+      ], { helpKey: 'Modify - Service' });
 
     }
 
@@ -8398,7 +8587,7 @@ function benchPush(card, source = '') {
           }
         })),
         { text: 'Back', action: () => renderModifyMenu() }
-      ]);
+      ], { helpKey: 'Modify - Service' });
 
     }
 
@@ -8644,7 +8833,7 @@ function benchPush(card, source = '') {
         <div class="merchant-cards">${cardsHtml}</div>
       `, [
         { text: 'Back', action: () => renderCollector() }
-      ]);
+      ], { helpKey: 'Collector - Apply' });
     }
 
     window.applyStampToCard = function(stampId, deckIdx) {
@@ -8683,7 +8872,7 @@ function benchPush(card, source = '') {
         <div class="merchant-cards">${cardsHtml}</div>
       `, [
         { text: 'Back', action: () => renderCollector() }
-      ]);
+      ], { helpKey: 'Collector - Apply' });
     }
 
     window.applySleeveToCard = function(sleeveId, deckIdx) {
@@ -12526,9 +12715,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
         // Tooltip lines
         const meta = TILE_META[tile.type] || { name: tile.label, desc: '' };
-        const ttTitle = `${meta.name} · ${tile.label}`;
-        const ttLines = [];
-        if (meta.desc) ttLines.push(meta.desc);
+        const tip = HELP_TILES[tile.type];
+        const ttTitle = tip?.title || (meta.name || tile.type);
+        const ttLines = tip && Array.isArray(tip.lines) ? [...tip.lines] : (meta.desc ? [meta.desc] : []);
 
         let subLabel = '';
         if (tile.npc && tile.npc.callingCard) {
@@ -13031,12 +13220,14 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       });
 
       document.addEventListener('mouseout', (e) => {
+        if (!tooltipsOn()) return;
         if (activeCard && !e.relatedTarget?.closest('.playing-card')) {
           hideTooltip();
         }
       });
 
       document.addEventListener('mousemove', (e) => {
+        if (!tooltipsOn()) return;
         if (!activeCard) return;
         tooltip.style.left = `${e.clientX + 12}px`;
         tooltip.style.top = `${e.clientY + 12}px`;
@@ -13102,12 +13293,14 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       });
 
       document.addEventListener('mouseout', (e) => {
+        if (!tooltipsOn()) return;
         if (activeChip && !e.relatedTarget?.closest('.action-chip')) {
           hideTooltip();
         }
       });
 
       document.addEventListener('mousemove', (e) => {
+        if (!tooltipsOn()) return;
         if (!activeChip) return;
         tooltip.style.left = `${e.clientX + 12}px`;
         tooltip.style.top = `${e.clientY + 12}px`;
@@ -13141,6 +13334,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       let activeTile = null;
       let longPressTimer = null;
 
+      const tooltipsOn = () => (uiSettings.tooltipsEnabled !== false);
+
       const buildTooltipHtml = (tileEl) => {
         const ds = tileEl.dataset || {};
         const title = ds.ttTitle || 'Tile';
@@ -13153,7 +13348,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       };
 
       const showTooltip = (tileEl, x, y) => {
-        if (!tileEl) return;
+        if (!tileEl || !tooltipsOn()) return;
         // Only show when board view is visible
         const boardView = document.getElementById('boardView');
         if (boardView && boardView.classList.contains('hidden')) return;
@@ -13170,37 +13365,40 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       };
 
       document.addEventListener('mouseover', (e) => {
+        if (!tooltipsOn()) return;
         const tileEl = e.target.closest && e.target.closest('.hex-tile');
         if (!tileEl) return;
         showTooltip(tileEl, e.clientX, e.clientY);
       });
 
       document.addEventListener('mouseout', (e) => {
+        if (!tooltipsOn()) return;
         if (activeTile && !e.relatedTarget?.closest?.('.hex-tile')) {
           hideTooltip();
         }
       });
 
       document.addEventListener('mousemove', (e) => {
+        if (!tooltipsOn()) return;
         if (!activeTile) return;
         tooltip.style.left = `${e.clientX + 12}px`;
         tooltip.style.top = `${e.clientY + 12}px`;
       });
 
       document.addEventListener('pointerdown', (e) => {
+        if (!tooltipsOn()) return;
         const tileEl = e.target.closest && e.target.closest('.hex-tile');
         if (!tileEl) return;
+        if (longPressTimer) clearTimeout(longPressTimer);
         longPressTimer = setTimeout(() => showTooltip(tileEl, e.clientX, e.clientY), 450);
       });
 
-      document.addEventListener('pointerup', () => {
-        if (longPressTimer) clearTimeout(longPressTimer);
-        longPressTimer = null;
-      });
-
-      document.addEventListener('pointercancel', () => {
-        if (longPressTimer) clearTimeout(longPressTimer);
-        longPressTimer = null;
+      ['pointerup','pointercancel','pointerleave'].forEach((evt) => {
+        document.addEventListener(evt, () => {
+          if (longPressTimer) clearTimeout(longPressTimer);
+          longPressTimer = null;
+          hideTooltip();
+        });
       });
 
       document.addEventListener('click', (e) => {
@@ -14090,6 +14288,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       } catch (e) {}
 
       loadSfxPrefs();
+      loadHelpPrefs();
+      applyReduceMotion();
       installGlobalClickSfx();
       setupCardTooltip();
       setupActionTooltip();
