@@ -4877,6 +4877,8 @@ const CALLING_RANK_THRESHOLDS = [
 
     const LOG_STORAGE_KEY = 'p63_runlog_latest';
     const PLAYER_NAME_KEY = 'p63_player_name';
+    const SFX_ENABLED_KEY = 'p63_sfx_enabled';
+    const SFX_VOLUME_KEY = 'p63_sfx_volume';
     let uiSettings = {
       autoOpenLogOnEnd: true,
 
@@ -4890,7 +4892,11 @@ const CALLING_RANK_THRESHOLDS = [
       rakeMode: 'hard', // 'easy' (none) | 'medium' (10% flat) | 'hard' (10/20/30)
 
       // hard cap for bench capacity (0 = no cap)
-      benchHardCap: 3 // 2 or 3 (or 0 for “no cap”)
+      benchHardCap: 3, // 2 or 3 (or 0 for “no cap”)
+
+      // SFX (NEW)
+      sfxEnabled: true,
+      sfxVolume: 0.70
     };
 
     // Back-compat: if you had older saves/edits that set uiSettings.difficulty
@@ -4907,6 +4913,29 @@ const CALLING_RANK_THRESHOLDS = [
 
     function clearPlayerName() {
       try { localStorage.removeItem(PLAYER_NAME_KEY); } catch (e) {}
+    }
+
+    function loadSfxPrefs() {
+      try {
+        const e = localStorage.getItem(SFX_ENABLED_KEY);
+        const v = localStorage.getItem(SFX_VOLUME_KEY);
+        if (e !== null) uiSettings.sfxEnabled = (e === '1');
+        if (v !== null) uiSettings.sfxVolume = Math.max(0, Math.min(1, parseFloat(v)));
+      } catch (err) {}
+
+      try {
+        if (window.SFX) {
+          SFX.setEnabled(uiSettings.sfxEnabled !== false);
+          SFX.setVolume(uiSettings.sfxVolume);
+        }
+      } catch (err) {}
+    }
+
+    function saveSfxPrefs() {
+      try {
+        localStorage.setItem(SFX_ENABLED_KEY, (uiSettings.sfxEnabled !== false) ? '1' : '0');
+        localStorage.setItem(SFX_VOLUME_KEY, String(Math.max(0, Math.min(1, parseFloat(uiSettings.sfxVolume)))));
+      } catch (err) {}
     }
 
 
@@ -5960,6 +5989,7 @@ const CALLING_RANK_THRESHOLDS = [
         },
         { text: 'Close', action: () => closeModal() }
       ]);
+
     }
 
     function openSettingsPanel() {
@@ -5970,6 +6000,8 @@ const CALLING_RANK_THRESHOLDS = [
       const rakeMode = (uiSettings.rakeMode || 'hard');
 
       const benchCap = String(safeNumber(uiSettings.benchHardCap, 3));
+      const sfxEnabled = (uiSettings.sfxEnabled !== false);
+      const sfxPct = Math.round(safeNumber(uiSettings.sfxVolume, 0.70) * 100);
 
       const body = `
         <p class="modal-text">Lightweight runtime options for testing.</p>
@@ -6030,6 +6062,27 @@ const CALLING_RANK_THRESHOLDS = [
             </div>
           </div>
 
+          <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
+            <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">Sound Effects</div>
+
+            <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:10px;">
+              <input id="setting_sfxEnabled" type="checkbox" ${sfxEnabled ? 'checked' : ''} style="margin-top:3px;"/>
+              <div>
+                <div style="font-weight:800; color:var(--text-primary);">Enable SFX</div>
+                <div style="color:var(--text-secondary); font-size:12px; line-height:1.4; margin-top:4px;">
+                  Warm UI + gameplay sounds (no music in MVP).
+                </div>
+              </div>
+            </label>
+
+            <div style="display:flex; align-items:center; gap:10px;">
+              <input id="setting_sfxVolume" type="range" min="0" max="100" value="${sfxPct}" ${sfxEnabled ? '' : 'disabled'} style="width:100%;" />
+              <div id="setting_sfxVolumeReadout" style="min-width:52px; text-align:right; font-weight:800; color:var(--text-primary);">
+                ${sfxPct}%
+              </div>
+            </div>
+          </div>
+
         </div>
       `;
 
@@ -6044,6 +6097,8 @@ const CALLING_RANK_THRESHOLDS = [
             const selOpp = document.getElementById('setting_opponentDifficulty');
             const selRake = document.getElementById('setting_rakeMode');
             const selCap = document.getElementById('setting_benchHardCap');
+            const cbSfx = document.getElementById('setting_sfxEnabled');
+            const volSfx = document.getElementById('setting_sfxVolume');
 
             uiSettings.autoOpenLogOnEnd = !!(cbLog && cbLog.checked);
             uiSettings.revealTotalsOnClose = !!(cbReveal && cbReveal.checked);
@@ -6052,6 +6107,13 @@ const CALLING_RANK_THRESHOLDS = [
             uiSettings.rakeMode = (selRake && selRake.value) ? selRake.value : 'hard';
 
             uiSettings.benchHardCap = safeNumber(selCap && selCap.value, 3);
+            uiSettings.sfxEnabled = !!(cbSfx && cbSfx.checked);
+            uiSettings.sfxVolume = Math.max(0, Math.min(1, safeNumber(volSfx && volSfx.value, 70) / 100));
+            saveSfxPrefs();
+            if (window.SFX) {
+              SFX.setEnabled(uiSettings.sfxEnabled !== false);
+              SFX.setVolume(uiSettings.sfxVolume);
+            }
 
             const nextSettings = getSettingsSnapshot();
             logEvent('SETTINGS_CHANGED', { prev: prevSettings, next: nextSettings });
@@ -6064,6 +6126,35 @@ const CALLING_RANK_THRESHOLDS = [
         },
         { text: 'Close', action: () => closeModal() }
       ]);
+
+      setTimeout(() => {
+        const cb = document.getElementById('setting_sfxEnabled');
+        const vol = document.getElementById('setting_sfxVolume');
+        const ro = document.getElementById('setting_sfxVolumeReadout');
+        if (!cb || !vol) return;
+
+        const applyEnabledUI = () => {
+          vol.disabled = !cb.checked;
+          if (window.SFX) SFX.setEnabled(cb.checked);
+          uiSettings.sfxEnabled = cb.checked;
+          saveSfxPrefs();
+        };
+
+        cb.addEventListener('change', () => {
+          applyEnabledUI();
+          if (cb.checked && window.SFX) SFX.play('toast');
+        });
+
+        vol.addEventListener('input', () => {
+          const v = Math.max(0, Math.min(1, (parseInt(vol.value, 10) || 0) / 100));
+          uiSettings.sfxVolume = v;
+          if (ro) ro.textContent = `${Math.round(v * 100)}%`;
+          saveSfxPrefs();
+          if (window.SFX) SFX.setVolume(v);
+        });
+
+        applyEnabledUI();
+      }, 0);
     }
 
 
@@ -6167,6 +6258,7 @@ const CALLING_RANK_THRESHOLDS = [
         },
         { text: 'Close', action: () => closeModal() }
       ]);
+
     }
 
     function openDeckViewer() {
@@ -6268,6 +6360,7 @@ const CALLING_RANK_THRESHOLDS = [
         ${footer}
       `;
       overlay.classList.remove('hidden');
+      try { if (window.SFX) { SFX.unlock(); SFX.play('modal_open'); } } catch(e){}
     }
 
     function closeModal() {
@@ -6278,6 +6371,7 @@ const CALLING_RANK_THRESHOLDS = [
 
       __modalOnClose = null;
       __modalTitle = '';
+      try { if (window.SFX) SFX.play('modal_close'); } catch(e){}
       document.getElementById('modalOverlay').classList.add('hidden');
       document.getElementById('modal').innerHTML = '';
       __modalButtons = [];
@@ -6294,6 +6388,7 @@ const CALLING_RANK_THRESHOLDS = [
         title: data.title || 'Calling Proc',
         desc: data.desc || ''
       };
+      try { if (window.SFX) SFX.play('proc'); } catch(e){}
 
       renderBlackjack();
 
@@ -6306,6 +6401,7 @@ const CALLING_RANK_THRESHOLDS = [
     }
 
     function showToast(text, ms = 1600) {
+      try { if (window.SFX) SFX.play('toast'); } catch(e){}
       const el = document.getElementById('toast');
       el.textContent = text;
       el.classList.remove('hidden');
@@ -6710,6 +6806,88 @@ const CALLING_RANK_THRESHOLDS = [
       return Number.isFinite(n) ? n : fallback;
     }
 
+    function installGlobalClickSfx() {
+      document.addEventListener('pointerdown', (e) => {
+        try {
+          if (!window.SFX) return;
+          if ((uiSettings && uiSettings.sfxEnabled) === false) return;
+          if (typeof e.button === 'number' && e.button !== 0) return;
+          const t = e.target;
+          if (!t || !t.closest) return;
+          if (t.closest('input, textarea, select')) return;
+          const clickable = t.closest('button, [role="button"], a[href], [onclick], .bj-btn, .modal-btn');
+          if (!clickable || clickable.disabled) return;
+          if (clickable.getAttribute('data-sfx-skip') === '1') return;
+          const key = clickable.getAttribute('data-sfx');
+          SFX.unlock();
+          SFX.play(key || 'ui_click');
+        } catch (err) {}
+      }, true);
+    }
+
+    window.SFX = (function(){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return { unlock(){}, play(){}, setEnabled(){}, setVolume(){}, isUnlocked(){ return false; } };
+      let ctx = null;
+      let master = null;
+      let unlocked = false;
+      const lastAt = new Map();
+      const gate = (k, ms) => {
+        const now = performance.now();
+        const prev = lastAt.get(k) || 0;
+        if (now - prev < ms) return false;
+        lastAt.set(k, now);
+        return true;
+      };
+      const rnd = (a,b)=>a+Math.random()*(b-a);
+      const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+      function enabled(){ return (uiSettings && uiSettings.sfxEnabled) !== false; }
+      function volume(){ const v=(uiSettings ? safeNumber(uiSettings.sfxVolume, 0.70) : 0.70); return clamp(v,0,1); }
+      function ensure(){ if (ctx) return; ctx = new AC({ latencyHint:'interactive' }); master = ctx.createGain(); master.gain.value = volume() * 2.0; master.connect(ctx.destination); }
+      async function unlock(){ if (unlocked) return; ensure(); try { await ctx.resume(); const o=ctx.createOscillator(); const g=ctx.createGain(); g.gain.value=0.00001; o.frequency.value=220; o.connect(g); g.connect(master); o.start(); o.stop(ctx.currentTime+0.01); unlocked=true; } catch(e){} }
+      function setEnabled(v){ if (uiSettings) uiSettings.sfxEnabled = !!v; }
+      function setVolume(v){ if (uiSettings) uiSettings.sfxVolume = clamp(parseFloat(v)||0, 0, 1); ensure(); master.gain.value = volume() * 2.0; }
+      function envGain(t0, a, d, s, r){ const g=ctx.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(a, t0 + 0.001); g.gain.exponentialRampToValueAtTime(Math.max(0.0001, s), t0 + d); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + r); return g; }
+      function hp(node, f){ const bi=ctx.createBiquadFilter(); bi.type='highpass'; bi.frequency.value=f; node.connect(bi); return bi; }
+      function lp(node, f){ const bi=ctx.createBiquadFilter(); bi.type='lowpass'; bi.frequency.value=f; node.connect(bi); return bi; }
+      function noiseBuf(){ const len=Math.floor(ctx.sampleRate*0.25); const b=ctx.createBuffer(1,len,ctx.sampleRate); const d=b.getChannelData(0); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len); return b; }
+      const _noise = { buf: null };
+      function noise(){ if (!_noise.buf) _noise.buf = noiseBuf(); const s=ctx.createBufferSource(); s.buffer=_noise.buf; return s; }
+      function s_click(vol=1){ if(!gate('ui_click',40)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nG=envGain(t,0.28*vol,0.018,0.0004,0.03); const nHP=hp(n,650); const nLP=lp(nHP,5200); nLP.connect(nG); nG.connect(master); const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(340,t); o.frequency.exponentialRampToValueAtTime(180,t+0.03); const oG=envGain(t,0.10*vol,0.015,0.0005,0.04); o.connect(oG); oG.connect(master); n.start(t); n.stop(t+0.08); o.start(t); o.stop(t+0.08); }
+      function s_toast(vol=1){ if(!gate('toast',80)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(1040,t); o.frequency.exponentialRampToValueAtTime(1320,t+0.08); const g=envGain(t,0.10*vol,0.05,0.0005,0.07); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.14); }
+      function s_modalOpen(vol=1){ if(!gate('modal_open',80)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,180); const nLP=lp(nHP,1800); const g=envGain(t,0.18*vol,0.05,0.0005,0.12); nLP.connect(g); g.connect(master); n.start(t); n.stop(t+0.18); }
+      function s_modalClose(vol=1){ if(!gate('modal_close',80)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,420); const nLP=lp(nHP,2600); const g=envGain(t,0.16*vol,0.03,0.0005,0.10); nLP.connect(g); g.connect(master); n.start(t); n.stop(t+0.14); }
+      function s_paper(vol=1){ if(!gate('paper',28)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,900); const nLP=lp(nHP,5400); const g=envGain(t,0.22*vol,0.02,0.0005,0.05); nLP.connect(g); g.connect(master); n.start(t); n.stop(t+0.10); }
+      function s_paperHeavy(vol=1){ if(!gate('paperHeavy',32)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,700); const nLP=lp(nHP,4600); const g=envGain(t,0.26*vol,0.03,0.0005,0.07); nLP.connect(g); g.connect(master); n.start(t); n.stop(t+0.13); }
+      function s_chipTap(vol=1){ if(!gate('chipTap',50)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(620,t); o.frequency.exponentialRampToValueAtTime(420,t+0.05); const g=envGain(t,0.12*vol,0.02,0.0005,0.06); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.10); }
+      function s_bust(vol=1){ if(!gate('bust',120)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,120); const nLP=lp(nHP,700); const g=envGain(t,0.22*vol,0.05,0.0005,0.15); nLP.connect(g); g.connect(master); const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(170,t); o.frequency.exponentialRampToValueAtTime(90,t+0.18); const og=envGain(t,0.10*vol,0.04,0.0005,0.18); o.connect(og); og.connect(master); n.start(t); n.stop(t+0.24); o.start(t); o.stop(t+0.24); }
+      function s_chipDrop(vol=1){ if(!gate('chipDrop',35)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o1=ctx.createOscillator(); o1.type='triangle'; o1.frequency.setValueAtTime(860,t); o1.frequency.exponentialRampToValueAtTime(520,t+0.06); const g1=envGain(t,0.14*vol,0.02,0.0005,0.07); o1.connect(g1); g1.connect(master); const o2=ctx.createOscillator(); o2.type='sine'; o2.frequency.setValueAtTime(1240,t+0.02); o2.frequency.exponentialRampToValueAtTime(760,t+0.08); const g2=envGain(t+0.02,0.10*vol,0.02,0.0005,0.08); o2.connect(g2); g2.connect(master); o1.start(t); o1.stop(t+0.11); o2.start(t+0.02); o2.stop(t+0.13); }
+      function s_rakeClick(vol=1){ if(!gate('rake',45)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,900); const nLP=lp(nHP,2600); const g=envGain(t,0.16*vol,0.015,0.0005,0.05); nLP.connect(g); g.connect(master); n.start(t); n.stop(t+0.08); }
+      function s_earnTick(vol=1){ if(!gate('earnTick',60)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(980,t); const g=envGain(t,0.06*vol,0.02,0.0005,0.05); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.08); }
+      function s_chipClinks(vol=1){ if(!gate('chipDone',160)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; for(let i=0;i<3;i++){ const tt=t+i*0.06; const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(rnd(900,1400),tt); const g=envGain(tt,0.10*vol,0.02,0.0005,0.06); o.connect(g); g.connect(master); o.start(tt); o.stop(tt+0.08); } }
+      function s_karmaTick(vol=1){ if(!gate('karmaTick',60)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(1180,t); o.frequency.exponentialRampToValueAtTime(1480,t+0.06); const g=envGain(t,0.06*vol,0.02,0.0005,0.06); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.10); }
+      function s_rankUp(vol=1){ if(!gate('rankUp',200)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(520,t); o.frequency.exponentialRampToValueAtTime(1040,t+0.18); const g=envGain(t,0.14*vol,0.06,0.0005,0.20); o.connect(g); g.connect(master); const n=noise(); const nHP=hp(n,1400); const nLP=lp(nHP,6000); const ng=envGain(t,0.10*vol,0.05,0.0005,0.22); nLP.connect(ng); ng.connect(master); o.start(t); o.stop(t+0.28); n.start(t); n.stop(t+0.28); }
+      function s_benchArm(vol=1){ if(!gate('benchArm',50)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='square'; o.frequency.setValueAtTime(240,t); o.frequency.exponentialRampToValueAtTime(320,t+0.05); const g=envGain(t,0.08*vol,0.02,0.0005,0.08); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.12); }
+      function s_modPlus(vol=1){ if(!gate('modPlus',60)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(820,t); o.frequency.exponentialRampToValueAtTime(1320,t+0.10); const g=envGain(t,0.10*vol,0.04,0.0005,0.12); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.18); }
+      function s_modMinus(vol=1){ if(!gate('modMinus',60)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(520,t); o.frequency.exponentialRampToValueAtTime(260,t+0.12); const g=envGain(t,0.10*vol,0.04,0.0005,0.14); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.20); }
+      function s_block(vol=1){ if(!gate('block',70)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,500); const nLP=lp(nHP,1300); const g=envGain(t,0.12*vol,0.02,0.0005,0.08); nLP.connect(g); g.connect(master); n.start(t); n.stop(t+0.12); }
+      function s_proc(vol=1){ if(!gate('proc',150)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(660,t); o.frequency.exponentialRampToValueAtTime(990,t+0.10); const g=envGain(t,0.12*vol,0.04,0.0005,0.12); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.18); }
+      function s_bossCleared(vol=1){ if(!gate('bossCleared',250)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(392,t); o.frequency.exponentialRampToValueAtTime(784,t+0.18); const g=envGain(t,0.18*vol,0.06,0.0005,0.22); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.30); }
+      function s_watcherIntro(vol=1){ if(!gate('watcherIntro',250)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(110,t); o.frequency.exponentialRampToValueAtTime(220,t+0.25); const g=envGain(t,0.18*vol,0.10,0.0005,0.35); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.45); }
+      function s_victory(vol=1){ if(!gate('victory',300)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(440,t); o.frequency.exponentialRampToValueAtTime(880,t+0.18); const g=envGain(t,0.18*vol,0.06,0.0005,0.24); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.32); }
+      function s_gameover(vol=1){ if(!gate('gameover',300)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(220,t); o.frequency.exponentialRampToValueAtTime(110,t+0.22); const g=envGain(t,0.16*vol,0.06,0.0005,0.26); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.34); }
+      function play(name, opt={}){ if (!enabled()) return; ensure(); if (!unlocked) unlock(); const vol = clamp(safeNumber(opt.volMul,1)*volume(),0,1); switch(name){
+        case 'ui_click': return s_click(vol); case 'toast': return s_toast(vol); case 'modal_open': return s_modalOpen(vol); case 'modal_close': return s_modalClose(vol);
+        case 'card_draw': return s_paper(vol); case 'card_place': return s_paperHeavy(vol); case 'dealer_place': return s_paper(vol*0.6);
+        case 'bench_add': return s_chipDrop(vol); case 'bench_overflow': return s_rakeClick(vol); case 'bench_arm': return s_benchArm(vol); case 'lane_close': return s_chipTap(vol); case 'bust': return s_bust(vol);
+        case 'chip_tick': return s_earnTick(vol); case 'chip_done': return s_chipClinks(vol); case 'karma_tick': return s_karmaTick(vol); case 'karma_done': return s_rankUp(vol);
+        case 'mod': return safeNumber(opt.delta,0) >= 0 ? s_modPlus(vol) : s_modMinus(vol); case 'mod_block': return s_block(vol);
+        case 'boss_cleared': return s_bossCleared(vol); case 'watcher_intro': return s_watcherIntro(vol); case 'victory': return s_victory(vol); case 'gameover': return s_gameover(vol); case 'proc': return s_proc(vol);
+        default: return;
+      }}
+      return { unlock, play, setEnabled, setVolume, isUnlocked: () => unlocked && ctx?.state === 'running' };
+    })();
+
     function escapeHtml(value) {
       return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -6858,6 +7036,7 @@ function benchPush(card, source = '') {
 
   if (blackjackMatch.bench.length >= cap) {
     removed = blackjackMatch.bench.shift();
+    try { if (window.SFX) SFX.play('bench_overflow'); } catch(e){}
 
     // keep armed index stable
     if (blackjackMatch.armedBenchIdx !== null && blackjackMatch.armedBenchIdx !== undefined) {
@@ -6870,6 +7049,7 @@ function benchPush(card, source = '') {
   }
 
   blackjackMatch.bench.push(card);
+  try { if (window.SFX) SFX.play('bench_add'); } catch(e){}
   return removed;
 }
 
@@ -9036,6 +9216,7 @@ body += `
       clearDealerTimers();
 
       run.chips -= buyIn;
+      if (buyIn > 0) { try { if (window.SFX) SFX.play('bench_add'); } catch(e){} }
       run.matchSeq = safeNumber(run.matchSeq, 0) + 1;
 
       const playerDrawPile = shuffle(run.playerDeck.slice());
@@ -9419,18 +9600,21 @@ body += `
     function applyLaneMod(side, laneIdx, delta) {
       const positions = side === 'dealer' ? blackjackMatch.dealerPositions : blackjackMatch.playerPositions;
       const pos = positions[laneIdx];
-      if (!pos) return 'invalid';
-      if (pos.isComplete) return 'closed';
+      if (!pos) { try { if (window.SFX) SFX.play('mod_block'); } catch(e){} return 'invalid'; }
+      if (pos.isComplete) { try { if (window.SFX) SFX.play('mod_block'); } catch(e){} return 'closed'; }
       if (!pos.isOpen) {
         blackjackMatch.traps[side][laneIdx] += delta;
+        try { if (window.SFX) SFX.play('mod_block'); } catch(e){}
         return 'unopened';
       }
       if ((pos.eraserCharges || 0) > 0) {
         pos.eraserCharges -= 1;
+        try { if (window.SFX) SFX.play('mod_block'); } catch(e){}
         return 'erased';
       }
       pos.mods = pos.mods || [];
       pos.mods.push(delta);
+      try { if (window.SFX) SFX.play('mod', { delta }); } catch(e){}
       return 'open';
     }
 
@@ -9861,6 +10045,7 @@ body += `
       const es = blackjackMatch.earningsSeq;
       if (es.idx >= es.steps.length) {
         es.active = false;
+        try { if (window.SFX && es.accrued > 0) SFX.play('chip_done'); } catch(e){}
         const cb = es.onDone;
         if (typeof cb === 'function') cb();
         renderAll();
@@ -9880,6 +10065,12 @@ body += `
         }
       }
       es.message = `${step.name}: ${step.delta >= 0 ? '+' : ''}${step.delta}`;
+      try {
+        if (window.SFX) {
+          if (step.delta > 0) SFX.play('chip_tick');
+          else if (step.delta < 0) SFX.play('bench_overflow');
+        }
+      } catch(e){}
       renderAll();
       setTimeout(advanceEarningsSequence, 650);
     }
@@ -9951,8 +10142,10 @@ body += `
       seq.focusSide = step.lane ? 'player' : null;
       seq.focusCardUids = step.cardUids || [];
       seq.message = step.message || 'Karma tally…';
+      if (step.type === 'levelUp') { try { if (window.SFX) SFX.play('karma_done'); } catch(e){} }
       if (step.delta > 0) {
         seq.accrued += step.delta;
+      try { if (window.SFX && step.delta > 0) SFX.play('karma_tick'); } catch(e){}
         if (step.lane && typeof step.lane.idx === 'number') seq.laneAccrued[step.lane.idx] += step.delta;
         seq.float = {
           id: `${Date.now()}_${seq.stepIndex}`,
@@ -10274,6 +10467,7 @@ body += `
           continue;
         }
         blackjackMatch.drawnCard = c;
+        try { if (window.SFX) SFX.play('card_draw'); } catch(e){}
         blackjackMatch.metrics.playerDraws += 1;
         logEvent('PLAYER_DRAW', { card: cardToString(c), cardUid: c.uid || null, cardRef: cardRef(c) });
         renderBlackjack();
@@ -10292,6 +10486,7 @@ body += `
 
       const placed = blackjackMatch.drawnCard;
       pos.cards.push(placed);
+      try { if (window.SFX) SFX.play('card_place'); } catch(e){}
       const placedForHooks = handleFusionOnCardPlaced(pos, placed);
       pos.lastPlay = { kind: 'card', rank: placed.rank, value: getStrikeValueFromCard(placedForHooks) };
       onCardPlacedForAttack(pos, placedForHooks);
@@ -10324,10 +10519,12 @@ body += `
 
       tryFireCloseAttack('player', posIdx);
       pos.isComplete = true;
+      try { if (window.SFX) SFX.play('lane_close'); } catch(e){}
 
       // If they close while >21, it is a bust now (closure reveals score)
       const total = getPositionTotal(pos);
       pos.isBust = total > 21;
+      if (pos.isBust) { try { if (window.SFX) SFX.play('bust'); } catch(e){} }
 
       blackjackMatch.metrics.playerStands += 1;
 
@@ -10545,6 +10742,7 @@ function dealerLaneScore(idx, total, diff) {
 
       if (targetIdx >= 0) {
         blackjackMatch.dealerPositions[targetIdx].cards.push(card);
+        try { if (window.SFX) SFX.play('dealer_place'); } catch(e){}
         const dealerPlaced = handleFusionOnCardPlaced(blackjackMatch.dealerPositions[targetIdx], card);
         blackjackMatch.dealerPositions[targetIdx].lastPlay = { kind: 'card', rank: card.rank, value: getStrikeValueFromCard(dealerPlaced) };
         onCardPlacedForAttack(blackjackMatch.dealerPositions[targetIdx], dealerPlaced);
@@ -11841,6 +12039,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         primary: true,
         action: () => {
           closeModal();
+          try { if (window.SFX) SFX.play('watcher_intro'); } catch(e){}
           const watcherCard = run.callingCard ? { ...run.callingCard } : { rank: 'A', suit: '♠' };
           startBlackjackMatch('WATCHER', 0, {
             npcOverride: { name: 'The Watcher', callingCard: watcherCard },
@@ -11940,6 +12139,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const result = blackjackMatch.result;
 
       if (bf.hp <= 0) {
+        try { if (window.SFX) SFX.play('boss_cleared'); } catch(e){}
         logEvent('BOSS_FIGHT_DEFEATED', { floor: run.floor, round: bf.round, maxRounds: bf.maxRounds });
         run.bossWins = safeNumber(run.bossWins, 0) + 1;
         run.bossFight = null;
@@ -12033,6 +12233,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     }
 
     function gameOver(message, reasonCode = 'UNKNOWN') {
+      try { if (window.SFX) SFX.play('gameover'); } catch(e){}
       clearDealerTimers();
       run.ui.mode = 'GAMEOVER';
       run.ui.message = message;
@@ -12044,6 +12245,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     }
 
     function victory() {
+      try { if (window.SFX) SFX.play('victory'); } catch(e){}
       clearDealerTimers();
       run.ui.mode = 'VICTORY';
       endCurrentFloorIfOpen({ endReason: 'VICTORY' });
@@ -13864,6 +14066,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         }
       } catch (e) {}
 
+      loadSfxPrefs();
+      installGlobalClickSfx();
       setupCardTooltip();
       setupActionTooltip();
       setupTileTooltip();
