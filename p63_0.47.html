@@ -3789,7 +3789,7 @@
     }
     .loot-item:last-child{ margin-bottom: 0; }
 
-    /* Reward card placeholders (winner screen) */
+    /* Reward cards (winner screen) */
     .loot-sub{
       margin-top: 6px;
       font-size: 13px;
@@ -3815,6 +3815,7 @@
       user-select: none;
       color: #111;
       overflow: hidden;
+      display: block;
     }
     .reward-card::after{
       content: '';
@@ -3829,9 +3830,58 @@
       border-color: rgba(var(--gold-rgb),0.60);
       box-shadow: 0 16px 34px rgba(0,0,0,0.52), 0 0 24px rgba(var(--gold-rgb),0.18);
     }
-    .reward-card.selected{
+    .reward-card.selected,
+    .reward-card.is-selected{
       border-color: rgba(var(--gold-rgb),0.95);
       box-shadow: 0 18px 40px rgba(0,0,0,0.60), 0 0 34px rgba(var(--gold-rgb),0.24);
+    }
+    .reward-card .reward-corner{
+      position:absolute;
+      top:8px;
+      left:8px;
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      line-height:1;
+      font-weight:800;
+      font-family:var(--font-mono);
+      color:#111;
+      z-index:2;
+    }
+    .reward-card .reward-corner.red{ color:#b13b3b; }
+    .reward-card .reward-corner .rank,
+    .reward-card .reward-corner .suit{ font-size:14px; }
+    .reward-card .reward-icon-badge{
+      position:absolute;
+      width:22px;
+      height:22px;
+      border-radius:999px;
+      border:1px solid rgba(0,0,0,0.14);
+      background:rgba(255,255,255,0.88);
+      display:grid;
+      place-items:center;
+      font-size:12px;
+      z-index:2;
+      line-height:1;
+    }
+    .reward-card .reward-stamp{ right:8px; top:8px; }
+    .reward-card .reward-sleeve{ left:8px; bottom:8px; }
+    .reward-card .reward-center{
+      position:absolute;
+      inset:0;
+      display:grid;
+      place-items:center;
+      font-family:var(--font-display);
+      letter-spacing:1px;
+      text-transform:uppercase;
+      color:rgba(17,17,17,0.85);
+    }
+    .reward-card .reward-pill{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(0,0,0,0.16);
+      background:rgba(255,255,255,0.72);
+      font-size:13px;
     }
 
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.72; } }
@@ -4081,6 +4131,26 @@
     return [{}, {}, {}];
   }
 
+  function rewardChoiceMarkup(r, loading = false) {
+    const suitSym = toSuitSymbol(r.suitSym || r.suit || '♠');
+    const rank = r.rank || r.value || '—';
+    const red = isRedSuit(suitSym);
+    const stamp = r.stampShort || r.stampLabel || r.stampId || '…';
+    const sleeve = r.sleeveShort || r.sleeveLabel || r.sleeveId || '…';
+
+    return `
+      <div class="reward-corner ${red ? 'red' : ''}">
+        <div class="rank">${rank}</div>
+        <div class="suit">${suitSym}</div>
+      </div>
+      <div class="reward-icon-badge reward-stamp" title="Stamp">${stamp}</div>
+      <div class="reward-icon-badge reward-sleeve" title="Sleeve">${sleeve}</div>
+      <div class="reward-center">
+        <div class="reward-pill">${loading ? 'Loading' : 'Reward'}</div>
+      </div>
+    `;
+  }
+
   function renderRewardChoices() {
     const lootBox   = document.getElementById('loot-box');
     const items     = document.getElementById('loot-items');
@@ -4096,40 +4166,19 @@
       const d = document.createElement('div');
       d.className = 'reward-card';
       d.title = rewardChoices.length ? 'Select reward' : 'Loading reward…';
-
-      // Build a display from flexible fields:
-      // Expected from parent:
-      // { rank:'A', suit:'S', suitSym:'♠', stampShort:'+10', sleeveShort:'STEEL' } (fields can vary)
-      const suitSym = toSuitSymbol(r.suitSym || r.suit || '♠');
-      const rank    = r.rank || r.value || '—';
-      const red     = isRedSuit(suitSym);
-
-      const stamp = r.stampShort || r.stampLabel || r.stampId || 'STAMP';
-      const sleeve = r.sleeveShort || r.sleeveLabel || r.sleeveId || 'SLEEVE';
-
-      d.innerHTML = `
-        <div style="position:absolute; top:8px; left:8px; display:flex; flex-direction:column; gap:2px; line-height:1; font-weight:800; color:${red?'#b13b3b':'#111'}; font-family:var(--font-mono); z-index:2;">
-          <div style="font-size:14px;">${rank}</div>
-          <div style="font-size:14px;">${suitSym}</div>
-        </div>
-
-        <div style="position:absolute; right:8px; top:8px; width:22px; height:22px; border-radius:999px; border:1px solid rgba(0,0,0,0.14); background:rgba(255,255,255,0.85); display:grid; place-items:center; font-size:12px; z-index:2;" title="Stamp">
-          ${rewardChoices.length ? stamp : '…'}
-        </div>
-
-        <div style="position:absolute; left:8px; bottom:8px; width:22px; height:22px; border-radius:999px; border:1px solid rgba(0,0,0,0.14); background:rgba(255,255,255,0.85); display:grid; place-items:center; font-size:12px; z-index:2;" title="Sleeve">
-          ${rewardChoices.length ? sleeve : '…'}
-        </div>
-
-        <div style="position:absolute; inset:0; display:grid; place-items:center; font-family:var(--font-display); letter-spacing:1px; text-transform:uppercase; color:rgba(17,17,17,0.85);">
-          <div style="padding:6px 10px; border-radius:999px; border:1px solid rgba(0,0,0,0.16); background:rgba(255,255,255,0.72); font-size:13px;">
-            ${rewardChoices.length ? 'Reward' : 'Loading'}
-          </div>
-        </div>
-      `;
+      d.setAttribute('role', 'button');
+      d.setAttribute('tabindex', rewardChoices.length ? '0' : '-1');
+      d.setAttribute('aria-label', rewardChoices.length ? `Select reward ${idx + 1}` : 'Loading reward');
+      d.innerHTML = rewardChoiceMarkup(r, !rewardChoices.length);
 
       if (rewardChoices.length){
         d.onclick = () => selectReward(idx);
+        d.onkeydown = (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') {
+            ev.preventDefault();
+            selectReward(idx);
+          }
+        };
       } else {
         d.style.cursor = "default";
       }
@@ -4143,7 +4192,12 @@
   function selectReward(idx) {
     selectedRewardIdx = idx;
     const nodes = Array.from(document.querySelectorAll('#loot-items .reward-card'));
-    nodes.forEach((n, i) => n.classList.toggle('selected', i === idx));
+    nodes.forEach((n, i) => {
+      const on = i === idx;
+      n.classList.toggle('selected', on);
+      n.classList.toggle('is-selected', on);
+      n.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
     document.getElementById('eg-action-btn').disabled = false;
   }
 
@@ -7792,7 +7846,8 @@ function benchPush(card, source = '') {
           suit: SUITS[Math.floor(Math.random() * SUITS.length)],
           stampId: null,
           sleeveId: null,
-          laminationId: null
+          laminationId: null,
+          _forcedHighValue: forceRare
         };
 
         const sr = forceRare ? 'rare' : rollRarity();
@@ -7802,6 +7857,37 @@ function benchPush(card, source = '') {
 
         assignUid(c);
         return c;
+      }
+
+      function dedupeRewardCards(rewards) {
+        const list = Array.isArray(rewards) ? rewards : [];
+        const seen = new Set();
+
+        for (let pass = 0; pass < 12; pass++) {
+          let changed = false;
+          seen.clear();
+
+          for (const card of list) {
+            const key = `${card.rank}${card.suit}|${card.stampId || ''}|${card.sleeveId || ''}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              continue;
+            }
+
+            card.rank = RANKS[Math.floor(Math.random() * RANKS.length)];
+            card.suit = SUITS[Math.floor(Math.random() * SUITS.length)];
+            if (!card._forcedHighValue) {
+              card.stampId = pickDefIdByRarity(STAMP_DEFS, rollRarity());
+              card.sleeveId = pickDefIdByRarity(SLEEVE_DEFS, rollRarity());
+            }
+            assignUid(card);
+            changed = true;
+          }
+
+          if (!changed) break;
+        }
+
+        return list;
       }
 
       function formatRewardForMinigame(card) {
@@ -7871,7 +7957,7 @@ function benchPush(card, source = '') {
         if (d.type === 'P63_REQUEST_REWARD_SET' && d.kind === 'INFILTRATION' && active.kind === 'INFILTRATION') {
           const setId = `rw_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
           const forcedIdx = Math.floor(Math.random() * 3);
-          const rewards = [0, 1, 2].map((idx) => makeRewardCard({ forceRare: idx === forcedIdx }));
+          const rewards = dedupeRewardCards([0, 1, 2].map((idx) => makeRewardCard({ forceRare: idx === forcedIdx })));
           active.infiltration.rewardSetId = setId;
           active.infiltration.rewards = rewards;
 
