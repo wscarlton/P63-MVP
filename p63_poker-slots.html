@@ -628,6 +628,8 @@
   // Tell parent we’re alive (optional but helpful)
   P63.send("P63_MINIGAME_READY", { kind: "POKER_SLOTS" });
 
+  let P63_ENDED = false;
+
   // ---------------- Runtime settings (tunable in TUNE tab) ----------------
   let CFG = {
     startChips: 100,
@@ -1210,6 +1212,9 @@
 
   // ---------------- End Game ----------------
   function endGame(reason){
+    if (P63_ENDED) return;
+    P63_ENDED = true;
+
     const cashOut = SESSION.chips;
 
     if (P63_EMBED){
@@ -1222,6 +1227,7 @@
     SESSION.chips = CFG.startChips;
     SESSION.heat = 0;
     resetToReady(`Ended game. Cashed out ${cashOut}.`);
+    P63_ENDED = false;
   }
 
   els.btnEndGame.addEventListener("click", ()=> endGame("cashout"));
