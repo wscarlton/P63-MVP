@@ -727,6 +727,21 @@
       pointer-events: none;
     }
 
+    .sleeve-icon {
+      position: absolute;
+      bottom: -6px;
+      left: -6px;
+      background: #334155;
+      color: #f8fafc;
+      font-size: 9px;
+      font-weight: 800;
+      border-radius: 999px;
+      padding: 2px 5px;
+      border: 1px solid rgba(0,0,0,0.25);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+      pointer-events: none;
+    }
+
     .card-tooltip {
       position: fixed;
       z-index: 9999;
@@ -1807,7 +1822,7 @@
     const MERCHANT_REMOVE_COST = 50;
     const REMOVAL_REROLL_COST = 25;      // also used as inventory reroll cost
     const MERCHANT_INVENTORY_REROLL_COST = 25;
-    const COLLECTOR_ITEM_COST = 150;
+    const COLLECTOR_COST_BY_RARITY = { common: 20, uncommon: 35, rare: 60 };
 
 // Economy tuning
 const MERCHANT_REMOVE_INCREMENT = 25; // removal cost increases by this amount each time you start a paid removal
@@ -2126,6 +2141,7 @@ const CALLING_RANK_THRESHOLDS = [
       let modCount = 0;
       let fusedCount = 0;
       let sleevedCount = 0;
+      let stampedCount = 0;
 
       for (const c of deck) {
         if (isModifier(c)) {
@@ -2145,6 +2161,7 @@ const CALLING_RANK_THRESHOLDS = [
           if (bySuit[c.suit] !== undefined) bySuit[c.suit] += 1;
           if (byRank[c.rank] !== undefined) byRank[c.rank] += 1;
           if (c.sleeveId) sleevedCount += 1;
+          if (c.stampId) stampedCount += 1;
         }
       }
 
@@ -2153,7 +2170,7 @@ const CALLING_RANK_THRESHOLDS = [
         modCount,
         fusedCount,
         sleevedCount,
-        stampsByRank: { ...(run && run.stampsByRank ? run.stampsByRank : {}) },
+        stampedCount,
         bySuit,
         byRank
       };
@@ -2176,6 +2193,7 @@ const CALLING_RANK_THRESHOLDS = [
         kind: 'STD',
         rank: card.rank,
         suit: card.suit,
+        stampId: card.stampId || null,
         sleeveId: card.sleeveId || null,
         laminationId: card.laminationId ?? null
       };
@@ -2184,8 +2202,7 @@ const CALLING_RANK_THRESHOLDS = [
     function serializeDeck() {
       const deck = run ? (run.playerDeck || []) : [];
       return {
-        cards: deck.map(serializeCard),
-        stampsByRank: { ...(run && run.stampsByRank ? run.stampsByRank : {}) }
+        cards: deck.map(serializeCard)
       };
     }
 
@@ -2197,7 +2214,7 @@ const CALLING_RANK_THRESHOLDS = [
         modCount: summary.modCount,
         fusedCount: summary.fusedCount,
         sleevedCount: summary.sleevedCount,
-        stampsByRank: summary.stampsByRank,
+        stampedCount: summary.stampedCount,
         bySuit: summary.bySuit,
         byRank: summary.byRank
       };
@@ -2228,8 +2245,8 @@ const CALLING_RANK_THRESHOLDS = [
       const sessionId = generateSessionId();
       const rulesContext = {
         collector: {
-          itemCost: COLLECTOR_ITEM_COST,
-          rarityRates: { common: 0.70, uncommon: 0.25, rare: 0.05 }
+          costByRarity: { ...COLLECTOR_COST_BY_RARITY },
+          rarityRates: { common: 0.55, uncommon: 0.35, rare: 0.10 }
         },
         modify: {
           services: Object.values(MODIFY_SERVICES).map(s => ({ id: s.id, tier: s.tier, kind: s.kind })),
@@ -2548,7 +2565,6 @@ const CALLING_RANK_THRESHOLDS = [
       if (t === 'CALLING_PROC_HEARTS_TRIAGE') return `Calling (♥): triage lane #${d.laneIdx}`;
       if (t === 'CALLING_CARD_LEVEL_UP') return `Calling card leveled: ${d.fromRank} → ${d.toRank}`;
       if (t === 'NPC_ASSIGNED') return `NPC: ${d.npcName} (${d.tileType})`;
-      if (t === 'CRYSTAL_SLEEVE_SAVE') return `Crystal sleeve saved lane #${d.laneIdx}`;
       if (t === 'GOLD_SLEEVE_BONUS') return `Gold sleeve bonus +${d.amount} (lane #${d.laneIdx})`;
       if (t === 'BURN_AFTER_READING') return `Burned ${d.count} stamped card(s)`;
       if (t === 'MERCHANT_ENTER') return `Merchant: ${d.npcName} (prices x${d.priceMult})`;
@@ -3264,10 +3280,7 @@ const CALLING_RANK_THRESHOLDS = [
     function openDeckViewer() {
       if (!run) return;
       const summary = buildDeckSummary();
-      const stamps = summary.stampsByRank || {};
-      const stampLines = Object.keys(stamps).length
-        ? Object.entries(stamps).map(([rank, stampId]) => `${rank}: ${getStampDef(stampId)?.name || stampId}`).join(', ')
-        : 'None';
+      const stampLines = summary.stampedCount ? `${summary.stampedCount} stamped card(s)` : 'None';
 
       const bySuitLine = Object.entries(summary.bySuit)
         .map(([suit, count]) => `${suit} ${count}`)
@@ -3423,7 +3436,7 @@ const CALLING_RANK_THRESHOLDS = [
     function makeStandardDeck52() {
       const deck = [];
       for (const s of SUITS) {
-        for (const r of RANKS) deck.push({ uid: null, rank: r, suit: s, sleeveId: null, laminationId: null });
+        for (const r of RANKS) deck.push({ uid: null, rank: r, suit: s, stampId: null, sleeveId: null, laminationId: null });
       }
       return deck;
     }
@@ -3450,21 +3463,26 @@ const CALLING_RANK_THRESHOLDS = [
     }
 
     const STAMP_DEFS = {
-      PLUS_FIVE: { id: 'PLUS_FIVE', name: 'Plus Five', rarity: 'uncommon', desc: '+5 karma per stamped card in a winning lane.', icon: '+5' },
-      PLUS_TEN: { id: 'PLUS_TEN', name: 'Plus Ten', rarity: 'rare', desc: '+10 karma per stamped card in a winning lane.', icon: '+10' },
-      DOUBLE_DIP: { id: 'DOUBLE_DIP', name: 'Double Dip', rarity: 'uncommon', desc: 'x2 karma contribution per stamped card in a winning lane.', icon: 'x2' },
-      TRIPLE_PLAY: { id: 'TRIPLE_PLAY', name: 'Triple Play', rarity: 'rare', desc: 'x3 karma contribution per stamped card in a winning lane.', icon: 'x3' },
-      LANE_COUNT_MULT: { id: 'LANE_COUNT_MULT', name: 'Lane Count Mult', rarity: 'rare', desc: 'Multiply stamped-card karma by lane card count.', icon: 'N×' },
-      PROXY_SUIT: { id: 'PROXY_SUIT', name: 'Proxy Suit', rarity: 'common', desc: 'Counts as calling suit for proc checks.', icon: 'PS' },
-      DEJA_VU: { id: 'DEJA_VU', name: 'Deja Vu', rarity: 'rare', desc: 'Doubles card actions and karma contribution.', icon: 'DV' },
-      BURN_AFTER_READING: { id: 'BURN_AFTER_READING', name: 'Burn After Reading', rarity: 'uncommon', desc: 'Remove stamped cards from deck after match.', icon: 'BR' }
+      PLUS_FIVE: { id: 'PLUS_FIVE', name: '+5', rarity: 'common', desc: 'If this card is in a winning lane, gain +5 karma.', icon: '+5' },
+      PLUS_TEN: { id: 'PLUS_TEN', name: '+10', rarity: 'common', desc: 'If this card is in a winning lane, gain +10 karma.', icon: '+10' },
+      DOUBLE: { id: 'DOUBLE', name: 'Double', rarity: 'uncommon', desc: "If this card is in a winning lane, multiply that lane's karma by ×2.", icon: 'x2' },
+      TRIPLE_PLAY: { id: 'TRIPLE_PLAY', name: 'Triple Play', rarity: 'uncommon', desc: "If this card is in a winning lane, multiply that lane's karma by ×3.", icon: 'x3' },
+      CROWD_CONTROL: { id: 'CROWD_CONTROL', name: 'Crowd Control', rarity: 'rare', desc: 'If this card is in a winning lane, multiply lane karma by lane size.', icon: 'CC' },
+      PROXY_SUIT: { id: 'PROXY_SUIT', name: 'Proxy Suit', rarity: 'common', desc: 'When played, counts as the Calling suit for proc checks.', icon: 'PS' },
+      BURN_AFTER_READING: { id: 'BURN_AFTER_READING', name: 'Burn After Reading', rarity: 'uncommon', desc: "If this card was played this match, remove it from your deck.", icon: 'BR' },
+      CHICKEN_DINNER: { id: 'CHICKEN_DINNER', name: 'Chicken Dinner', rarity: 'rare', desc: 'If this card is in a winning lane, gain +21 karma.', icon: '21' },
+      HOUSE_EDGE: { id: 'HOUSE_EDGE', name: 'House Edge', rarity: 'rare', desc: 'If lane total is exactly 21 and wins, gain +10 karma per card in lane.', icon: 'HE' },
+      VENTURE_FUND: { id: 'VENTURE_FUND', name: 'Venture Fund', rarity: 'rare', desc: 'If this card is in a winning lane, gain chips equal to lane karma.', icon: 'VF', cost: 75 }
     };
 
     const SLEEVE_DEFS = {
-      CRYSTAL: { id: 'CRYSTAL', name: 'Crystal Sleeve', rarity: 'rare', desc: 'Prevent bust once by burning this card.', className: 'sleeve-crystal' },
-      STEEL: { id: 'STEEL', name: 'Steel Sleeve', rarity: 'uncommon', desc: 'Lane cannot be targeted by opponent effects.', className: 'sleeve-steel' },
-      GOLD: { id: 'GOLD', name: 'Gold Sleeve', rarity: 'rare', desc: 'Gain chips equal to lane total at close.', className: 'sleeve-gold' },
-      BLUE: { id: 'BLUE', name: 'Blue Sleeve', rarity: 'common', desc: 'Drawn card goes to bench instead of forced play.', className: 'sleeve-blue' }
+      BLUE: { id: 'BLUE', name: 'Blue', rarity: 'common', desc: 'If drawn, card goes to bench instead of forced draw-play.', icon: 'B' },
+      GOLD: { id: 'GOLD', name: 'Gold', rarity: 'common', desc: 'If lane wins, gain chips equal to lane total per Gold card in lane.', icon: 'G' },
+      STEEL: { id: 'STEEL', name: 'Steel', rarity: 'uncommon', desc: 'Lane cannot be targeted by opponent modifier effects while present.', icon: 'S' },
+      FUSION: { id: 'FUSION', name: 'Fusion', rarity: 'rare', desc: 'When played, arms fusion. Next standard card atop it fuses.', icon: '✦' },
+      ERASER: { id: 'ERASER', name: 'Eraser', rarity: 'uncommon', desc: 'Negate the first modifier applied to this lane after this card is present.', icon: 'E' },
+      FOIL: { id: 'FOIL', name: 'Foil', rarity: 'rare', desc: 'Doubles the effect of the stamp on this same card.', icon: 'F' },
+      NEGATIVE: { id: 'NEGATIVE', name: 'Negative', rarity: 'uncommon', desc: "This card's value is subtracted from lane total instead of added.", icon: 'N' }
     };
 
     function getStampDef(id) {
@@ -3476,9 +3494,10 @@ const CALLING_RANK_THRESHOLDS = [
     }
 
     function getCardStampId(card) {
-      if (!run || !run.stampsByRank) return null;
+      if (!card) return null;
+      if (isFused(card) && card.a && card.a.sleeveId === 'FUSION') return card.a.stampId || null;
       if (!isStandardCard(card)) return null;
-      return run.stampsByRank[card.rank] || null;
+      return card.stampId || null;
     }
 
     function assignUid(card) {
@@ -3495,11 +3514,12 @@ const CALLING_RANK_THRESHOLDS = [
       if (!card) return null;
       if (isModifier(card)) return { uid: null, type: 'MOD', delta: card.delta };
       if (isKeyCard(card)) return { ...card, uid: null };
-      if (isFused(card)) return { uid: null, type: 'FUSE', a: card.a, b: card.b };
+      if (isFused(card)) return { uid: null, type: 'FUSE', a: card.a, b: card.b, sleeveId: card.sleeveId || null };
       return {
         uid: null,
         rank: card.rank,
         suit: card.suit,
+        stampId: card.stampId || null,
         sleeveId: card.sleeveId || null,
         laminationId: card.laminationId ?? null
       };
@@ -3515,9 +3535,30 @@ const CALLING_RANK_THRESHOLDS = [
         kind: 'STD',
         rank: card.rank,
         suit: card.suit,
+        stampId: card.stampId || null,
         sleeveId: card.sleeveId || null,
         laminationId: card.laminationId ?? null
       };
+    }
+
+
+    function collectLaneCardsForEffects(cards) {
+      const out = [];
+      for (const c of cards || []) {
+        if (!c || isModifier(c) || isKeyCard(c)) continue;
+        if (isFused(c)) {
+          if (c.a) out.push(c.a);
+          if (c.b) out.push(c.b);
+        } else {
+          out.push(c);
+        }
+      }
+      return out;
+    }
+
+    function laneHasSleeve(pos, sleeveId) {
+      const cards = collectLaneCardsForEffects(pos?.cards || []);
+      return cards.some(c => c && c.sleeveId === sleeveId);
     }
 
     function getStampKarmaContribution(stampId, baseValue, laneSize) {
@@ -3526,14 +3567,17 @@ const CALLING_RANK_THRESHOLDS = [
           return 5;
         case 'PLUS_TEN':
           return 10;
-        case 'DOUBLE_DIP':
+        case 'DOUBLE':
           return baseValue;
         case 'TRIPLE_PLAY':
           return baseValue * 2;
-        case 'LANE_COUNT_MULT':
-          return baseValue * laneSize;
-        case 'DEJA_VU':
-          return baseValue;
+        case 'CROWD_CONTROL':
+          return Math.max(0, baseValue * (Math.max(1, laneSize) - 1));
+        case 'CHICKEN_DINNER':
+          return 21;
+        case 'HOUSE_EDGE':
+        case 'VENTURE_FUND':
+          return 0;
         default:
           return 0;
       }
@@ -3555,10 +3599,6 @@ const CALLING_RANK_THRESHOLDS = [
       if (isFused(card)) return 'fused';
       if (isKeyCard(card)) return 'black';
       const classes = [isRedSuit(card.suit) ? 'red' : 'black'];
-      if (card && card.sleeveId) {
-        const sleeve = getSleeveDef(card.sleeveId);
-        if (sleeve && sleeve.className) classes.push(sleeve.className);
-      }
       return classes.join(' ');
     }
 
@@ -3645,13 +3685,18 @@ const CALLING_RANK_THRESHOLDS = [
 
     function getCardValueOptions(card) {
       if (!card || isModifier(card)) return [];
+
       if (isFused(card)) {
-        const options = [
-          ...getCardValueOptions(card.a),
-          ...getCardValueOptions(card.b)
-        ];
-        return Array.from(new Set(options));
+        const a = getCardValueOptions(card.a);
+        const b = getCardValueOptions(card.b);
+        const sums = [];
+        for (const av of a) {
+          for (const bv of b) sums.push(av + bv);
+        }
+        return Array.from(new Set(sums));
       }
+
+      if (card.__negValue !== undefined) return [safeNumber(card.__negValue, 0)];
       if (card.rank === 'A') return [1, 11];
       if (['J', 'Q', 'K'].includes(card.rank)) return [10];
       const n = Number(card.rank);
@@ -4003,7 +4048,6 @@ function benchPush(card, source = '') {
         callingCardChosenSuit: null,
         playerName: loadPlayerName() || '',
         playerDeck: makeStandardDeck52(),
-        stampsByRank: {},
         collectorShop: null,
         ownedActions: [],
         nextCardUid: 1,
@@ -4678,8 +4722,8 @@ function benchPush(card, source = '') {
 
     function rollCollectorRarity() {
       const roll = Math.random();
-      if (roll < 0.70) return 'common';
-      if (roll < 0.95) return 'uncommon';
+      if (roll < 0.55) return 'common';
+      if (roll < 0.90) return 'uncommon';
       return 'rare';
     }
 
@@ -4692,20 +4736,20 @@ function benchPush(card, source = '') {
       return { ...pick, purchased: false };
     }
 
-    function getEligibleStampRanks() {
-      const ranks = new Set();
-      for (const card of run.playerDeck) {
-        if (!isStandardCard(card)) continue;
-        if (run.stampsByRank && run.stampsByRank[card.rank]) continue;
-        ranks.add(card.rank);
-      }
-      return Array.from(ranks);
+    function getEligibleStampCardIndices() {
+      const eligible = [];
+      run.playerDeck.forEach((card, idx) => {
+        if (!isStandardCard(card) || isFused(card) || isKeyCard(card)) return;
+        if (card.stampId) return;
+        eligible.push(idx);
+      });
+      return eligible;
     }
 
     function getEligibleSleeveCardIndices() {
       const eligible = [];
       run.playerDeck.forEach((card, idx) => {
-        if (!isStandardCard(card)) return;
+        if (!isStandardCard(card) || isFused(card) || isKeyCard(card)) return;
         if (card.sleeveId) return;
         eligible.push(idx);
       });
@@ -4719,7 +4763,7 @@ function benchPush(card, source = '') {
         run.collectorShop = {
           tileId,
           shopId,
-          items: Array.from({ length: 3 }, () => randomCollectorItem()),
+          items: Array.from({ length: 5 }, () => randomCollectorItem()),
           activeItemIdx: null
         };
         logEvent('COLLECTOR_SHOP_GENERATED', {
@@ -4729,7 +4773,7 @@ function benchPush(card, source = '') {
             itemId: item.id,
             type: item.type,
             rarity: item.rarity,
-            cost: COLLECTOR_ITEM_COST
+            cost: (item.cost || COLLECTOR_COST_BY_RARITY[item.rarity] || COLLECTOR_COST_BY_RARITY.common)
           }))
         });
       }
@@ -4762,9 +4806,10 @@ function benchPush(card, source = '') {
       }
 
       const itemsHtml = shop.items.map((item, idx) => {
-        const eligible = item.type === 'STAMP' ? getEligibleStampRanks().length : getEligibleSleeveCardIndices().length;
-        const disabled = item.purchased || chipsNow < COLLECTOR_ITEM_COST || eligible === 0 || inProgress;
-        const status = item.purchased ? 'Purchased' : (eligible === 0 ? 'No eligible cards' : '');
+        const eligible = item.type === 'STAMP' ? getEligibleStampCardIndices().length : getEligibleSleeveCardIndices().length;
+        const itemCost = item.cost || COLLECTOR_COST_BY_RARITY[item.rarity] || COLLECTOR_COST_BY_RARITY.common;
+        const disabled = chipsNow < itemCost || eligible === 0 || inProgress;
+        const status = eligible === 0 ? 'No eligible cards' : '';
         const rarityClass = `rarity-${item.rarity}`;
         return `
           <div class="merchant-card-slot" style="min-width:180px;">
@@ -4774,7 +4819,7 @@ function benchPush(card, source = '') {
             </div>
             <div style="font-size:12px; color:var(--text-secondary); min-height:32px;">${item.desc}</div>
             <button class="modal-btn" ${disabled ? 'disabled' : ''} onclick="buyCollectorItem(${idx})">
-              ${item.purchased ? 'Purchased' : `Buy (${COLLECTOR_ITEM_COST})`}
+              Buy (${itemCost})
             </button>
             ${status ? `<div style="font-size:11px; color:var(--text-muted); margin-top:6px;">${status}</div>` : ''}
           </div>
@@ -4809,20 +4854,21 @@ function benchPush(card, source = '') {
       const shop = run.collectorShop;
       if (!shop) return;
       const item = shop.items[idx];
-      if (!item || item.purchased) return;
-      if (run.chips < COLLECTOR_ITEM_COST) return;
+      if (!item) return;
+      const itemCost = item.cost || COLLECTOR_COST_BY_RARITY[item.rarity] || COLLECTOR_COST_BY_RARITY.common;
+      if (run.chips < itemCost) return;
 
-      if (item.type === 'STAMP' && getEligibleStampRanks().length === 0) return;
+      if (item.type === 'STAMP' && getEligibleStampCardIndices().length === 0) return;
       if (item.type === 'SLEEVE' && getEligibleSleeveCardIndices().length === 0) return;
 
       const chipsBefore = run.chips;
-      run.chips -= COLLECTOR_ITEM_COST;
+      run.chips -= itemCost;
       shop.activeItemIdx = idx;
       logEvent('COLLECTOR_BUY', {
         itemId: item.id,
         name: item.name,
         type: item.type,
-        cost: COLLECTOR_ITEM_COST,
+        cost: (item.cost || COLLECTOR_COST_BY_RARITY[item.rarity] || COLLECTOR_COST_BY_RARITY.common),
         shopId: shop.shopId,
         slot: idx,
         chipsBefore,
@@ -4841,35 +4887,43 @@ function benchPush(card, source = '') {
     }
 
     function openStampSelection(item) {
-      const ranks = getEligibleStampRanks();
-      if (!ranks.length) {
+      const eligible = getEligibleStampCardIndices();
+      if (!eligible.length) {
         renderCollector();
         return;
       }
-      const options = shuffle(ranks).slice(0, Math.min(2, ranks.length));
-      logEvent('STAMP_OPTIONS_SHOWN', {
+      const sample = shuffle(eligible).slice(0, Math.min(5, eligible.length));
+      logEvent('STAMP_CANDIDATES_SHOWN', {
         stampId: item.id,
-        options,
-        eligibleCount: ranks.length
+        candidates: sample.map(idx => cardRef(run.playerDeck[idx]))
       });
+      const cardsHtml = sample.map(idx => {
+        const card = run.playerDeck[idx];
+        return `
+          <div class="merchant-card-slot">
+            ${renderCard(card, false)}
+            <button class="modal-btn" onclick="applyStampToCard('${item.id}', ${idx})">Select</button>
+          </div>
+        `;
+      }).join('');
+
       showModal(`Collector - ${item.name}`, `
-        <p class="modal-text">Choose a rank to stamp.</p>
-      `, options.map(rank => ({
-        text: rank,
-        primary: true,
-        action: () => applyStampToRank(item, rank)
-      })));
+        <p class="modal-text">Choose a card to stamp.</p>
+        <div class="merchant-cards">${cardsHtml}</div>
+      `, [
+        { text: 'Back', action: () => renderCollector() }
+      ]);
     }
 
-    function applyStampToRank(item, rank) {
-      if (!run.stampsByRank) run.stampsByRank = {};
-      run.stampsByRank[rank] = item.id;
-
-      logEvent('STAMP_APPLY', { stampId: item.id, rank, shopId: run.collectorShop?.shopId, slot: run.collectorShop?.activeItemIdx ?? null });
+    window.applyStampToCard = function(stampId, deckIdx) {
+      const card = run.playerDeck[deckIdx];
+      if (!card || !isStandardCard(card) || card.stampId) return;
+      card.stampId = stampId;
+      logEvent('STAMP_APPLY', { stampId, card: cardToString(card), cardUid: card.uid || null, cardRef: cardRef(card), shopId: run.collectorShop?.shopId, slot: run.collectorShop?.activeItemIdx ?? null });
       recordDeckSnapshot('STAMP_APPLY');
       finalizeCollectorItem();
-      showToast(`${item.name} applied to ${rank}`);
-    }
+      showToast(`${getStampDef(stampId).name} applied`);
+    };
 
     function openSleeveSelection(item) {
       const eligible = getEligibleSleeveCardIndices();
@@ -4923,8 +4977,7 @@ function benchPush(card, source = '') {
       if (!shop) return;
       const idx = shop.activeItemIdx;
       if (idx !== null && idx !== undefined) {
-        const item = shop.items[idx];
-        if (item) item.purchased = true;
+        shop.items[idx] = randomCollectorItem();
       }
       shop.activeItemIdx = null;
       renderCollector();
@@ -5534,7 +5587,9 @@ body += `
           bonus21Awarded: false,
           lastPlayedCard: null,
           lastPlayedAttackValue: 0,
-          attackFired: false
+          attackFired: false,
+          pendingFusionUid: null,
+          eraserCharges: 0
         });
         blackjackMatch.dealerPositions.push({
           cards: [],
@@ -5545,7 +5600,9 @@ body += `
           isBust: false,
           lastPlayedCard: null,
           lastPlayedAttackValue: 0,
-          attackFired: false
+          attackFired: false,
+          pendingFusionUid: null,
+          eraserCharges: 0
         });
       }
 
@@ -5673,7 +5730,15 @@ body += `
 
     function getPositionTotal(pos) {
       const modSum = (pos.mods || []).reduce((a, b) => a + b, 0);
-      const base = calcBestTotal(pos.cards, modSum);
+      const transformed = (pos.cards || []).map(card => {
+        if (!card) return card;
+        if (card.sleeveId !== 'NEGATIVE') return card;
+        const clone = { ...card, rank: card.rank };
+        if (isFused(card)) return card;
+        const val = getCardValueOptions(card)[0] || 0;
+        return { ...clone, __negValue: -Math.abs(val) };
+      });
+      const base = calcBestTotal(transformed, modSum);
       return safeNumber(base, 0);
     }
 
@@ -5737,6 +5802,10 @@ body += `
         blackjackMatch.traps[side][laneIdx] += delta;
         return 'unopened';
       }
+      if ((pos.eraserCharges || 0) > 0) {
+        pos.eraserCharges -= 1;
+        return 'erased';
+      }
       pos.mods = pos.mods || [];
       pos.mods.push(delta);
       return 'open';
@@ -5762,6 +5831,19 @@ body += `
           delta,
           lastPlay: attackerPos.lastPlay,
           targetState: 'closed',
+          trapTotalAfter: blackjackMatch.traps[targetSide][laneIdx],
+          reason
+        });
+        return;
+      }
+
+      if (attackerSide === 'dealer' && targetSide === 'player' && laneHasSleeve(targetPos, 'STEEL')) {
+        logEvent('TEMPO_STRIKE_BLOCKED', {
+          attacker: attackerSide,
+          lane: laneIdx + 1,
+          delta,
+          lastPlay: attackerPos.lastPlay,
+          targetState: 'blocked_steel',
           trapTotalAfter: blackjackMatch.traps[targetSide][laneIdx],
           reason
         });
@@ -5848,6 +5930,15 @@ body += `
 
       const laneIdx = targetIdx;
       const p = targetPos;
+      if (laneHasSleeve(p, 'STEEL')) {
+        logEvent('BOSS_COUNTERMEASURE', {
+          lane: laneIdx + 1,
+          dealerBenchMod: null,
+          appliedDelta: 0,
+          targetState: 'blocked_steel'
+        });
+        return false;
+      }
       const cur = getPositionTotal(p);
 
       let pick = 0;
@@ -5866,7 +5957,7 @@ body += `
       const mod = bench[pick];
       const appliedDelta = -mod.delta;
       const state = applyLaneMod('player', laneIdx, appliedDelta);
-      if (state !== 'open') return false;
+      if (state !== 'open' && state !== 'erased') return false;
 
       bench.splice(pick, 1);
 
@@ -5902,31 +5993,12 @@ body += `
         if (pos.isComplete) continue;
         const total = getPositionTotal(pos);
         if (total > 21) {
-          let crystalSaved = false;
-          if (side === 'player') {
-            const crystalIdx = (pos.cards || []).findIndex(c => c && c.sleeveId === 'CRYSTAL');
-            if (crystalIdx >= 0) {
-              const burned = pos.cards.splice(crystalIdx, 1)[0];
-              blackjackMatch.burnedSleeveCards = blackjackMatch.burnedSleeveCards || [];
-              blackjackMatch.burnedSleeveCards.push(burned);
-              logEvent('CRYSTAL_SLEEVE_SAVE', { laneIdx: i + 1, card: cardToString(burned) });
-              showToast(`Crystal Sleeve saved lane #${i + 1}`);
-              crystalSaved = true;
-              pos.isBust = false;
-              pos.isComplete = false;
-            }
-          }
-
-          if (!crystalSaved) {
-            pos.isBust = true;
-            pos.isComplete = true;
-          } else if (getPositionTotal(pos) > 21) {
-            pos.isBust = true;
-            pos.isComplete = true;
-          }
+          pos.isBust = true;
+          pos.isComplete = true;
         }
       }
     }
+
 
     function countOpenPositions(positions) {
       return positions.filter(p => p.isOpen && !p.isComplete).length;
@@ -5948,18 +6020,31 @@ body += `
 
           const trapDelta = blackjackMatch && blackjackMatch.traps ? blackjackMatch.traps[side][i] : 0;
           if (trapDelta) {
-            positions[i].mods = positions[i].mods || [];
-            positions[i].mods.push(trapDelta);
-            blackjackMatch.traps[side][i] = 0;
-            const attacker = side === 'dealer' ? 'player' : 'dealer';
-            logEvent('TEMPO_STRIKE_TRAP_TRIGGERED', {
-              attacker,
-              lane: i + 1,
-              delta: trapDelta,
-              lastPlay: null,
-              targetState: 'open',
-              trapTotalAfter: blackjackMatch.traps[side][i]
-            });
+            if (side === 'player' && laneHasSleeve(positions[i], 'STEEL')) {
+              logEvent('TEMPO_STRIKE_BLOCKED', {
+                attacker: 'dealer',
+                lane: i + 1,
+                delta: trapDelta,
+                lastPlay: null,
+                targetState: 'blocked_steel',
+                trapTotalAfter: blackjackMatch.traps[side][i],
+                reason: 'trap_trigger'
+              });
+              blackjackMatch.traps[side][i] = 0;
+            } else {
+              positions[i].mods = positions[i].mods || [];
+              positions[i].mods.push(trapDelta);
+              blackjackMatch.traps[side][i] = 0;
+              const attacker = side === 'dealer' ? 'player' : 'dealer';
+              logEvent('TEMPO_STRIKE_TRAP_TRIGGERED', {
+                attacker,
+                lane: i + 1,
+                delta: trapDelta,
+                lastPlay: null,
+                targetState: 'open',
+                trapTotalAfter: blackjackMatch.traps[side][i]
+              });
+            }
           }
 
           if (blackjackMatch && side === 'player') maybeAward21BonusForPlayerPos(i);
@@ -6097,11 +6182,14 @@ body += `
         let stampTotal = 0;
         let stampUids = [];
         if (isWin) {
-          laneCards.forEach(card => {
+          collectLaneCardsForEffects(laneCards).forEach(card => {
             const stampId = getCardStampId(card);
             if (!stampId) return;
             const def = getStampDef(stampId);
-            const delta = getStampKarmaContribution(stampId, base, laneSize);
+            let delta = getStampKarmaContribution(stampId, base, laneSize);
+            const foilMult = (card && card.sleeveId === 'FOIL') ? 2 : 1;
+            if (stampId === 'HOUSE_EDGE' && base === 21) delta = laneSize * 10;
+            delta *= foilMult;
             stampTotal += delta;
             if (card && card.uid !== null && card.uid !== undefined) stampUids.push(card.uid);
             stamps.push({ stampId, name: def ? def.name : stampId, icon: def ? def.icon : '', delta, cardUid: card?.uid ?? null });
@@ -6271,9 +6359,9 @@ body += `
       blackjackMatch.actionUsedThisTurn = true;
       logEvent('TOKEN_SPENT', { amount: 1, source: 'BENCH_USE' });
 
-      pos.mods = pos.mods || [];
-      pos.mods.push(mod.delta);
-      pos.lastPlay = { kind: 'mod', delta: mod.delta };
+      const laneState = applyLaneMod(side, posIdx, mod.delta);
+      if (laneState !== 'open' && laneState !== 'erased') return;
+      pos.lastPlay = { kind: 'mod', delta: laneState === 'erased' ? 0 : mod.delta };
       onCardPlacedForAttack(pos, mod);
 
       blackjackMatch.bench.splice(bi, 1);
@@ -6298,7 +6386,7 @@ body += `
       const stampId = getCardStampId(placedCard);
       const proxySuit = stampId === 'PROXY_SUIT';
       const matchesCalling = placedCard.suit === run.callingCard.suit || proxySuit;
-      const procMult = stampId === 'DEJA_VU' ? 2 : 1;
+      const procMult = 1;
       const effectiveSuit = proxySuit ? run.callingCard.suit : placedCard.suit;
 
       if (!matchesCalling) {
@@ -6415,8 +6503,9 @@ body += `
       logEvent('TOKEN_SPENT', { amount: 1, source: 'BENCH_USE' });
 
       pos.cards.push(c);
-      pos.lastPlay = { kind: 'card', rank: c.rank, value: getStrikeValueFromCard(c) };
-      onCardPlacedForAttack(pos, c);
+      const placedForHooks = handleFusionOnCardPlaced(pos, c);
+      pos.lastPlay = { kind: 'card', rank: c.rank, value: getStrikeValueFromCard(placedForHooks) };
+      onCardPlacedForAttack(pos, placedForHooks);
       recordLaneCard('player', posIdx);
       blackjackMatch.bench.splice(bi, 1);
       blackjackMatch.armedBenchIdx = null;
@@ -6427,9 +6516,33 @@ body += `
       maybeAward21BonusForPlayerPos(posIdx);
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
       updateThreatTargetLane(false, 'bench_place');
-      const deferred = handleCallingSuitOnPlayerCardPlaced(c, posIdx, endPlayerTurn);
+      const deferred = handleCallingSuitOnPlayerCardPlaced(placedForHooks, posIdx, endPlayerTurn);
       if (!deferred) endPlayerTurn();
     };
+
+
+    function handleFusionOnCardPlaced(pos, placed) {
+      if (!pos || !placed || !isStandardCard(placed)) return placed;
+
+      if (pos.pendingFusionUid) {
+        const pendingIdx = (pos.cards || []).findIndex(c => c && c.uid === pos.pendingFusionUid);
+        const placedIdx = (pos.cards || []).findIndex(c => c && c.uid === placed.uid);
+        if (pendingIdx !== -1 && placedIdx !== -1 && pendingIdx !== placedIdx) {
+          const fusionCard = pos.cards[pendingIdx];
+          const placedCard = pos.cards[placedIdx];
+          const fused = { uid: null, type: 'FUSE', a: fusionCard, b: placedCard, sleeveId: 'FUSION' };
+          assignUid(fused);
+          pos.cards = pos.cards.filter((_, i) => i !== pendingIdx && i !== placedIdx);
+          pos.cards.push(fused);
+          pos.pendingFusionUid = null;
+          return fused;
+        }
+      }
+
+      if (placed.sleeveId === 'FUSION') pos.pendingFusionUid = placed.uid;
+      if (placed.sleeveId === 'ERASER') pos.eraserCharges = safeNumber(pos.eraserCharges, 0) + 1;
+      return placed;
+    }
 
     // =============================================
     // PLAYER TURN: drawing places modifiers into bench automatically
@@ -6481,8 +6594,9 @@ body += `
 
       const placed = blackjackMatch.drawnCard;
       pos.cards.push(placed);
-      pos.lastPlay = { kind: 'card', rank: placed.rank, value: getStrikeValueFromCard(placed) };
-      onCardPlacedForAttack(pos, placed);
+      const placedForHooks = handleFusionOnCardPlaced(pos, placed);
+      pos.lastPlay = { kind: 'card', rank: placed.rank, value: getStrikeValueFromCard(placedForHooks) };
+      onCardPlacedForAttack(pos, placedForHooks);
       recordLaneCard('player', posIdx);
       blackjackMatch.drawnCard = null;
 
@@ -6499,7 +6613,7 @@ body += `
         dealerPlaceOneCard(gift, true);
       }
 
-      const deferred = handleCallingSuitOnPlayerCardPlaced(placed, posIdx, endPlayerTurn);
+      const deferred = handleCallingSuitOnPlayerCardPlaced(placedForHooks, posIdx, endPlayerTurn);
       if (!deferred) endPlayerTurn();
     };
 
@@ -6720,8 +6834,9 @@ function dealerLaneScore(idx, total, diff) {
 
       if (targetIdx >= 0) {
         blackjackMatch.dealerPositions[targetIdx].cards.push(card);
-        blackjackMatch.dealerPositions[targetIdx].lastPlay = { kind: 'card', rank: card.rank, value: getStrikeValueFromCard(card) };
-        onCardPlacedForAttack(blackjackMatch.dealerPositions[targetIdx], card);
+        const dealerPlaced = handleFusionOnCardPlaced(blackjackMatch.dealerPositions[targetIdx], card);
+        blackjackMatch.dealerPositions[targetIdx].lastPlay = { kind: 'card', rank: card.rank, value: getStrikeValueFromCard(dealerPlaced) };
+        onCardPlacedForAttack(blackjackMatch.dealerPositions[targetIdx], dealerPlaced);
         recordLaneCard('dealer', targetIdx);
         if (blackjackMatch.spadePeekLanes) blackjackMatch.spadePeekLanes.delete(targetIdx);
 
@@ -6759,9 +6874,9 @@ function dealerApplyBenchMod(bestMove) {
   const pos = blackjackMatch.dealerPositions[laneIdx];
   if (!pos || !pos.isOpen || pos.isComplete) return false;
 
-  pos.mods = pos.mods || [];
-  pos.mods.push(modCard.delta);
-  pos.lastPlay = { kind: 'mod', delta: modCard.delta };
+  const laneState = applyLaneMod('dealer', laneIdx, modCard.delta);
+  if (laneState !== 'open' && laneState !== 'erased') return false;
+  pos.lastPlay = { kind: 'mod', delta: laneState === 'erased' ? 0 : modCard.delta };
   onCardPlacedForAttack(pos, modCard);
 
   blackjackMatch.dealerBench.splice(modIdx, 1);
@@ -7111,11 +7226,11 @@ function dealerStandPhase(diff, maxPasses = 6) {
       let goldBonusTotal = 0;
       for (let i = 0; i < 5; i++) {
         const pPos = blackjackMatch.playerPositions[i];
-        const hasGold = (pPos.cards || []).some(c => c && c.sleeveId === 'GOLD');
-        if (hasGold) {
-          const amount = safeNumber(playerTotals[i], 0);
+        const goldCount = (pPos.cards || []).filter(c => c && c.sleeveId === 'GOLD').length;
+        if (goldCount > 0) {
+          const amount = safeNumber(playerTotals[i], 0) * goldCount;
           goldBonusTotal += amount;
-          logEvent('GOLD_SLEEVE_BONUS', { laneIdx: i + 1, amount });
+          logEvent('GOLD_SLEEVE_BONUS', { laneIdx: i + 1, amount, count: goldCount });
         }
       }
       if (goldBonusTotal > 0) {
@@ -7174,6 +7289,18 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
       const karmaExtraTotal = karmaExtras.reduce((sum, e) => sum + safeNumber(e.delta, 0), 0);
       const karmaGained = karmaLaneGain + karmaExtraTotal;
+      let ventureFundChips = 0;
+      for (let i = 0; i < 5; i++) {
+        if (positionResults[i] !== 'player') continue;
+        const laneCards = blackjackMatch.playerPositions[i].cards || [];
+        const vfCount = collectLaneCardsForEffects(laneCards).filter(c => getCardStampId(c) === 'VENTURE_FUND').length;
+        const laneKarmaTotal = safeNumber(karmaBreakdown.lanes[i]?.laneTotal, 0);
+        if (vfCount > 0) ventureFundChips += laneKarmaTotal * vfCount;
+      }
+      if (ventureFundChips > 0) {
+        run.chips = safeNumber(run.chips) + ventureFundChips;
+        blackjackMatch.bonusChipsEarned += ventureFundChips;
+      }
       run.karma = Math.max(0, safeNumber(run.karma, 0) + karmaGained);
       const levelUpSummary = maybeLevelUpCallingCardFromKarma();
       const callingRankAfter = run.callingCard ? run.callingCard.rank : null;
@@ -7196,7 +7323,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
       const burnCards = [];
       blackjackMatch.playerPositions.forEach(pos => {
-        (pos.cards || []).forEach(card => {
+        collectLaneCardsForEffects(pos.cards).forEach(card => {
           if (getCardStampId(card) === 'BURN_AFTER_READING') burnCards.push(card);
         });
       });
@@ -8654,8 +8781,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         sleeveId ? `data-card-sleeve="${sleeveId}"` : '',
         card && card.uid !== undefined && card.uid !== null ? `data-card-uid="${card.uid}"` : ''
       ].filter(Boolean).join(' ');
+      const sleeveDef = sleeveId ? getSleeveDef(sleeveId) : null;
       const stampIcon = (stampDef && stampDef.icon) ? `<div class="stamp-icon">${stampDef.icon}</div>` : '';
-      return `<div class="${cls}" ${dataAttrs}>${text}${stampIcon}</div>`;
+      const sleeveIcon = (sleeveDef && sleeveDef.icon) ? `<div class="sleeve-icon">${sleeveDef.icon}</div>` : '';
+      return `<div class="${cls}" ${dataAttrs}>${text}${stampIcon}${sleeveIcon}</div>`;
     }
 
     function setupCardTooltip() {
