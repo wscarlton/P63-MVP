@@ -3806,30 +3806,32 @@
       width: 112px;
       height: 172px;
       border-radius: 14px;
-      border: 1px solid rgba(148,163,184,0.22);
-      background: linear-gradient(160deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.12) 100%);
-      box-shadow: 0 10px 26px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08);
+      border: 1px solid rgba(0,0,0,0.20);
+      background: #f7f7f7;
+      box-shadow: 0 10px 26px rgba(0,0,0,0.42);
       cursor: pointer;
       position: relative;
       transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
       user-select: none;
+      color: #111;
+      overflow: hidden;
     }
     .reward-card::after{
       content: '';
       position: absolute;
-      inset: 12px;
-      border-radius: 12px;
-      border: 1px dashed rgba(148,163,184,0.18);
-      opacity: 0.9;
+      inset: 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.12);
+      pointer-events: none;
     }
     .reward-card:hover{
       transform: translateY(-8px) scale(1.02);
       border-color: rgba(var(--gold-rgb),0.60);
-      box-shadow: 0 16px 34px rgba(0,0,0,0.70), 0 0 24px rgba(var(--gold-rgb),0.18), inset 0 1px 0 rgba(255,255,255,0.10);
+      box-shadow: 0 16px 34px rgba(0,0,0,0.52), 0 0 24px rgba(var(--gold-rgb),0.18);
     }
     .reward-card.selected{
       border-color: rgba(var(--gold-rgb),0.95);
-      box-shadow: 0 18px 40px rgba(0,0,0,0.75), 0 0 34px rgba(var(--gold-rgb),0.22), inset 0 1px 0 rgba(255,255,255,0.12);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.60), 0 0 34px rgba(var(--gold-rgb),0.24);
     }
 
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.72; } }
@@ -4106,23 +4108,22 @@
       const sleeve = r.sleeveShort || r.sleeveLabel || r.sleeveId || 'SLEEVE';
 
       d.innerHTML = `
-        <div style="position:absolute; inset:12px; display:flex; flex-direction:column; justify-content:space-between;">
-          <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-weight:800; font-size:14px; line-height:1; color:${red?'var(--card-red)':'#e8e8ea'};">
-            <div>${rank}${suitSym}</div>
-            <div style="transform:rotate(180deg)">${rank}${suitSym}</div>
-          </div>
+        <div style="position:absolute; top:8px; left:8px; display:flex; flex-direction:column; gap:2px; line-height:1; font-weight:800; color:${red?'#b13b3b':'#111'}; font-family:var(--font-mono); z-index:2;">
+          <div style="font-size:14px;">${rank}</div>
+          <div style="font-size:14px;">${suitSym}</div>
+        </div>
 
-          <div style="text-align:center; font-family:var(--font-display); letter-spacing:2px; text-transform:uppercase; color:rgba(212,175,55,0.95); font-size:16px;">
-            ${rewardChoices.length ? 'REWARD' : 'LOADING'}
-          </div>
+        <div style="position:absolute; right:8px; top:8px; width:22px; height:22px; border-radius:999px; border:1px solid rgba(0,0,0,0.14); background:rgba(255,255,255,0.85); display:grid; place-items:center; font-size:12px; z-index:2;" title="Stamp">
+          ${rewardChoices.length ? stamp : '…'}
+        </div>
 
-          <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
-            <span style="font-family:var(--font-mono); font-size:12px; padding:6px 8px; border-radius:999px; border:1px solid rgba(148,163,184,0.22); background:rgba(0,0,0,0.22); color:rgba(255,255,255,0.85);">
-              ${rewardChoices.length ? stamp : '…'}
-            </span>
-            <span style="font-family:var(--font-mono); font-size:12px; padding:6px 8px; border-radius:999px; border:1px solid rgba(148,163,184,0.22); background:rgba(0,0,0,0.22); color:rgba(255,255,255,0.85);">
-              ${rewardChoices.length ? sleeve : '…'}
-            </span>
+        <div style="position:absolute; left:8px; bottom:8px; width:22px; height:22px; border-radius:999px; border:1px solid rgba(0,0,0,0.14); background:rgba(255,255,255,0.85); display:grid; place-items:center; font-size:12px; z-index:2;" title="Sleeve">
+          ${rewardChoices.length ? sleeve : '…'}
+        </div>
+
+        <div style="position:absolute; inset:0; display:grid; place-items:center; font-family:var(--font-display); letter-spacing:1px; text-transform:uppercase; color:rgba(17,17,17,0.85);">
+          <div style="padding:6px 10px; border-radius:999px; border:1px solid rgba(0,0,0,0.16); background:rgba(255,255,255,0.72); font-size:13px;">
+            ${rewardChoices.length ? 'Reward' : 'Loading'}
           </div>
         </div>
       `;
@@ -7783,7 +7784,8 @@ function benchPush(card, source = '') {
         return use[Math.floor(Math.random() * use.length)].id;
       }
 
-      function makeRewardCard() {
+      function makeRewardCard(opts = {}) {
+        const forceRare = !!opts.forceRare;
         const c = {
           uid: null,
           rank: RANKS[Math.floor(Math.random() * RANKS.length)],
@@ -7793,8 +7795,8 @@ function benchPush(card, source = '') {
           laminationId: null
         };
 
-        const sr = rollRarity();
-        const lr = rollRarity();
+        const sr = forceRare ? 'rare' : rollRarity();
+        const lr = forceRare ? 'rare' : rollRarity();
         c.stampId = pickDefIdByRarity(STAMP_DEFS, sr);
         c.sleeveId = pickDefIdByRarity(SLEEVE_DEFS, lr);
 
@@ -7868,7 +7870,8 @@ function benchPush(card, source = '') {
 
         if (d.type === 'P63_REQUEST_REWARD_SET' && d.kind === 'INFILTRATION' && active.kind === 'INFILTRATION') {
           const setId = `rw_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
-          const rewards = [makeRewardCard(), makeRewardCard(), makeRewardCard()];
+          const forcedIdx = Math.floor(Math.random() * 3);
+          const rewards = [0, 1, 2].map((idx) => makeRewardCard({ forceRare: idx === forcedIdx }));
           active.infiltration.rewardSetId = setId;
           active.infiltration.rewards = rewards;
 
