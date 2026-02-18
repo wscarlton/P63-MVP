@@ -24,6 +24,7 @@
       --text-muted: #737373;
 
       --accent-gold: #d4af37;
+      --gold-rgb: 212,175,55;
       --accent-gold-dim: #8a6f1f;
       --accent-red: #a83232;
       --accent-green: #5e8c61;
@@ -601,7 +602,7 @@
     <!-- Buttons -->
     <div class="actions" style="margin-bottom:10px">
       <button class="btn btn-secondary" onclick="toggleRules()">Rules</button>
-      <button class="btn btn-primary" onclick="initGame()">⟲ New Run</button>
+      <button class="btn btn-primary" id="new-run-btn" onclick="initGame()">⟲ New Run</button>
     </div>
 
     <!-- Rules Panel -->
@@ -720,6 +721,7 @@
   };
 
   let rewardSetId = null;
+  let P63_ENDED = false;
 
   function isRedSuit(sym){ return sym === '♥' || sym === '♦'; }
 
@@ -870,9 +872,12 @@
   }
 
   function endgameAction() {
+    if (P63_ENDED) return;
+
     if (P63_EMBED){
       if (endgameMode === 'win'){
         if (selectedRewardIdx === null) return;
+        P63_ENDED = true;
         P63.send("P63_MINIGAME_END", {
           kind: "INFILTRATION",
           outcome: "win",
@@ -883,6 +888,7 @@
       }
 
       // dead
+      P63_ENDED = true;
       P63.send("P63_MINIGAME_END", {
         kind: "INFILTRATION",
         outcome: "dead"
@@ -906,10 +912,14 @@
   }
 
   function initGame() {
+    P63_ENDED = false;
+
     if (P63_EMBED){
       selectedLength = "medium"; // Standard only
       const lb = document.querySelector(".length-bar");
       if (lb) lb.style.display = "none";
+      const nr = document.getElementById("new-run-btn");
+      if (nr) nr.style.display = "none";
       setLength("medium");
     }
 
