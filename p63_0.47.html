@@ -7537,7 +7537,25 @@ function benchPush(card, source = '') {
         const html = tpl ? tpl.innerHTML : '';
         const ov = overlay();
         const fr = frame();
-        fr.srcdoc = html;
+
+        const sfxBridge = `<script>(function(){
+  document.addEventListener('pointerdown', function(e){
+    try {
+      if (typeof e.button === 'number' && e.button !== 0) return;
+      var t = e.target;
+      if (!t || !t.closest) return;
+      if (t.closest('input, textarea, select')) return;
+      var clickable = t.closest('button, [role="button"], a[href], [onclick], .bj-btn, .modal-btn');
+      if (!clickable || clickable.disabled) return;
+      if (clickable.getAttribute('data-sfx-skip') === '1') return;
+      var key = clickable.getAttribute('data-sfx') || 'ui_click';
+      parent.postMessage({ __p63: 1, type: 'P63_MINIGAME_SFX', name: key }, '*');
+    } catch (err) {}
+  }, true);
+})();<\/script>`;
+
+        if (html.includes('</body>')) fr.srcdoc = html.replace('</body>', `${sfxBridge}</body>`);
+        else fr.srcdoc = `${html}${sfxBridge}`;
         ov.classList.remove('hidden');
         ov.setAttribute('aria-hidden', 'false');
       }
@@ -7653,6 +7671,11 @@ function benchPush(card, source = '') {
         if (!active) return;
 
         if (d.type === 'P63_MINIGAME_READY') return;
+
+        if (d.type === 'P63_MINIGAME_SFX') {
+          try { if (window.SFX) SFX.play(d.name || 'ui_click'); } catch (err) {}
+          return;
+        }
 
         if (d.type === 'P63_REQUEST_REWARD_SET' && d.kind === 'INFILTRATION' && active.kind === 'INFILTRATION') {
           const setId = `rw_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
