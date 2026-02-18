@@ -566,6 +566,17 @@
     }
     .merchant-cards { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 
+    .shop-purchase-counter{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 12px;
+      border:1px solid var(--border-color);
+      border-radius:12px;
+      background:rgba(255,255,255,0.03);
+      margin-bottom:10px;
+    }
+
     .merchant-card-slot {
       display: flex;
       flex-direction: column;
@@ -1898,6 +1909,7 @@
     const REMOVAL_REROLL_COST = 25;      // also used as inventory reroll cost
     const MERCHANT_INVENTORY_REROLL_COST = 25;
     const COLLECTOR_COST_BY_RARITY = { common: 20, uncommon: 35, rare: 60 };
+    const SHOP_PURCHASE_CAP = 10;
 
 // Economy tuning
 const MERCHANT_REMOVE_INCREMENT = 25; // removal cost increases by this amount each time you start a paid removal
@@ -2105,7 +2117,7 @@ const CALLING_RANK_THRESHOLDS = [
     let startPlasma = null;
     let uiView = 'start';
     function initStartPlasma(){ const c=document.getElementById('startPlasma'); if (!c) return; startPlasma = new StartPlasma2D(c, START_PLASMA_CONFIG); }
-    function showStartScreen(){ uiView = 'start'; const el=document.getElementById('startScreen'); if (el) el.style.display='flex'; if (startPlasma) startPlasma.start(); }
+    function showStartScreen(){ uiView = 'start'; const el=document.getElementById('startScreen'); if (el) el.style.display='flex'; if (startPlasma) startPlasma.start(); setTimeout(updateStartRunCard, 0); }
     function hideStartScreen(){ uiView = 'game'; const el=document.getElementById('startScreen'); if (el) el.style.display='none'; if (startPlasma) startPlasma.stop(); }
     function updateStartRunCard(){
       const sum = document.getElementById('startRunSummary');
@@ -3699,19 +3711,24 @@ const CALLING_RANK_THRESHOLDS = [
       const out = [];
       for (const c of cards || []) {
         if (!c || isModifier(c) || isKeyCard(c)) continue;
-        if (isFused(c)) {
-          if (c.a) out.push(c.a);
-          if (c.b) out.push(c.b);
-        } else {
-          out.push(c);
-        }
+        out.push(c); // fused counts as ONE card entity for effect scanning
       }
       return out;
     }
 
+    function cardHasSleeve(card, sleeveId) {
+      if (!card) return false;
+      if (isFused(card)) {
+        return card.sleeveId === sleeveId
+          || card.a?.sleeveId === sleeveId
+          || card.b?.sleeveId === sleeveId;
+      }
+      return card.sleeveId === sleeveId;
+    }
+
     function laneHasSleeve(pos, sleeveId) {
       const cards = collectLaneCardsForEffects(pos?.cards || []);
-      return cards.some(c => c && c.sleeveId === sleeveId);
+      return cards.some(c => cardHasSleeve(c, sleeveId));
     }
 
     function getStampKarmaContribution(stampId, baseValue, laneSize) {
@@ -3842,11 +3859,7 @@ const CALLING_RANK_THRESHOLDS = [
       if (isFused(card)) {
         const a = getCardValueOptions(card.a);
         const b = getCardValueOptions(card.b);
-        const sums = [];
-        for (const av of a) {
-          for (const bv of b) sums.push(av + bv);
-        }
-        return Array.from(new Set(sums));
+        return Array.from(new Set([...(a || []), ...(b || [])])).sort((x, y) => x - y);
       }
 
       if (card.__negValue !== undefined) return [safeNumber(card.__negValue, 0)];
@@ -3907,6 +3920,19 @@ const CALLING_RANK_THRESHOLDS = [
       });
     }
 
+
+    function cloneCard(card) {
+      if (!card) return card;
+      if (isFused(card)) {
+        return {
+          ...card,
+          a: cloneCard(card.a),
+          b: cloneCard(card.b)
+        };
+      }
+      return { ...card };
+    }
+
     function randomCard() {
       if (Math.random() < MOD_OFFER_CHANCE) {
         const delta = MODIFIER_DELTAS[Math.floor(Math.random() * MODIFIER_DELTAS.length)];
@@ -3934,6 +3960,50 @@ const CALLING_RANK_THRESHOLDS = [
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
     }
+
+function ensureShopPurchaseCounts() {
+  if (!run) return;
+  if (!run.shopPurchaseCounts || typeof run.shopPurchaseCounts !== 'object') {
+    run.shopPurchaseCounts = {};
+  }
+}
+
+function getShopPurchasesUsed(shopId) {
+  if (!run || !shopId) return 0;
+  ensureShopPurchaseCounts();
+  return safeNumber(run.shopPurchaseCounts[shopId], 0);
+}
+
+function getShopPurchasesRemaining(shopId) {
+  return Math.max(0, SHOP_PURCHASE_CAP - getShopPurchasesUsed(shopId));
+}
+
+function canShopPurchase(shopId) {
+  return getShopPurchasesRemaining(shopId) > 0;
+}
+
+function recordShopPurchase(shopId, meta = {}) {
+  ensureShopPurchaseCounts();
+  const before = getShopPurchasesUsed(shopId);
+  run.shopPurchaseCounts[shopId] = before + 1;
+
+  logEvent('SHOP_PURCHASE', {
+    shopId,
+    cap: SHOP_PURCHASE_CAP,
+    before,
+    after: before + 1,
+    ...meta
+  });
+}
+
+function renderShopPurchaseCounter(shopId) {
+  const remaining = getShopPurchasesRemaining(shopId);
+  return `
+    <div class="shop-purchase-counter">
+      Purchases Left: <b>${remaining}</b> / ${SHOP_PURCHASE_CAP}
+    </div>
+  `;
+}
 
 
 // =============================================
@@ -3974,13 +4044,15 @@ function getMerchantCost(base) {
 
 function getMerchantBuyCost(card) {
   if (isKeyCard(card)) return KEY_MERCHANT_COST;
-  const isMod = isModifier(card);
-  const base = isMod ? MERCHANT_BUY_BASE_MOD : MERCHANT_BUY_BASE_STANDARD;
-  const count = isMod
-    ? safeNumber(run && run.merchantModifierBuys, 0)
-    : safeNumber(run && run.merchantStandardBuys, 0);
-  const scaled = base + (MERCHANT_BUY_INCREMENT * count);
-  return Math.ceil(scaled * getMerchantPriceMult());
+  const mult = getMerchantPriceMult();
+
+  if (isModifier(card)) {
+    const n = safeNumber(run.merchantModifierBuys, 0);
+    return Math.round((MERCHANT_BUY_BASE_MOD + MERCHANT_BUY_INCREMENT * n) * mult);
+  }
+
+  // Standard cards: NO scaling
+  return Math.round(MERCHANT_BUY_BASE_STANDARD * mult);
 }
 
 function getModifyServiceCost(serviceId, floor) {
@@ -4620,14 +4692,23 @@ function benchPush(card, source = '') {
       return offers;
     }
 
+
+    function modifyCounterBanner() {
+      const ctx = run && run.ui && run.ui.modifyContext;
+      const shopId = ctx && ctx.shopId;
+      return shopId ? renderShopPurchaseCounter(shopId) : '';
+    }
+
     function encounterModify() {
       const offers = buildModifyOffers();
       const eligibleCount = getEligibleStandardIndices().length;
+      const tileId = run.board.currentTileId;
+      const shopId = `modify-${safeNumber(run.encounterSeq, 0)}-${tileId}`;
 
       run.ui.modifyContext = {
-        tileId: run.board.currentTileId,
+        tileId,
+        shopId,
         servicesOffered: offers,
-        serviceUsed: false,
         selectedServiceId: null,
         previewIndices: [],
         rankChoices: null,
@@ -4636,7 +4717,7 @@ function benchPush(card, source = '') {
       };
 
       logEvent('MODIFY_ENTER', {
-        tileId: run.board.currentTileId,
+        tileId,
         floor: run.floor,
         chips: safeNumber(run.chips),
         deckSize: run.playerDeck.length,
@@ -4651,15 +4732,19 @@ function benchPush(card, source = '') {
       const ctx = run.ui.modifyContext || {};
       const eligibleCount = getEligibleStandardIndices().length;
       const offers = ctx.servicesOffered || [];
-      const inProgress = !!ctx.selectedServiceId && !ctx.serviceUsed;
+      const inProgress = !!ctx.selectedServiceId;
       const chipsNow = safeNumber(run.chips);
+      const shopId = ctx.shopId;
+      const counterHtml = renderShopPurchaseCounter(shopId);
+      const capReached = !canShopPurchase(shopId);
 
       let body = `
+        ${counterHtml}
         <p class="modal-text">Modify changes cards already in your deck (base cards only). Choose one service.</p>
         <p class="modal-text">Chips: <strong>${chipsNow}</strong> | Eligible cards: <strong>${eligibleCount}</strong></p>
       `;
 
-      if (offers.length && !inProgress && !ctx.serviceUsed) {
+      if (offers.length && !inProgress) {
         body += `<div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">`;
         offers.forEach(serviceId => {
           const cost = getModifyServiceCost(serviceId, run.floor);
@@ -4680,19 +4765,21 @@ function benchPush(card, source = '') {
       } else if (inProgress) {
         const meta = MODIFY_SERVICES[ctx.selectedServiceId];
         body += `<p class="modal-text" style="color:var(--accent-gold); font-weight:700;">Service in progress: ${meta ? meta.name : ctx.selectedServiceId}</p>`;
-      } else if (ctx.serviceUsed) {
-        body += `<p class="modal-text" style="color:var(--accent-green); font-weight:700;">Service completed.</p>`;
+      }
+
+      if (capReached && !inProgress) {
+        body += `<p class="modal-text" style="color:var(--danger); font-weight:700;">Purchase cap reached for this shop.</p>`;
       }
 
       const buttons = [];
-      if (eligibleCount && !ctx.serviceUsed && !inProgress) {
+      if (eligibleCount && !inProgress) {
         offers.forEach(serviceId => {
           const meta = MODIFY_SERVICES[serviceId];
           const cost = getModifyServiceCost(serviceId, run.floor);
           buttons.push({
             text: `${meta ? meta.name : serviceId} (${cost})`,
             primary: true,
-            disabled: chipsNow < cost,
+            disabled: chipsNow < cost || capReached,
             action: () => selectModifyService(serviceId)
           });
         });
@@ -4721,13 +4808,18 @@ function benchPush(card, source = '') {
 
     function selectModifyService(serviceId) {
       const ctx = run.ui.modifyContext;
-      if (!ctx || ctx.serviceUsed) return;
+      if (!ctx || !canShopPurchase(ctx.shopId)) {
+        showToast('Purchase cap reached for this shop.');
+        return;
+      }
+      if (!ctx) return;
       const meta = MODIFY_SERVICES[serviceId];
       const cost = getModifyServiceCost(serviceId, run.floor);
       if (run.chips < cost) return;
 
       const chipsBefore = run.chips;
       run.chips -= cost;
+      recordShopPurchase(ctx.shopId, { shopType: 'MODIFY', kind: serviceId });
       ctx.selectedServiceId = serviceId;
       logEvent('MODIFY_SERVICE_SELECT', {
         serviceId,
@@ -4742,11 +4834,15 @@ function benchPush(card, source = '') {
 
     function rerollModifyCandidates(serviceId) {
       const ctx = run.ui.modifyContext;
-      if (!ctx || ctx.serviceUsed) return;
+      if (!ctx || !canShopPurchase(ctx.shopId)) {
+        showToast('Purchase cap reached for this shop.');
+        return;
+      }
       const cost = getModifyRerollCost();
       if (run.chips < cost) return;
       const chipsBefore = run.chips;
       run.chips -= cost;
+      recordShopPurchase(ctx.shopId, { shopType: 'MODIFY', kind: 'REROLL', serviceId });
 
       logEvent('MODIFY_REROLL', {
         serviceId,
@@ -4802,9 +4898,10 @@ function benchPush(card, source = '') {
       }).join('');
 
       const rerollCost = getModifyRerollCost();
-      const canReroll = run.chips >= rerollCost;
+      const canReroll = run.chips >= rerollCost && canShopPurchase(ctx.shopId);
 
       showModal(`Modify - ${title}`, `
+        ${modifyCounterBanner()}
         <p class="modal-text">Choose a card to modify.</p>
         <div class="merchant-cards">${cardsHtml}</div>
         <div style="display:flex; justify-content:center; margin-top:8px;">
@@ -4857,9 +4954,10 @@ function benchPush(card, source = '') {
       }).join('');
 
       const rerollCost = getModifyRerollCost();
-      const canReroll = run.chips >= rerollCost;
+      const canReroll = run.chips >= rerollCost && canShopPurchase(ctx.shopId);
 
       showModal('Modify - Rank Shift', `
+        ${modifyCounterBanner()}
         <p class="modal-text">Choose one card for rank shifting.</p>
         <div class="merchant-cards">${cardsHtml}</div>
         <div style="display:flex; justify-content:center; margin-top:8px;">
@@ -4902,6 +5000,7 @@ function benchPush(card, source = '') {
       const previewLabel = shiftedRank ? `${card.rank} → ${shiftedRank}` : `${card.rank} → (invalid)`;
 
       showModal('Modify - Rank Shift', `
+        ${modifyCounterBanner()}
         <p class="modal-text">Selected card:</p>
         <div class="merchant-cards" style="justify-content:center;">${renderCard(card, false)}</div>
         <p class="modal-text" style="margin-top:8px;">Rank preview: <strong>${previewLabel}</strong></p>
@@ -4962,6 +5061,7 @@ function benchPush(card, source = '') {
       if (!card || !isStandardCard(card)) return;
 
       showModal('Modify - Re-Suit', `
+        ${modifyCounterBanner()}
         <p class="modal-text">Choose a new suit for ${cardToString(card)}.</p>
         <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
           ${SUITS.map(suit => `<button class="modal-btn" onclick="applyModifyResuit(${deckIdx}, '${suit}')">${suit}</button>`).join('')}
@@ -4991,9 +5091,10 @@ function benchPush(card, source = '') {
       }).join('');
 
       const rerollCost = getModifyRerollCost();
-      const canReroll = run.chips >= rerollCost;
+      const canReroll = run.chips >= rerollCost && canShopPurchase(ctx.shopId);
 
       showModal('Modify - Calling Suit Sweep', `
+        ${modifyCounterBanner()}
         <p class="modal-text">Preview the cards that will be re-suited to ${run.callingCard ? run.callingCard.suit : ''}.</p>
         <div class="merchant-cards">${cardsHtml}</div>
         <div style="display:flex; justify-content:center; margin-top:8px;">
@@ -5038,9 +5139,10 @@ function benchPush(card, source = '') {
       }).join('');
 
       const rerollCost = getModifyRerollCost();
-      const canReroll = run.chips >= rerollCost;
+      const canReroll = run.chips >= rerollCost && canShopPurchase(ctx.shopId);
 
       showModal('Modify - Uniform Rank Press', `
+        ${modifyCounterBanner()}
         <p class="modal-text">Choose a rank to press onto these cards.</p>
         <div class="merchant-cards">${cardsHtml}</div>
         <div style="display:flex; justify-content:center; margin-top:8px;">
@@ -5086,7 +5188,6 @@ function benchPush(card, source = '') {
       recordDeckSnapshot('MODIFY_APPLY');
 
       if (ctx) {
-        ctx.serviceUsed = true;
         ctx.selectedServiceId = null;
         ctx.previewIndices = [];
         ctx.rankChoices = null;
@@ -5183,8 +5284,12 @@ function benchPush(card, source = '') {
       const activeIdx = shop.activeItemIdx;
       const inProgress = activeIdx !== null && activeIdx !== undefined;
 
+      const shopId = shop.shopId;
+      const counterHtml = renderShopPurchaseCounter(shopId);
+
       let body = `
-        <p class="modal-text">The Collector offers stamps and sleeves to shape your deck.</p>
+        ${counterHtml}
+        <p class="modal-text">Buy an item, then apply it to a card.</p>
         <p class="modal-text">Chips: <strong>${chipsNow}</strong></p>
       `;
 
@@ -5244,6 +5349,11 @@ function benchPush(card, source = '') {
       const item = shop.items[idx];
       if (!item) return;
       const itemCost = item.cost || COLLECTOR_COST_BY_RARITY[item.rarity] || COLLECTOR_COST_BY_RARITY.common;
+      const shopId = shop.shopId;
+      if (!canShopPurchase(shopId)) {
+        showToast('Purchase cap reached for this shop.');
+        return;
+      }
       if (run.chips < itemCost) return;
 
       if (item.type === 'STAMP' && getEligibleStampCardIndices().length === 0) return;
@@ -5251,6 +5361,7 @@ function benchPush(card, source = '') {
 
       const chipsBefore = run.chips;
       run.chips -= itemCost;
+      recordShopPurchase(shopId, { shopType: 'COLLECTOR', kind: item.type || 'ITEM' });
       shop.activeItemIdx = idx;
       logEvent('COLLECTOR_BUY', {
         itemId: item.id,
@@ -5389,8 +5500,14 @@ function benchPush(card, source = '') {
         priceMult = Math.max(0.75, Math.min(1.25, 1 + affinityMod + edgeMod));
       }
 
+      const tileId = run.board.currentTileId;
+      const shopId = `merchant-${safeNumber(run.encounterSeq, 0)}-${tileId}`;
+
       run.ui.merchantContext = {
-        tileId: run.board.currentTileId,
+        tileId,
+        shopId,
+        rerolls: 0,
+        offers: [],
         npc,
         affinity,
         edgeDelta,
@@ -5399,6 +5516,7 @@ function benchPush(card, source = '') {
 
       merchantOffers = [randomCard(), randomCard(), randomCard()];
       merchantOffers.forEach(card => assignUid(card));
+      run.ui.merchantContext.offers = merchantOffers.map(c => cloneCard(c));
       maybeInjectMerchantKey(merchantOffers);
       removalMode = false;
       removalCandidates = [];
@@ -5425,6 +5543,8 @@ function benchPush(card, source = '') {
       const chipsNow = safeNumber(run.chips);
       const ctx = run.ui.merchantContext || {};
       const npc = ctx.npc;
+      const shopId = ctx.shopId;
+      const counterHtml = renderShopPurchaseCounter(shopId);
       const affinity = ctx.affinity || 'neutral';
       const priceMult = getMerchantPriceMult();
       const npcLine = npc
@@ -5432,6 +5552,7 @@ function benchPush(card, source = '') {
         : `Prices x${priceMult.toFixed(2)}`;
       const rerollInvCost = getMerchantCost(MERCHANT_INVENTORY_REROLL_COST);
       let body = `
+        ${counterHtml}
         <p class="modal-text">The merchant displays their wares.</p>
         <div class="log-kv" style="margin-bottom:10px;">${npcLine}</div>
         <p class="modal-text">Chips: <strong>${chipsNow}</strong> | Deck: <strong>${run.playerDeck.length}</strong></p>
@@ -5441,7 +5562,7 @@ function benchPush(card, source = '') {
       const canRerollInv = chipsNow >= rerollInvCost;
       body += `
         <div class="merchant-section">
-          <div class="merchant-section-title">Buy Cards (Standard ${MERCHANT_BUY_BASE_STANDARD}+ · Mod ${MERCHANT_BUY_BASE_MOD}+ · +${MERCHANT_BUY_INCREMENT} per buy)</div>
+          <div class="merchant-section-title">Buy Cards (Standard ${MERCHANT_BUY_BASE_STANDARD} flat · Mod ${MERCHANT_BUY_BASE_MOD}+ · +${MERCHANT_BUY_INCREMENT} per mod buy)</div>
           <div style="display:flex; justify-content:center; margin-bottom:12px;">
             <button class="modal-btn" ${canRerollInv ? '' : 'disabled'} onclick="rerollMerchantInventory()">Re-roll Inventory (${rerollInvCost})</button>
           </div>
@@ -5544,6 +5665,10 @@ body += `
       run.chips -= cost;
       merchantOffers = [randomCard(), randomCard(), randomCard()];
       merchantOffers.forEach(card => assignUid(card));
+      if (run && run.ui && run.ui.merchantContext) {
+        run.ui.merchantContext.rerolls = safeNumber(run.ui.merchantContext.rerolls, 0) + 1;
+        run.ui.merchantContext.offers = merchantOffers.map(c => cloneCard(c));
+      }
       if (run.floor === 2 && run.secret && run.secret.keys) {
         const mk = run.secret.keys.merchant;
         mk.chance = Math.min(0.35, safeNumber(mk.chance, 0.05) + 0.03);
@@ -5555,6 +5680,12 @@ body += `
     };
 
     window.buyMerchantCard = function(idx) {
+  const ctx = run.ui.merchantContext;
+  if (!ctx || !canShopPurchase(ctx.shopId)) {
+    showToast('Purchase cap reached for this shop.');
+    return;
+  }
+
   const card = merchantOffers[idx];
   assignUid(card);
   const chipsBefore = run.chips;
@@ -5578,6 +5709,7 @@ body += `
   }
 
   run.chips -= cost;
+  recordShopPurchase(ctx.shopId, { shopType: 'MERCHANT', kind: isModifier(card) ? 'MODIFIER' : 'STANDARD' });
   run.playerDeck.push(card);
 
   if (isKeyCard(card) && run.secret && run.secret.keys) {
@@ -5589,8 +5721,6 @@ body += `
   if (isModifier(card)) {
     recordModifierPurchase(card.delta);
     run.merchantModifierBuys = safeNumber(run.merchantModifierBuys, 0) + 1;
-  } else {
-    run.merchantStandardBuys = safeNumber(run.merchantStandardBuys, 0) + 1;
   }
 
   logEvent('MERCHANT_BUY', {
@@ -5616,6 +5746,12 @@ body += `
 };
 
     window.startRemoval = function() {
+  const ctx = run.ui.merchantContext;
+  if (!ctx || !canShopPurchase(ctx.shopId)) {
+    showToast('Purchase cap reached for this shop.');
+    return;
+  }
+
   const cost = getMerchantRemovalCost();
   if (run.playerDeck.length < 3) return;
 
@@ -5627,6 +5763,7 @@ body += `
 
   // charge only after eligibility is confirmed
   run.chips -= cost;
+  recordShopPurchase(ctx.shopId, { shopType: 'MERCHANT', kind: 'REMOVAL' });
   run.paidRemovalCount = safeNumber(run.paidRemovalCount, 0) + 1;
   removalPaidCost = cost;
 
@@ -5747,11 +5884,50 @@ body += `
     }
 
     function encounterBoss() {
-      if (run.floor === 3 && run.loan.active && !run.loan.repaid) {
-        logEvent('LOAN_DEFAULTED', { floor: run.floor, amountOwed: LOAN_REPAY, at: 'BOSS_ENTRANCE' });
-        gameOver("Debt unpaid. You cannot face the final boss.", 'LOAN_DEFAULTED');
+      if (run.floor === 3 && run.loan && run.loan.active && !run.loan.repaid) {
+        const owed = LOAN_REPAY;
+        const canRepayNow = run.chips >= owed;
+
+        showModal(
+          'Debt Due',
+          `
+            <div class="modal-text">
+              You owe the Loan Shark <b>${owed}</b> chips.<br/>
+              Repay before the final boss or you’ll be turned away.
+            </div>
+          `,
+          [
+            {
+              text: `Repay ${owed} & Enter`,
+              primary: true,
+              disabled: !canRepayNow,
+              action: () => {
+                repayLoan('BOSS_GATE');
+                closeModal();
+                encounterBoss_startFight();
+              }
+            },
+            {
+              text: 'Back',
+              action: () => { closeModal(); renderAll(); }
+            },
+            {
+              text: 'Enter Without Repaying',
+              danger: true,
+              action: () => {
+                closeModal();
+                logEvent('LOAN_DEFAULTED', { floor: run.floor, amountOwed: owed, at: 'BOSS_ENTRANCE' });
+                gameOver(`You entered the final boss without repaying ${owed} chips.`, 'LOAN_DEFAULTED');
+              }
+            }
+          ]
+        );
         return;
       }
+      encounterBoss_startFight();
+    }
+
+    function encounterBoss_startFight() {
       if (run.chips < BUYIN_BOSS) {
         logEvent('MATCH_START_FAILED', { type: 'BOSS', buyIn: BUYIN_BOSS, chips: run.chips, reason: 'INSUFFICIENT_CHIPS' });
         gameOver("You can't afford the buy-in.", 'INSUFFICIENT_BUYIN');
@@ -5761,6 +5937,7 @@ body += `
     }
 
     function startBossFight() {
+
       run.bossFight = {
         active: true,
         floor: run.floor,
@@ -5837,7 +6014,8 @@ body += `
       const dealerDrawPile = shuffle(dealerBaseDeck.slice());
 
       // load tokens: base by floor + from bank
-      const baseTokens = Math.max(1, safeNumber(run.floor, 1));
+      // Floor 1=2, Floor 2=3, Floor 3=4
+      const baseTokens = Math.max(2, safeNumber(run.floor, 1) + 1);
       const banked = run.bankedTokens || 0;
       const addFromBank = Math.min(banked, ACTION_TOKEN_MAX_BANKED);
       const tokensTotal = baseTokens + addFromBank;
@@ -5891,6 +6069,7 @@ body += `
         // Action tokens + action usage
         tokensTotal,
         tokensSpent: 0,
+        autoPassToEnd: false,
         usedActions: {},
         actionUsedThisTurn: false,
         actionSelectionInProgress: false,
@@ -6122,10 +6301,15 @@ body += `
       const a = drawNonModifierCard(pile, fallbackDeck, side);
       const b = drawNonModifierCard(pile, fallbackDeck, side);
       if (!a || !b) return false;
+
       pos.cards.push(a);
+      handleFusionOnCardPlaced(pos, a);
+
       pos.cards.push(b);
-      pos.lastPlay = { kind: 'card', rank: b.rank, value: getStrikeValueFromCard(b) };
-      onCardPlacedForAttack(pos, b);
+      const placed = handleFusionOnCardPlaced(pos, b);
+
+      pos.lastPlay = { kind: 'card', rank: b.rank, value: getStrikeValueFromCard(placed) };
+      if (side === 'dealer') onCardPlacedForAttack(pos, placed);
       recordLaneCard(side, laneIdx, 1);
       recordLaneCard(side, laneIdx, 1);
       return true;
@@ -6575,6 +6759,11 @@ body += `
       return patterns;
     }
 
+    function countGoldSleeves(pos) {
+      const laneCards = pos && pos.cards ? pos.cards : [];
+      return collectLaneCardsForEffects(laneCards).filter(c => cardHasSleeve(c, 'GOLD')).length;
+    }
+
     function buildKarmaBreakdown(positionResults, playerTotals) {
       const lanes = positionResults.map((result, idx) => {
         const isWin = result === 'player';
@@ -6590,7 +6779,7 @@ body += `
             if (!stampId) return;
             const def = getStampDef(stampId);
             let delta = getStampKarmaContribution(stampId, base, laneSize);
-            const foilMult = (card && card.sleeveId === 'FOIL') ? 2 : 1;
+            const foilMult = cardHasSleeve(card, 'FOIL') ? 2 : 1;
             if (stampId === 'HOUSE_EDGE' && base === 21) delta = laneSize * 10;
             delta *= foilMult;
             stampTotal += delta;
@@ -7012,7 +7201,7 @@ body += `
         }
       }
 
-      if (placed.sleeveId === 'FUSION') pos.pendingFusionUid = placed.uid;
+      if (!isFused(placed) && placed.sleeveId === 'FUSION') pos.pendingFusionUid = placed.uid;
       if (placed.sleeveId === 'ERASER') pos.eraserCharges = safeNumber(pos.eraserCharges, 0) + 1;
       return placed;
     }
@@ -7141,18 +7330,20 @@ body += `
       maintainOpenPositions(blackjackMatch.playerPositions, blackjackMatch.playerDrawPile, run.playerDeck, 'player');
       updateThreatTargetLane(false, 'player_end_turn_close');
       if (checkMatchEnd()) return;
+      if (blackjackMatch) blackjackMatch.autoPassToEnd = false;
       endPlayerTurn();
     };
 
-    window.passTillMatchEnd = function(){
-      if (!blackjackMatch || blackjackMatch.phase !== 'playing') return;
-      if (blackjackMatch.turn !== 'player') return;
-      if (blackjackMatch.drawnCard) return;
-      if (countOpenPositions(blackjackMatch.playerPositions) > 0) return;
+    window.passTillMatchEnd = function() {
+      if (!blackjackMatch || blackjackMatch.turn !== 'player') return;
+      if (countOpenPositions(blackjackMatch.playerPositions) > 0) {
+        showToast('Close all lanes first.');
+        return;
+      }
+      blackjackMatch.autoPassToEnd = true;
       blackjackMatch.turn = 'dealer';
-      blackjackMatch.turnStartMs = Date.now();
-      renderAll();
-      setTimeout(() => dealerTurn(), 380);
+      renderBlackjack();
+      setTimeout(dealerTurn, 250);
     };
 
     function endPlayerTurn() {
@@ -7562,6 +7753,17 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
       if (checkMatchEnd()) return;
 
+      const playerDone = (countOpenPositions(blackjackMatch.playerPositions) === 0);
+      const dealerDone = allPositionsComplete(blackjackMatch.dealerPositions);
+
+      if (blackjackMatch.autoPassToEnd && playerDone && !dealerDone) {
+        blackjackMatch.turn = 'dealer';
+        renderBlackjack();
+        setTimeout(dealerTurn, 250);
+        return;
+      }
+
+      blackjackMatch.autoPassToEnd = false;
       blackjackMatch.turn = 'player';
       blackjackMatch.actionUsedThisTurn = false;
       blackjackMatch.actionSelectionInProgress = false;
@@ -7591,6 +7793,7 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
     function resolveMatch(options = {}) {
       blackjackMatch.phase = 'resolved';
+      blackjackMatch.autoPassToEnd = false;
       clearDealerTimers();
       const chipsBefore = safeNumber(run.chips, 0);
 
@@ -7723,18 +7926,18 @@ function dealerStandPhase(diff, maxPasses = 6) {
 
       let goldBonusTotal = 0;
       for (let i = 0; i < 5; i++) {
-        const pPos = blackjackMatch.playerPositions[i];
-        const goldCount = (pPos.cards || []).filter(c => c && c.sleeveId === 'GOLD').length;
-        if (goldCount > 0) {
-          const amount = safeNumber(playerTotals[i], 0) * goldCount;
+        const goldCount = countGoldSleeves(blackjackMatch.playerPositions[i]);
+        if (!goldCount) continue;
+        if (positionResults[i] !== 'player') continue;
+
+        const amount = safeNumber(playerTotals[i], 0) * goldCount;
+        if (amount > 0) {
           goldBonusTotal += amount;
-          laneBonus[i] += amount;
+          laneBonus[i] = safeNumber(laneBonus[i], 0) + amount;
+          blackjackMatch.bonusChipsEarned = safeNumber(blackjackMatch.bonusChipsEarned, 0) + amount;
+          run.chips = safeNumber(run.chips) + amount;
           logEvent('GOLD_SLEEVE_BONUS', { laneIdx: i + 1, amount, count: goldCount });
         }
-      }
-      if (goldBonusTotal > 0) {
-        run.chips = safeNumber(run.chips) + goldBonusTotal;
-        blackjackMatch.bonusChipsEarned += goldBonusTotal;
       }
 
       const callingRankBefore = run.callingCard ? run.callingCard.rank : null;
@@ -8603,6 +8806,34 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       }]);
     }
 
+    function showBossAdvanceModal(nextFloor) {
+      const benchCap = BENCH_BASE_CAPACITY + (nextFloor - 1);
+
+      const tokenLine = `
+        <div style="display:flex;align-items:center;gap:10px;margin:10px 0;">
+          <span class="token-icon" style="cursor:default;">+1</span>
+          <div><b>Token</b> (Floor ${nextFloor} base)</div>
+        </div>
+      `;
+
+      const benchLine = `<div style="margin:8px 0;"><b>Bench Capacity</b>: ${benchCap}</div>`;
+
+      showModal(
+        'Boss Cleared',
+        `${tokenLine}${benchLine}<div class="muted">Continue to Floor ${nextFloor}</div>`,
+        [{
+          text: 'Continue',
+          primary: true,
+          action: () => {
+            closeModal();
+            initFloor(nextFloor);
+            showToast(`Floor ${run.floor} begins!`);
+            renderAll();
+          }
+        }]
+      );
+    }
+
     // =============================================
     // CONTINUE / END CONDITIONS
     // =============================================
@@ -8656,12 +8887,12 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           run.bossWins = safeNumber(run.bossWins, 0) + 1;
           run.bossFight = null;
           logEvent('BOSS_CLEARED', { floor: run.floor, bossWins: run.bossWins, benchCapacity: getBenchCapacity() });
-          showToast(`Boss cleared. Bench capacity is now ${getBenchCapacity()}.`);
           if (run.floor < 3) {
             endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
+            const nextFloor = run.floor + 1;
             blackjackMatch = null;
-            initFloor(run.floor + 1);
-            showToast(`Floor ${run.floor} begins!`);
+            showBossAdvanceModal(nextFloor);
+            return;
           } else {
             endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
             blackjackMatch = null;
@@ -8692,12 +8923,12 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         if (result.outcome === 'WIN') {
           run.bossWins = safeNumber(run.bossWins, 0) + 1;
           logEvent('BOSS_CLEARED', { floor: run.floor, bossWins: run.bossWins, benchCapacity: getBenchCapacity() });
-          showToast(`Boss cleared. Bench capacity is now ${getBenchCapacity()}.`);
           if (run.floor < 3) {
             endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
+            const nextFloor = run.floor + 1;
             blackjackMatch = null;
-            initFloor(run.floor + 1);
-            showToast(`Floor ${run.floor} begins!`);
+            showBossAdvanceModal(nextFloor);
+            return;
           } else {
             endCurrentFloorIfOpen({ endReason: 'BOSS_CLEARED' });
             blackjackMatch = null;
@@ -8807,7 +9038,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         : 'Rank —';
       const toNext = rankInfo ? (rankInfo.isMax ? 'Max rank reached' : `${rankInfo.toNext} karma to next rank`) : '';
       const prog = rankInfo ? Math.round(rankInfo.progress * 100) : 0;
-      const collapsed = !!(run.ui && run.ui.hudCollapsed);
+      const collapsed = !!(run && run.ui && run.ui.hudCollapsed);
+      const ccVal = run && run.callingCard ? cardToString(run.callingCard) : '—';
+
+      const tokenOrCallingLabel = collapsed ? 'Calling Card' : 'Tokens';
+      const tokenOrCallingValue = collapsed ? ccVal : getHudTokensValue();
       const debtWarning = (run.loan.active && !run.loan.repaid)
         ? '<span class="hud-stat-label" style="color:var(--accent-red);">Debt!</span>'
         : '';
@@ -8831,8 +9066,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
               <span class="hud-stat-value karma">${karma}</span>
             </div>
             <div class="hud-stat">
-              <span class="hud-stat-label">Tokens</span>
-              <span class="hud-stat-value tokens">${getHudTokensValue()}</span>
+              <span class="hud-stat-label">${tokenOrCallingLabel}</span>
+              <span class="hud-stat-value tokens">${tokenOrCallingValue}</span>
             </div>
           </div>
 
@@ -9122,6 +9357,16 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       return `
         <div class="cc-reveal-root">
+                    <div class="cc-reveal-meta">
+            <div class="cc-name">${escapeHtml(effect.name)}</div>
+            <div class="cc-summary">${escapeHtml(effect.summary)}</div>
+
+            <div class="cc-reveal-actions">
+              <button class="modal-btn" id="ccDetailsBtn">${flipped ? 'Hide details' : 'View details'}</button>
+              <button class="modal-btn success" onclick="introEnterTower()">Enter Floor 1</button>
+            </div>
+          </div>
+
           <div class="cc-card-stage">
             <div class="cc-bounce" id="ccBounce">
               <div class="cc-float" id="ccFloat">
@@ -9151,15 +9396,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             </div>
           </div>
 
-          <div class="cc-reveal-meta">
-            <div class="cc-name">${escapeHtml(effect.name)}</div>
-            <div class="cc-summary">${escapeHtml(effect.summary)}</div>
 
-            <div class="cc-reveal-actions">
-              <button class="modal-btn" id="ccDetailsBtn">${flipped ? 'Hide details' : 'View details'}</button>
-              <button class="modal-btn success" onclick="introEnterTower()">Enter Floor 1</button>
-            </div>
-          </div>
         </div>
       `;
     }
@@ -9823,6 +10060,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       if (isResolved && result) {
         const outcome = result.outcome;
         const titleCls = outcome === 'WIN' ? 'win' : (outcome === 'LOSS' ? 'lose' : 'tie');
+        const playerWins = safeNumber(result.playerWins, 0);
+        const dealerWins = safeNumber(result.dealerWins, 0);
+        const outcomeLine = `${outcome} (${playerWins}-${dealerWins})`;
 
         const transfer = blackjackMatch.transferChipsNet || 0;
         const bonus = blackjackMatch.bonusChipsEarned || 0;
@@ -9850,7 +10090,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         html += `
           <div class="bj-result">
             <div class="bj-result-row">
-              <div><b>Outcome:</b> <span class="${titleCls}">${outcome}</span></div>
+              <div><b>Outcome:</b> <span class="${titleCls}">${outcomeLine}</span></div>
               <div><b>Match Earnings:</b> <span class="${netCls}">${earningsNow >= 0 ? '+' : ''}${earningsNow}</span> <span style="color:var(--text-muted)">(Payout ${payout}, SideBet ${transfer >= 0 ? '+' : ''}${transfer}, Rake -${rake}, Bonus ${bonus})</span></div>
             </div>
             <div class="bj-result-row">
@@ -9991,7 +10231,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
               <div class="bj-action-btns">
                 <button class="bj-btn" onclick="playerDrawCard()" ${(!isPlayerTurn || !!drawn || countOpenPositions(blackjackMatch.playerPositions) === 0) ? 'disabled' : ''}>Draw</button>
                 ${(isPlayerTurn && countOpenPositions(blackjackMatch.playerPositions) > 0) ? `<button class="bj-btn danger" ${(!isPlayerTurn || !!drawn) ? 'disabled' : ''} onclick="playerEndTurn()">Stand All &amp; End Turn</button>` : ''}
-                ${(isPlayerTurn && countOpenPositions(blackjackMatch.playerPositions) === 0 && !allPositionsComplete(blackjackMatch.dealerPositions)) ? `<button class="bj-btn" ${(!isPlayerTurn || !!drawn) ? 'disabled' : ''} onclick="passTillMatchEnd()">Pass Till Match End</button>` : ''}
+                ${(isPlayerTurn && countOpenPositions(blackjackMatch.playerPositions) === 0 && !allPositionsComplete(blackjackMatch.dealerPositions)) ? `<button class="bj-btn" ${(!isPlayerTurn || !!drawn) ? 'disabled' : ''} onclick="playerEndTurn()">End Turn</button><button class="bj-btn primary" ${(!isPlayerTurn || !!drawn) ? 'disabled' : ''} onclick="passTillMatchEnd()">Pass Till Match End</button>` : ''}
               </div>
 
               <div class="controls-row">
@@ -10427,6 +10667,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const modDens = (s.modDensityEnd != null) ? `${Math.round(s.modDensityEnd * 100)}%` : '—';
       const sid = s.sessionId || '—';
       const sidShort = (typeof sid === 'string' && sid.length > 10) ? sid.slice(0,10) + '…' : sid;
+      const stampCount = run.playerDeck.filter(c => !!getCardStampId(c)).length;
+      const sleeveCount = run.playerDeck.filter(c => isFused(c) || (isStandardCard(c) && !!c.sleeveId)).length;
+      const fusedCount  = run.playerDeck.filter(c => isFused(c)).length;
       const statsEl = document.getElementById('endBuildDeckStats');
       if (statsEl) {
         statsEl.innerHTML = `
@@ -10441,6 +10684,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
             <div><b>Mods:</b> ${escapeHtml(String(modsEnd))}</div>
             <div><b>Mod density:</b> ${escapeHtml(String(modDens))}</div>
             <div><b>Chips:</b> ${escapeHtml(String(formatCompact(s.startChips)))} → ${escapeHtml(String(formatCompact(s.endChips)))}</div>
+            <div><b>Stamps:</b> ${stampCount} · <b>Sleeves:</b> ${sleeveCount} · <b>Fused:</b> ${fusedCount}</div>
           </div>
         `;
       }
