@@ -477,48 +477,6 @@
     th{ color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px; font-size: 0.78em; }
     .right{ text-align:right; }
 
-    /* Tune tab */
-    .tuneWrap{ display:none; padding: 14px 18px 18px; }
-    .tGrid{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    @media (max-width: 820px){ .tGrid{ grid-template-columns: 1fr; } }
-
-    .tCard{
-      border: 1px solid var(--panel-border);
-      border-radius: 14px;
-      padding: 12px;
-      background: rgba(255,255,255,0.02);
-    }
-    .tTitle{
-      font-family: var(--font-display);
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--accent-gold);
-      font-size: 1.05em;
-      margin-bottom: 10px;
-    }
-
-    label{
-      display:flex;
-      justify-content: space-between;
-      gap: 10px;
-      align-items:center;
-      font-family: var(--font-mono);
-      font-size: 0.86em;
-      color: var(--text-secondary);
-      margin: 8px 0;
-    }
-    input{
-      width: 140px;
-      padding: 8px 9px;
-      border-radius: 10px;
-      border: 1px solid rgba(148,163,184,0.25);
-      background: rgba(0,0,0,0.25);
-      color: var(--text-primary);
-      font-family: var(--font-mono);
-      outline: none;
-    }
-    .tActions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
-    .hint{ color: var(--text-secondary); font-size: 0.86em; line-height: 1.45; margin-top: 8px; }
 
   </style>
 </head>
@@ -533,7 +491,7 @@
         </div>
         <div class="tabs">
           <div class="tab active" id="tabPlay">Play</div>
-          <div class="tab" id="tabTune">Tune</div>
+          <button class="btn btn-ghost" id="btnRules" type="button">Rules</button>
         </div>
       </div>
 
@@ -575,7 +533,7 @@
 
         <!-- Exit action requested: button below cards -->
         <div class="endRow">
-          <button class="btn btn-ghost" id="btnEndGame">End Game</button>
+          <button class="btn btn-ghost" id="btnEndGame">END GAME</button>
         </div>
       </div>
 
@@ -591,44 +549,6 @@
           <div>
             <span class="pill" id="pillAnte">Next hand: −25</span>
             <span class="pill" id="pillHeatRule">Heat +10% on safe overclock</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TUNE TAB (dev only) -->
-    <div class="tuneWrap" id="tuneTab">
-      <div class="tGrid">
-        <div class="tCard">
-          <div class="tTitle">Session</div>
-          <label>Start chips <input id="inStartChips" type="number" min="0" step="1" value="100"></label>
-          <label>Ante <input id="inAnte" type="number" min="1" step="1" value="25"></label>
-          <label>Free spins <input id="inFreeSpins" type="number" min="0" step="1" value="2"></label>
-          <div class="tActions">
-            <button class="btn btn-primary" id="btnApply">Apply</button>
-            <button class="btn btn-ghost" id="btnReset">Reset Run</button>
-          </div>
-          <div class="hint">
-            This tab is for tuning only. The Play tab shows the player-facing screen.
-          </div>
-        </div>
-
-        <div class="tCard">
-          <div class="tTitle">Overclock</div>
-          <label>Base burn (%) <input id="inBaseBurn" type="number" min="0" max="95" step="1" value="15"></label>
-          <label>Heat step (%) <input id="inHeatStep" type="number" min="0" max="95" step="1" value="10"></label>
-          <div class="hint">
-            Overclock burn <b>only wipes the current hand’s winnings</b>. Your existing chips remain safe.
-          </div>
-        </div>
-
-        <div class="tCard" style="grid-column:1/-1">
-          <div class="tTitle">Paytable (mult × ante)</div>
-          <div class="hint" style="margin-top:0">
-            Royal 20×, Straight Flush 10×, 4K 8×, FH 6×, Flush 5×, Straight 4×, Trips 3×, 2P 2×, Pair 1×.
-          </div>
-          <div class="hint">
-            (Hands are fully evaluated: Royal / Straight Flush / Four / Full House / Flush / Straight / Trips / Two Pair / Pair / High.)
           </div>
         </div>
       </div>
@@ -654,9 +574,59 @@
     </div>
   </div>
 
+
+  <!-- Rules modal -->
+  <div class="modalBack" id="rulesBack">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Rules">
+      <div class="modalHead">
+        <h2>Rules</h2>
+        <button class="btn btn-ghost" id="btnCloseRules">Close</button>
+      </div>
+      <div class="modalBody">
+        <ul style="margin:0; padding-left:18px; line-height:1.5; color:var(--text-secondary)">
+          <li>Start a hand by paying the ante.</li>
+          <li>Hold cards and use free spins to reroll unheld cards.</li>
+          <li>Bank at any time to collect the current payout.</li>
+          <li>When free spins are gone, you may overclock for one risky final reroll.</li>
+          <li>Burnout resets heat; if embedded, your run ends when chips hit 0.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
 <script>
 (() => {
-  // ---------------- Runtime settings (tunable in TUNE tab) ----------------
+  // ---------------- P63 Embed Bridge ----------------
+  const P63_EMBED = (window.parent && window.parent !== window);
+  const P63 = {
+    send(type, payload={}) {
+      if (!P63_EMBED) return;
+      window.parent.postMessage({ __p63: 1, type, ...payload }, "*");
+    }
+  };
+  // Tell parent we’re alive (optional but helpful)
+  P63.send("P63_MINIGAME_READY", { kind: "POKER_SLOTS" });
+
+  let P63_ENDED = false;
+
+
+  window.addEventListener("message", (e) => {
+    const d = e.data;
+    if (!d || d.__p63 !== 1 || d.type !== "P63_INIT" || d.kind !== "POKER_SLOTS") return;
+    if (typeof d.startChips === "number") CFG.startChips = d.startChips;
+    if (typeof d.ante === "number") CFG.ante = d.ante;
+    if (typeof d.freeSpins === "number") CFG.freeSpins = d.freeSpins;
+    if (typeof d.baseBurn === "number") CFG.baseBurn = d.baseBurn;
+    if (typeof d.heatStep === "number") CFG.heatStep = d.heatStep;
+
+    // reset session with new CFG
+    SESSION.chips = CFG.startChips;
+    SESSION.heat = 0;
+    resetToReady("Ready.");
+    updateHUD();
+  });
+
+  // ---------------- Runtime settings ----------------
   let CFG = {
     startChips: 100,
     ante: 25,
@@ -795,9 +765,8 @@
   const $ = (id)=>document.getElementById(id);
   const els = {
     tabPlay: $("tabPlay"),
-    tabTune: $("tabTune"),
+    btnRules: $("btnRules"),
     playTab: $("playTab"),
-    tuneTab: $("tuneTab"),
 
     credits: $("credits"),
     spinsLeft: $("spinsLeft"),
@@ -824,14 +793,9 @@
     btnCloseModal: $("btnCloseModal"),
     paytableBody: $("paytableBody"),
 
-    // Tune inputs
-    inStartChips: $("inStartChips"),
-    inAnte: $("inAnte"),
-    inFreeSpins: $("inFreeSpins"),
-    inBaseBurn: $("inBaseBurn"),
-    inHeatStep: $("inHeatStep"),
-    btnApply: $("btnApply"),
-    btnReset: $("btnReset"),
+    rulesBack: $("rulesBack"),
+    btnCloseRules: $("btnCloseRules"),
+
   };
 
   // ---------------- State ----------------
@@ -844,9 +808,7 @@
     spinsLeft: 0,
     deck: [],
     eval: null,
-    lastWinnings: 0,   // winnings from THIS hand only (used for double)
-    doubleAvailable: false,
-    doubleUsed: false,
+    lastWinnings: 0,   // winnings from THIS hand only
   };
 
   function burnChance(){
@@ -917,6 +879,7 @@
     // Disable global buttons during spin
     const disabledGlobal = (HAND.phase === "SPINNING");
     els.btnPaytable.disabled = disabledGlobal;
+    els.btnRules.disabled = disabledGlobal;
     els.btnEndGame.disabled = disabledGlobal;
 
     if (HAND.eval){
@@ -937,6 +900,15 @@
     }
 
     rebuildButtons();
+
+    // Embedded rule: if you hit 0 chips, the machine run ends.
+    // (Don’t end mid-hand; allow a hand already in play to resolve.)
+    if (P63_EMBED && SESSION.chips <= 0 && HAND.phase !== "HOLDING" && HAND.phase !== "SPINNING"){
+      // Avoid double-fire if updateHUD runs again during close
+      els.btnEndGame.disabled = true;
+      endGame("broke");
+      return;
+    }
   }
 
   function rebuildButtons(){
@@ -973,9 +945,6 @@
 
     if (HAND.phase === "RESOLVED"){
       els.leftButtons.appendChild(mk(`Next Hand (\u2212${CFG.ante})`, "btn-primary", startHand, SESSION.chips < CFG.ante));
-      if (HAND.doubleAvailable && !HAND.doubleUsed){
-        els.leftButtons.appendChild(mk("Double or Nothing", "btn-warn", doubleOrNothing));
-      }
       return;
     }
 
@@ -1004,8 +973,6 @@
     HAND.deck = [];
     HAND.eval = null;
     HAND.lastWinnings = 0;
-    HAND.doubleAvailable = false;
-    HAND.doubleUsed = false;
 
     renderReels([false,false,false,false,false]);
     setStateText(msg);
@@ -1079,8 +1046,6 @@
     HAND.held = [false,false,false,false,false];
     HAND.spinsLeft = CFG.freeSpins;
     HAND.lastWinnings = 0;
-    HAND.doubleAvailable = false;
-    HAND.doubleUsed = false;
 
     for (let i=0;i<5;i++) HAND.cards[i] = dealFromDeck();
 
@@ -1122,8 +1087,6 @@
 
     SESSION.chips += pay;
     HAND.lastWinnings = pay;
-    HAND.doubleAvailable = pay > 0;
-    HAND.doubleUsed = false;
 
     HAND.phase = "RESOLVED";
     HAND.held = [false,false,false,false,false];
@@ -1149,16 +1112,12 @@
 
       if (shownPay > 0){
         HAND.lastWinnings = 0;
-        HAND.doubleAvailable = false;
-        HAND.doubleUsed = true;
         HAND.phase = "BURNED";
         HAND.held = [false,false,false,false,false];
         setStateText("Burnout. Payout wiped. Heat reset.");
       } else {
         SESSION.chips = Math.max(0, SESSION.chips - penalty);
         HAND.lastWinnings = 0;
-        HAND.doubleAvailable = false;
-        HAND.doubleUsed = true;
         HAND.phase = "BURNED";
         HAND.held = [false,false,false,false,false];
         setStateText(`Burnout. Lost ${penalty} chips. Heat reset.`);
@@ -1185,8 +1144,6 @@
       SESSION.chips += pay;
 
       HAND.lastWinnings = pay;
-      HAND.doubleAvailable = pay > 0;
-      HAND.doubleUsed = false;
 
       HAND.phase = "RESOLVED";
       HAND.held = [false,false,false,false,false];
@@ -1196,94 +1153,55 @@
     });
   }
 
-  function doubleOrNothing(){
-    if (HAND.phase !== "RESOLVED") return;
-    if (!HAND.doubleAvailable || HAND.doubleUsed) return;
-
-    const stake = HAND.lastWinnings;
-    if (stake <= 0) return;
-
-    HAND.doubleUsed = true;
-
-    const win = rng() >= 0.5;
-    if (win){
-      SESSION.chips += stake;
-      HAND.lastWinnings = stake * 2;
-      setStateText(`Double win. +${HAND.lastWinnings}.`);
-    } else {
-      // only pulls back THIS hand\u2019s winnings
-      SESSION.chips = Math.max(0, SESSION.chips - stake);
-      HAND.lastWinnings = 0;
-      HAND.doubleAvailable = false;
-      setStateText("Double loss. Winnings erased.");
-    }
-    updateHUD();
-  }
-
   // ---------------- Tabs ----------------
   function showPlay(){
     els.tabPlay.classList.add("active");
-    els.tabTune.classList.remove("active");
     els.playTab.style.display = "";
-    els.tuneTab.style.display = "none";
-  }
-  function showTune(){
-    els.tabTune.classList.add("active");
-    els.tabPlay.classList.remove("active");
-    els.playTab.style.display = "none";
-    els.tuneTab.style.display = "";
   }
 
   els.tabPlay.addEventListener("click", showPlay);
-  els.tabTune.addEventListener("click", showTune);
 
   // ---------------- Modal ----------------
   function openPaytable(){ els.modalBack.style.display = "flex"; renderPaytable(); }
   function closePaytable(){ els.modalBack.style.display = "none"; }
+  function openRules(){ els.rulesBack.style.display = "flex"; }
+  function closeRules(){ els.rulesBack.style.display = "none"; }
 
   els.btnPaytable.addEventListener("click", openPaytable);
   els.btnCloseModal.addEventListener("click", closePaytable);
   els.modalBack.addEventListener("click", (e)=>{ if (e.target === els.modalBack) closePaytable(); });
-  document.addEventListener("keydown", (e)=>{ if (e.key==="Escape") closePaytable(); });
 
-  // ---------------- End Game (stub) ----------------
-  els.btnEndGame.addEventListener("click", ()=>{
-    // In the real game, this returns you to the floor with your current machine chips.
+  els.btnRules.addEventListener("click", openRules);
+  els.btnCloseRules.addEventListener("click", closeRules);
+  els.rulesBack.addEventListener("click", (e)=>{ if (e.target === els.rulesBack) closeRules(); });
+
+  document.addEventListener("keydown", (e)=>{
+    if (e.key!=="Escape") return;
+    closePaytable();
+    closeRules();
+  });
+
+  // ---------------- End Game ----------------
+  function endGame(reason){
+    if (P63_ENDED) return;
+    P63_ENDED = true;
+
     const cashOut = SESSION.chips;
+
+    if (P63_EMBED){
+      // Parent owns what happens next (chips credit + close overlay)
+      P63.send("P63_MINIGAME_END", { kind:"POKER_SLOTS", reason, cashOut });
+      return;
+    }
+
+    // Standalone fallback behavior:
     SESSION.chips = CFG.startChips;
     SESSION.heat = 0;
     resetToReady(`Ended game. Cashed out ${cashOut}.`);
-  });
-
-  // ---------------- Tune actions ----------------
-  function applyTune(){
-    const startChips = Math.max(0, parseInt(els.inStartChips.value||"0",10));
-    const ante = Math.max(1, parseInt(els.inAnte.value||"25",10));
-    const freeSpins = Math.max(0, parseInt(els.inFreeSpins.value||"2",10));
-    const baseBurn = clamp(parseInt(els.inBaseBurn.value||"15",10), 0, 95);
-    const heatStep = clamp(parseInt(els.inHeatStep.value||"10",10), 0, 95);
-
-    CFG = {
-      startChips,
-      ante,
-      freeSpins,
-      baseBurn,
-      heatStep,
-    };
-
-    SESSION.chips = startChips;
-    SESSION.heat = 0;
-
-    resetToReady("Settings applied. Ready.");
-    showPlay();
+    P63_ENDED = false;
   }
 
-  els.btnApply.addEventListener("click", applyTune);
-  els.btnReset.addEventListener("click", ()=>{
-    SESSION.chips = CFG.startChips;
-    SESSION.heat = 0;
-    resetToReady("Run reset. Ready.");
-  });
+  els.btnEndGame.addEventListener("click", ()=> endGame("cashout"));
 
   // ---------------- Boot ----------------
   renderReels([false,false,false,false,false]);
