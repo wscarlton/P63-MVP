@@ -95,34 +95,6 @@
 
     #game-container { width: 100%; max-width: 760px; }
 
-    /* ── RUN LENGTH SELECTOR ─────────────────── */
-    .length-bar {
-      display: flex;
-      margin-bottom: 14px;
-      border: 1px solid rgba(212,175,55,0.25);
-      border-radius: 12px;
-      overflow: hidden;
-      background: rgba(255,255,255,0.02);
-    }
-    .length-opt {
-      flex: 1;
-      padding: 9px 8px 8px;
-      cursor: pointer;
-      background: transparent;
-      border: none;
-      border-right: 1px solid rgba(212,175,55,0.14);
-      color: var(--text-muted);
-      font-family: var(--font-body);
-      font-size: 0.82em;
-      text-align: center;
-      transition: all 0.18s;
-      line-height: 1.35;
-    }
-    .length-opt:last-child { border-right: none; }
-    .length-opt:hover  { background: rgba(212,175,55,0.06); color: var(--text-secondary); }
-    .length-opt.active { background: rgba(212,175,55,0.10); color: var(--text-primary); }
-    .length-opt .lo-name   { font-family: var(--font-display); font-size: 1.05em; letter-spacing: 2px; display: block; text-transform: uppercase; }
-    .length-opt .lo-detail { font-size: 0.82em; opacity: 0.85; display: block; }
 
     /* ── STATS ─────────────────────────────── */
     .stats {
@@ -565,22 +537,6 @@
 
   <div id="game-container">
 
-    <!-- Run Length -->
-    <div class="length-bar">
-      <button class="length-opt" data-len="short" onclick="setLength('short')">
-        <span class="lo-name">Quick</span>
-        <span class="lo-detail">20 cards · ~5 nodes</span>
-      </button>
-      <button class="length-opt" data-len="medium" onclick="setLength('medium')">
-        <span class="lo-name">Standard</span>
-        <span class="lo-detail">32 cards · ~8 nodes</span>
-      </button>
-      <button class="length-opt active" data-len="full" onclick="setLength('full')">
-        <span class="lo-name">Full</span>
-        <span class="lo-detail">44 cards · ~11 nodes</span>
-      </button>
-    </div>
-
     <!-- Stats -->
     <div class="stats">
       <div class="meter-section">
@@ -602,8 +558,7 @@
     <!-- Buttons -->
     <div class="actions" style="margin-bottom:10px">
       <button class="btn btn-secondary" onclick="toggleRules()">Rules</button>
-      <button class="btn btn-primary" id="new-run-btn" onclick="initGame()">⟲ New Run</button>
-    </div>
+          </div>
 
     <!-- Rules Panel -->
     <div class="rules-panel" id="rules-panel">
@@ -792,7 +747,7 @@
   let pendingDetection = null;
   let pendingDetectionIdx = null;
 
-  let selectedLength = 'full';
+  let selectedLength = 'medium';
 
     // Reward placeholders (victory screen)
   let endgameMode = null;          // 'win' | 'dead'
@@ -904,23 +859,11 @@
   // ================================================================
   //  SETUP
   // ================================================================
-  function setLength(len) {
-    selectedLength = len;
-    document.querySelectorAll('.length-opt').forEach(el =>
-      el.classList.toggle('active', el.dataset.len === len)
-    );
-  }
-
   function initGame() {
     P63_ENDED = false;
 
     if (P63_EMBED){
       selectedLength = "medium"; // Standard only
-      const lb = document.querySelector(".length-bar");
-      if (lb) lb.style.display = "none";
-      const nr = document.getElementById("new-run-btn");
-      if (nr) nr.style.display = "none";
-      setLength("medium");
     }
 
     deck = shuffle(buildDeck(selectedLength));
