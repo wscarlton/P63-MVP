@@ -465,6 +465,60 @@
       backdrop-filter: blur(7px) saturate(120%);
     }
 
+
+    #minigameOverlay{
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0,0,0,0.72);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+    }
+
+    #minigameOverlay.hidden{ display:none; }
+
+    .minigame-shell{
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .minigame-testbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(0,0,0,0.35);
+      backdrop-filter: blur(8px) saturate(120%);
+      -webkit-backdrop-filter: blur(8px) saturate(120%);
+    }
+
+    .minigame-testbar.hidden{ display:none; }
+
+    .minigame-testbar-title{
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.95;
+    }
+
+    .minigame-testbar-actions{
+      display:flex;
+      gap: 8px;
+    }
+
+    #minigameFrame{
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: transparent;
+    }
+
     #modal {
       position: relative;
       background:
@@ -525,6 +579,55 @@
 
     .modal-btn.danger { border-color: var(--accent-red); color: var(--accent-red); }
     .modal-btn.danger:hover:not(:disabled) { background: var(--wash-red); }
+
+
+    .help-block{
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--bg-secondary);
+    }
+    .help-block summary{
+      cursor: pointer;
+      font-weight: 800;
+      color: var(--text-primary);
+      user-select: none;
+    }
+    .help-block ul{
+      margin: 8px 0 0 18px;
+      padding: 0;
+    }
+    .help-block li{
+      margin: 4px 0;
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .settings-section{
+      padding: 10px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      margin: 10px 0;
+    }
+    .settings-section summary{
+      cursor:pointer;
+      font-weight: 900;
+      color: var(--text-primary);
+      user-select:none;
+      margin-bottom: 8px;
+    }
+
+    .reduce-motion *,
+    .reduce-motion *::before,
+    .reduce-motion *::after{
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
 
 
     /* Unified button surface */
@@ -671,6 +774,12 @@
       font-family: 'Inter', sans-serif;
       font-size: 14px;
       color: var(--text-secondary);
+    }
+    .bj-house-rule, .bj-style-line{
+      margin-top: 4px;
+      font-size: 12px;
+      opacity: .85;
+      letter-spacing: .2px;
     }
 
     .bj-board { display: flex; flex-direction: column; gap: 34px; }
@@ -1936,7 +2045,7 @@
 
       <div class="start-grid">
         <button class="hud-btn" id="btnRules">Rules</button>
-        <button class="hud-btn" id="btnStats">Run Stats</button>
+        <button class="hud-btn" id="btnTestGames">Test Games</button>
         <button class="hud-btn" id="btnSettings">Settings</button>
         <button class="hud-btn" id="btnFeedback">Feedback</button>
       </div>
@@ -1959,6 +2068,19 @@
     <div id="modal"></div>
   </div>
 
+
+  <div id="minigameOverlay" class="hidden" aria-hidden="true">
+    <div class="minigame-shell">
+      <div id="minigameTestBar" class="minigame-testbar hidden">
+        <div class="minigame-testbar-title" id="minigameTestTitle">TEST MODE</div>
+        <div class="minigame-testbar-actions">
+          <button class="hud-btn" id="btnEndTest">END TEST</button>
+        </div>
+      </div>
+      <iframe id="minigameFrame" title="Minigame" sandbox="allow-scripts"></iframe>
+    </div>
+  </div>
+
   <div id="toast" class="hidden"></div>
   <div id="cardTooltip" class="card-tooltip hidden"></div>
   <div id="actionTooltip" class="card-tooltip hidden"></div>
@@ -1967,6 +2089,2589 @@
   <!-- Log Panel -->
   <aside id="logPanel" aria-label="Run Log"></aside>
 
+  <template id="tplMinigamePokerSlots">
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Project 63 — Poker Slot (Player Screen)</title>
+
+  <!-- Match MVP typography -->
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* ------------------------------------------------------------
+      P63 MVP THEME (aligned with p63_0.47.html)
+      ------------------------------------------------------------ */
+    :root {
+      --bg-primary: #0f0f0f;
+      --bg-secondary: #1a1a1a;
+      --bg-card: #262626;
+      --bg-hover: #2c2c2c;
+
+      --text-primary: #f5f5f5;
+      --text-secondary: #b8b8b8;
+      --text-muted: #737373;
+
+      --accent-gold: #d4af37;
+      --accent-gold-dim: #8a6f1f;
+      --accent-red: #a83232;
+      --accent-green: #5e8c61;
+      --accent-blue: #5f7d95;
+      --accent-purple: #7d6a82;
+
+      --border-color: #404040;
+
+      --card-red: #b13b3b;
+      --card-black: #111111;
+
+      --font-display: 'Bebas Neue', sans-serif;
+      --font-mono: 'Space Mono', monospace;
+      --font-body: 'Inter', sans-serif;
+
+      --wash-gold: rgba(212, 175, 55, 0.14);
+      --wash-red: rgba(168, 50, 50, 0.18);
+      --wash-green: rgba(94, 140, 97, 0.18);
+      --wash-blue: rgba(95, 125, 149, 0.16);
+      --wash-purple: rgba(125, 106, 130, 0.16);
+
+      --noir-bg-primary: #0f1119;
+      --noir-bg-secondary: #141820;
+
+      --panel: rgba(255,255,255,0.03);
+      --panel-border: rgba(148,163,184,0.18);
+      --panel-border-strong: rgba(148,163,184,0.26);
+
+      --shadow: 0 18px 40px rgba(0,0,0,0.60);
+      --radius: 16px;
+    }
+
+    *{ box-sizing: border-box; margin: 0; padding: 0; }
+
+    body{
+      font-family: var(--font-body);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 18px 14px 28px;
+      background:
+        radial-gradient(ellipse at 50% -10%, rgba(212,175,55,0.18), rgba(15,17,25,0.0) 55%),
+        radial-gradient(ellipse at 40% 115%, rgba(95,125,149,0.18), rgba(15,17,25,0.0) 55%),
+        linear-gradient(180deg, var(--noir-bg-primary), var(--bg-primary));
+      -webkit-tap-highlight-color: transparent;
+      overflow-x: hidden;
+    }
+
+    /* Vignette + faint texture (MVP-like) */
+    body::after{
+      content:"";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.55) 100%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 2px, transparent 6px);
+      opacity: 0.35;
+      mix-blend-mode: overlay;
+    }
+
+    .shell{
+      width: min(980px, 100%);
+      border: 1px solid var(--panel-border-strong);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(20,24,32,0.95), rgba(15,15,15,0.92));
+      position: relative;
+    }
+    .shell::before{
+      content:"";
+      position:absolute;
+      left:0; top:0; right:0;
+      height:3px;
+      background: linear-gradient(90deg, rgba(212,175,55,0.75), rgba(95,125,149,0.55));
+      opacity: 0.9;
+    }
+
+    /* Header */
+    .top{
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--panel-border);
+      background:
+        radial-gradient(700px 260px at 12% 0%, rgba(212,175,55,0.14), transparent 70%),
+        radial-gradient(700px 260px at 88% 0%, rgba(95,125,149,0.14), transparent 70%),
+        rgba(255,255,255,0.02);
+    }
+    .row{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .titleWrap{ display:flex; flex-direction:column; gap:6px; }
+    h1{
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: 2.2em;
+      letter-spacing: 6px;
+      color: var(--accent-gold);
+      text-transform: uppercase;
+      text-shadow: 0 0 18px rgba(212,175,55,0.22);
+      line-height: 1;
+    }
+    .sub{
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 0.82em;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      line-height: 1.45;
+      max-width: 72ch;
+    }
+
+    /* Tabs */
+    .tabs{ display:flex; gap:8px; align-items:center; }
+    .tab{
+      font-family: var(--font-display);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-size: 0.90em;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      background: rgba(255,255,255,0.03);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.18s;
+      user-select: none;
+    }
+    .tab:hover{ background: rgba(212,175,55,0.06); border-color: rgba(212,175,55,0.35); }
+    .tab.active{
+      background: rgba(212,175,55,0.10);
+      border-color: rgba(212,175,55,0.55);
+      color: var(--text-primary);
+      box-shadow: 0 0 0 2px rgba(212,175,55,0.08);
+    }
+
+    /* HUD */
+    .hud{
+      margin-top: 12px;
+      display:grid;
+      grid-template-columns: 1.1fr 0.9fr 1.4fr;
+      gap: 10px;
+    }
+    @media (max-width: 820px){
+      .hud{ grid-template-columns: 1fr 1fr; }
+      .hud .box:nth-child(3){ grid-column: 1 / -1; }
+    }
+
+    .box{
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.02);
+      min-height: 62px;
+      display:flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .lbl{ font-size: 0.68em; color: var(--text-muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+    .val{ font-family: var(--font-mono); font-size: 1.05em; color: var(--text-primary); }
+    .val small{ font-size: 0.78em; color: var(--text-secondary); margin-left: 6px; }
+
+    .heatRow{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .meter{
+      flex: 1 1 auto;
+      height: 13px;
+      border-radius: 10px;
+      border: 1px solid rgba(148,163,184,0.25);
+      background: rgba(0,0,0,0.35);
+      overflow:hidden;
+      min-width: 150px;
+    }
+    .fill{
+      height: 100%;
+      width: 0%;
+      border-radius: 10px;
+      transition: width 0.35s ease;
+      background: linear-gradient(90deg, rgba(94,140,97,0.95), rgba(212,175,55,0.90), rgba(168,50,50,0.95));
+    }
+
+    /* Mid */
+    .mid{ padding: 14px 18px 12px; }
+
+    .status{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+      padding: 10px 12px;
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.02);
+    }
+    .state{ font-family: var(--font-mono); font-size: 0.88em; color: var(--text-secondary); }
+
+    .pills{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .pill{
+      font-family: var(--font-mono);
+      font-size: 0.78em;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--panel-border);
+      background: rgba(0,0,0,0.22);
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    /* Reels */
+    .reels{
+      margin-top: 12px;
+      display:grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 780px){
+      .reels{ grid-template-columns: repeat(2, 1fr); }
+      /* Keep all cards the same size in portrait: center the last card but cap it to one-column width */
+      .reels .reel:nth-child(5){
+        grid-column: 1 / -1;
+        justify-self: center;
+        width: calc((100% - 10px) / 2); /* (grid width - gap) / 2 */
+      }
+    }
+
+    .reel{
+      position: relative;
+      border-radius: 16px;
+      padding: 10px;
+      border: 1px solid var(--panel-border);
+      background:
+        radial-gradient(420px 160px at 20% 0%, rgba(212,175,55,0.10), transparent 65%),
+        radial-gradient(420px 160px at 80% 100%, rgba(95,125,149,0.10), transparent 65%),
+        rgba(255,255,255,0.02);
+      user-select: none;
+      cursor: pointer;
+      transition: transform 0.16s, box-shadow 0.16s, border-color 0.16s, opacity 0.16s;
+      min-height: 176px;
+      display:flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .reel:hover{ transform: translateY(-6px); box-shadow: 0 18px 36px rgba(0,0,0,0.55); border-color: rgba(212,175,55,0.35); }
+    .reel.locked{ opacity: 0.82; cursor: default; transform: none; box-shadow: none; }
+    .reel.held{
+      border-color: rgba(212,175,55,0.70);
+      box-shadow: 0 0 0 2px rgba(212,175,55,0.14), 0 18px 36px rgba(0,0,0,0.60);
+    }
+
+    .holdTag{
+      font-family: var(--font-mono);
+      font-size: 0.78em;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--panel-border);
+      background: rgba(0,0,0,0.22);
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: max-content;
+    }
+    .dot{
+      width: 8px; height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.22);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.12);
+    }
+    .reel.held .dot{ background: var(--accent-gold); box-shadow: 0 0 0 1px rgba(212,175,55,0.35), 0 0 14px rgba(212,175,55,0.25); }
+    .reel.held .holdTag{ color: rgba(212,175,55,0.95); border-color: rgba(212,175,55,0.30); }
+
+    .cardFace{ flex: 1; display:flex; align-items:center; justify-content:center; }
+
+    /* Card itself (white) */
+    .card{
+      width: 100%;
+      aspect-ratio: 2.5 / 3.5;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #ffffff, #f3f3f5);
+      color: var(--card-black);
+      box-shadow: 0 10px 18px rgba(0,0,0,0.35);
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.10);
+      isolation: isolate;
+    }
+
+    .corner{
+      position:absolute;
+      display:flex;
+      flex-direction:column;
+      align-items:flex-start;
+      gap: 4px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      font-size: 1.02em;
+      line-height: 1;
+      padding: 10px;
+    }
+    .corner.br{ right: 0; bottom: 0; transform: rotate(180deg); }
+
+    .pip{
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size: 3.2em;
+      opacity: 0.92;
+      text-shadow: 0 1px 0 rgba(0,0,0,0.08);
+    }
+
+    .shine{
+      position:absolute;
+      inset:-40% -60%;
+      background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.55) 35%, transparent 70%);
+      transform: rotate(12deg) translateX(-40%);
+      opacity: 0.32;
+      pointer-events:none;
+      mix-blend-mode: screen;
+    }
+
+    .spin .shine{ animation: shine 700ms linear infinite; }
+    @keyframes shine{ 0%{ transform: rotate(12deg) translateX(-40%); } 100%{ transform: rotate(12deg) translateX(40%); } }
+
+    .red{ color: var(--card-red) !important; }
+    .blk{ color: var(--card-black) !important; }
+
+    /* END GAME button row (below cards) */
+    .endRow{
+      margin-top: 12px;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+    }
+
+    /* Bottom controls */
+    .bottom{
+      padding: 12px 18px 16px;
+      border-top: 1px solid var(--panel-border);
+      background: rgba(0,0,0,0.12);
+    }
+
+    .btnRow{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+    .btnGroup{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+
+    .btn{
+      font-family: var(--font-display);
+      font-size: 0.92em;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 10px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.18s;
+      border: 1px solid var(--border-color);
+      background: rgba(255,255,255,0.03);
+      color: var(--text-primary);
+    }
+    .btn:hover:not(:disabled){ background: rgba(212,175,55,0.06); border-color: rgba(212,175,55,0.55); }
+    .btn:disabled{ opacity: 0.40; cursor: not-allowed; }
+
+    .btn-primary{
+      background: rgba(95,125,149,0.22);
+      border-color: rgba(95,125,149,0.70);
+    }
+    .btn-primary:hover:not(:disabled){ background: rgba(95,125,149,0.30); border-color: rgba(212,175,55,0.70); }
+
+    .btn-warn{
+      background: rgba(212,175,55,0.12);
+      border-color: rgba(212,175,55,0.55);
+    }
+    .btn-warn:hover:not(:disabled){ background: rgba(212,175,55,0.18); }
+
+    .btn-danger{
+      background: rgba(168,50,50,0.10);
+      border-color: rgba(168,50,50,0.55);
+    }
+    .btn-danger:hover:not(:disabled){ border-color: rgba(168,50,50,0.85); background: rgba(168,50,50,0.14); }
+
+    .btn-ghost{ background: rgba(0,0,0,0.18); color: var(--text-secondary); }
+    .btn-ghost:hover:not(:disabled){ border-color: rgba(148,163,184,0.55); background: rgba(255,255,255,0.03); }
+
+    .help{
+      margin-top: 10px;
+      display:flex;
+      justify-content:space-between;
+      gap: 10px;
+      flex-wrap:wrap;
+      color: var(--text-secondary);
+      font-size: 0.86em;
+      line-height: 1.35;
+      align-items:center;
+    }
+
+    /* Modal */
+    .modalBack{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+      z-index: 50;
+      backdrop-filter: blur(3px);
+    }
+    .modal{
+      width: min(560px, 100%);
+      border-radius: 16px;
+      border: 1px solid var(--panel-border-strong);
+      background: linear-gradient(180deg, rgba(20,24,32,0.96), rgba(15,15,15,0.96));
+      box-shadow: 0 0 60px rgba(0,0,0,0.60);
+      overflow: hidden;
+      position: relative;
+    }
+    .modal::before{
+      content:"";
+      position:absolute;
+      left:0; top:0; right:0;
+      height:3px;
+      background: linear-gradient(90deg, rgba(212,175,55,0.75), rgba(95,125,149,0.55));
+    }
+    .modalHead{
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid var(--panel-border);
+      display:flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .modalHead h2{
+      margin: 0;
+      font-family: var(--font-display);
+      color: var(--accent-gold);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-size: 1.25em;
+    }
+    .modalBody{ padding: 12px 14px 14px; }
+
+    table{
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-mono);
+      font-size: 0.86em;
+      color: var(--text-secondary);
+    }
+    th, td{ border-bottom: 1px solid rgba(148,163,184,0.18); padding: 8px 8px; text-align: left; }
+    th{ color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px; font-size: 0.78em; }
+    .right{ text-align:right; }
+
+
+  </style>
+</head>
+<body>
+
+  <div class="shell">
+    <div class="top">
+      <div class="row">
+        <div class="titleWrap">
+          <h1>Poker Slot</h1>
+          <p class="sub">Hold cards. Spin for free rerolls. Bank, or overclock once the freebies run out.</p>
+        </div>
+        <div class="tabs">
+          <div class="tab active" id="tabPlay">Play</div>
+          <button class="btn btn-ghost" id="btnRules" type="button">Rules</button>
+        </div>
+      </div>
+
+      <!-- PLAYER HUD (only what player sees) -->
+      <div class="hud" id="playHud">
+        <div class="box">
+          <div class="lbl">Chips</div>
+          <div class="val"><span id="credits">100</span> <small>in machine</small></div>
+        </div>
+        <div class="box">
+          <div class="lbl">Spins</div>
+          <div class="val"><span id="spinsLeft">—</span> <small>free</small></div>
+        </div>
+        <div class="box">
+          <div class="lbl">Heat</div>
+          <div class="heatRow">
+            <div class="val"><span id="heatPct">0</span><small>%</small></div>
+            <div class="meter" title="Burn chance increases with heat. Burnout resets heat to 0.">
+              <div class="fill" id="heatFill"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLAY TAB -->
+    <div id="playTab">
+      <div class="mid">
+        <div class="status">
+          <div class="state" id="stateText">Ready.</div>
+          <div class="pills">
+            <span class="pill" id="handPill">Hand: —</span>
+            <span class="pill" id="payoutPill">Payout: —</span>
+            <span class="pill" id="burnPill">Burn: —</span>
+          </div>
+        </div>
+
+        <div class="reels" id="reels"></div>
+
+        <!-- Exit action requested: button below cards -->
+        <div class="endRow">
+          <button class="btn btn-ghost" id="btnEndGame">END GAME</button>
+        </div>
+      </div>
+
+      <div class="bottom">
+        <div class="btnRow">
+          <div class="btnGroup" id="leftButtons"></div>
+          <div class="btnGroup" id="rightButtons">
+            <button class="btn btn-ghost" id="btnPaytable">Paytable</button>
+          </div>
+        </div>
+
+        <div class="help">
+          <div>
+            <span class="pill" id="pillAnte">Next hand: −25</span>
+            <span class="pill" id="pillHeatRule">Heat +10% on safe overclock</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Paytable modal -->
+  <div class="modalBack" id="modalBack">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Paytable">
+      <div class="modalHead">
+        <h2>Paytable</h2>
+        <button class="btn btn-ghost" id="btnCloseModal">Close</button>
+      </div>
+      <div class="modalBody">
+        <table>
+          <thead>
+            <tr><th>Hand</th><th class="right">Mult</th><th class="right">Pays</th></tr>
+          </thead>
+          <tbody id="paytableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Rules modal -->
+  <div class="modalBack" id="rulesBack">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Rules">
+      <div class="modalHead">
+        <h2>Rules</h2>
+        <button class="btn btn-ghost" id="btnCloseRules">Close</button>
+      </div>
+      <div class="modalBody">
+        <ul style="margin:0; padding-left:18px; line-height:1.5; color:var(--text-secondary)">
+          <li>Start a hand by paying the ante.</li>
+          <li>Hold cards and use free spins to reroll unheld cards.</li>
+          <li>Bank at any time to collect the current payout.</li>
+          <li>When free spins are gone, you may overclock for one risky final reroll.</li>
+          <li>Burnout resets heat; if embedded, your run ends when chips hit 0.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ---------------- P63 Embed Bridge ----------------
+  const P63_EMBED = (window.parent && window.parent !== window);
+  const P63 = {
+    send(type, payload={}) {
+      if (!P63_EMBED) return;
+      window.parent.postMessage({ __p63: 1, type, ...payload }, "*");
+    }
+  };
+  // Tell parent we’re alive (optional but helpful)
+  P63.send("P63_MINIGAME_READY", { kind: "POKER_SLOTS" });
+
+  let P63_ENDED = false;
+
+
+  window.addEventListener("message", (e) => {
+    const d = e.data;
+    if (!d || d.__p63 !== 1 || d.type !== "P63_INIT" || d.kind !== "POKER_SLOTS") return;
+    if (typeof d.startChips === "number") CFG.startChips = d.startChips;
+    if (typeof d.ante === "number") CFG.ante = d.ante;
+    if (typeof d.freeSpins === "number") CFG.freeSpins = d.freeSpins;
+    if (typeof d.baseBurn === "number") CFG.baseBurn = d.baseBurn;
+    if (typeof d.heatStep === "number") CFG.heatStep = d.heatStep;
+
+    // reset session with new CFG
+    SESSION.chips = CFG.startChips;
+    SESSION.heat = 0;
+    resetToReady("Ready.");
+    updateHUD();
+  });
+
+  // ---------------- Runtime settings ----------------
+  let CFG = {
+    startChips: 100,
+    ante: 25,
+    freeSpins: 2,
+    baseBurn: 15,   // %
+    heatStep: 10,   // %
+  };
+
+  // Updated payout table (as provided)
+  const PAYTABLE = [
+    {key:"Royal Flush", mult:20},
+    {key:"Straight Flush", mult:10},
+    {key:"Four of a Kind", mult:8},
+    {key:"Full House", mult:6},
+    {key:"Flush", mult:5},
+    {key:"Straight", mult:4},
+    {key:"Three of a Kind", mult:3},
+    {key:"Two Pair", mult:2},
+    {key:"One Pair", mult:1},
+    {key:"No Win", mult:0},
+  ];
+
+  // ---------------- RNG ----------------
+  const rng = () => Math.random();
+  const rint = (n) => Math.floor(rng() * n);
+  const clamp = (n,a,b)=>Math.max(a, Math.min(b,n));
+
+  // ---------------- Cards / Deck ----------------
+  const SUITS = [
+    {k:'S', sym:'\u2660', color:'blk'},
+    {k:'H', sym:'\u2665', color:'red'},
+    {k:'D', sym:'\u2666', color:'red'},
+    {k:'C', sym:'\u2663', color:'blk'},
+  ];
+  const RANKS = [
+    {k:'2', v:2},{k:'3', v:3},{k:'4', v:4},{k:'5', v:5},{k:'6', v:6},{k:'7', v:7},
+    {k:'8', v:8},{k:'9', v:9},{k:'10', v:10},{k:'J', v:11},{k:'Q', v:12},{k:'K', v:13},{k:'A', v:14}
+  ];
+
+  function buildDeck(){
+    const deck = [];
+    for (const s of SUITS){
+      for (const r of RANKS){
+        deck.push({ id: r.k + s.k, rank:r.k, rv:r.v, suit:s.k, sym:s.sym, color:s.color });
+      }
+    }
+    return deck;
+  }
+  function shuffle(arr){
+    for (let i=arr.length-1;i>0;i--){
+      const j = rint(i+1);
+      [arr[i],arr[j]] = [arr[j],arr[i]];
+    }
+    return arr;
+  }
+
+  // ---------------- Hand evaluation (all standard hands) ----------------
+  function isStraight(uniq){
+    if (uniq.length !== 5) return {ok:false, high:0};
+    // wheel A-2-3-4-5
+    const wheel = [2,3,4,5,14];
+    const isWheel = wheel.every(v=>uniq.includes(v));
+    if (isWheel) return {ok:true, high:5};
+    const min = uniq[0], max = uniq[4];
+    if (max - min === 4) return {ok:true, high:max};
+    return {ok:false, high:0};
+  }
+  function rankToLabel(rv){
+    const map = {14:'A',13:'K',12:'Q',11:'J',10:'10',9:'9',8:'8',7:'7',6:'6',5:'5',4:'4',3:'3',2:'2'};
+    return map[String(rv)] || String(rv);
+  }
+
+  function evaluate(cards){
+    const ranks = cards.map(c=>c.rv).sort((a,b)=>a-b);
+    const suits = cards.map(c=>c.suit);
+    const flush = suits.every(s=>s===suits[0]);
+
+    const uniq = Array.from(new Set(ranks)).sort((a,b)=>a-b);
+    const straight = isStraight(uniq);
+
+    const countMap = new Map();
+    for (const rv of ranks) countMap.set(rv, (countMap.get(rv)||0)+1);
+    const counts = Array.from(countMap.entries())
+      .map(([rv,ct])=>({rv,ct}))
+      .sort((a,b)=> b.ct - a.ct || b.rv - a.rv);
+
+    const highStraight = straight.high;
+    const isRoyal = flush && straight.ok && highStraight===14 && ranks.includes(10);
+
+    let category = "High Card";
+    let detail = `High ${rankToLabel(ranks[4])}`;
+
+    if (isRoyal){
+      category = "Royal Flush"; detail = "A high";
+    } else if (flush && straight.ok){
+      category = "Straight Flush"; detail = `${rankToLabel(highStraight)} high`;
+    } else if (counts[0].ct === 4){
+      category = "Four of a Kind"; detail = `${rankToLabel(counts[0].rv)}s`;
+    } else if (counts[0].ct === 3 && counts[1].ct === 2){
+      category = "Full House"; detail = `${rankToLabel(counts[0].rv)}s full of ${rankToLabel(counts[1].rv)}s`;
+    } else if (flush){
+      category = "Flush"; detail = `${rankToLabel(ranks[4])} high`;
+    } else if (straight.ok){
+      category = "Straight"; detail = `${rankToLabel(highStraight)} high`;
+    } else if (counts[0].ct === 3){
+      category = "Three of a Kind"; detail = `${rankToLabel(counts[0].rv)}s`;
+    } else if (counts[0].ct === 2 && counts[1].ct === 2){
+      category = "Two Pair";
+      const hi = Math.max(counts[0].rv, counts[1].rv);
+      const lo = Math.min(counts[0].rv, counts[1].rv);
+      detail = `${rankToLabel(hi)}s and ${rankToLabel(lo)}s`;
+    } else if (counts[0].ct === 2){
+      category = "One Pair"; detail = `${rankToLabel(counts[0].rv)}s`;
+    }
+
+    // Map to payout row
+    let payoutKey = "No Win";
+    if (category === "Royal Flush") payoutKey = "Royal Flush";
+    else if (category === "Straight Flush") payoutKey = "Straight Flush";
+    else if (category === "Four of a Kind") payoutKey = "Four of a Kind";
+    else if (category === "Full House") payoutKey = "Full House";
+    else if (category === "Flush") payoutKey = "Flush";
+    else if (category === "Straight") payoutKey = "Straight";
+    else if (category === "Three of a Kind") payoutKey = "Three of a Kind";
+    else if (category === "Two Pair") payoutKey = "Two Pair";
+    else if (category === "One Pair") payoutKey = "One Pair";
+
+    const row = PAYTABLE.find(x=>x.key===payoutKey) || {mult:0};
+    const mult = row.mult || 0;
+    const payout = Math.round(mult * CFG.ante);
+
+    return {category, detail, payoutKey, mult, payout};
+  }
+
+  // ---------------- UI refs ----------------
+  const $ = (id)=>document.getElementById(id);
+  const els = {
+    tabPlay: $("tabPlay"),
+    btnRules: $("btnRules"),
+    playTab: $("playTab"),
+
+    credits: $("credits"),
+    spinsLeft: $("spinsLeft"),
+    heatPct: $("heatPct"),
+    heatFill: $("heatFill"),
+
+    stateText: $("stateText"),
+    handPill: $("handPill"),
+    payoutPill: $("payoutPill"),
+    burnPill: $("burnPill"),
+
+    reels: $("reels"),
+
+    leftButtons: $("leftButtons"),
+    rightButtons: $("rightButtons"),
+
+    pillAnte: $("pillAnte"),
+    pillHeatRule: $("pillHeatRule"),
+
+    btnEndGame: $("btnEndGame"),
+
+    btnPaytable: $("btnPaytable"),
+    modalBack: $("modalBack"),
+    btnCloseModal: $("btnCloseModal"),
+    paytableBody: $("paytableBody"),
+
+    rulesBack: $("rulesBack"),
+    btnCloseRules: $("btnCloseRules"),
+
+  };
+
+  // ---------------- State ----------------
+  const SESSION = { chips: CFG.startChips, heat: 0 };
+
+  const HAND = {
+    phase: "READY",   // READY | HOLDING | RESOLVED | BURNED | SPINNING
+    cards: [null,null,null,null,null],
+    held: [false,false,false,false,false],
+    spinsLeft: 0,
+    deck: [],
+    eval: null,
+    lastWinnings: 0,   // winnings from THIS hand only
+  };
+
+  function burnChance(){
+    return clamp(CFG.baseBurn + SESSION.heat, 0, 95);
+  }
+
+  // ---------------- Rendering ----------------
+  function cardHTML(card, spinning){
+    const rank = card ? card.rank : "\u2014";
+    const sym = card ? card.sym : "\u2022";
+    const color = card ? card.color : "blk";
+    return `
+      <div class="card ${spinning ? 'spin':''}">
+        <div class="shine"></div>
+        <div class="corner ${color}">
+          <div>${rank}</div>
+          <div style="font-size:1.05em">${sym}</div>
+        </div>
+        <div class="corner br ${color}">
+          <div>${rank}</div>
+          <div style="font-size:1.05em">${sym}</div>
+        </div>
+        <div class="pip ${color}">${sym}</div>
+      </div>
+    `;
+  }
+
+  function canToggleHold(){ return HAND.phase === "HOLDING"; }
+
+  function renderReels(spinningMask){
+    els.reels.innerHTML = "";
+    for (let i=0;i<5;i++){
+      const reel = document.createElement("div");
+      const held = HAND.held[i];
+      const locked = !canToggleHold();
+      reel.className = "reel" + (held ? " held":"") + (locked ? " locked":"");
+      reel.setAttribute("role","button");
+      reel.setAttribute("tabindex","0");
+
+      const tag = held ? "HOLD" : (locked ? "\u2014" : "TAP TO HOLD");
+      reel.innerHTML = `
+        <div class="holdTag"><span class="dot"></span><span>${tag}</span></div>
+        <div class="cardFace">${cardHTML(HAND.cards[i], !!(spinningMask && spinningMask[i]))}</div>
+      `;
+
+      reel.addEventListener("click", ()=>toggleHold(i));
+      reel.addEventListener("keydown", (e)=>{
+        if (e.key==="Enter" || e.key===" "){ e.preventDefault(); toggleHold(i); }
+      });
+
+      els.reels.appendChild(reel);
+    }
+  }
+
+  function setStateText(t){ els.stateText.textContent = t; }
+
+  function updateHUD(){
+    els.credits.textContent = String(SESSION.chips);
+    els.spinsLeft.textContent = (HAND.phase==="HOLDING") ? String(HAND.spinsLeft) : "\u2014";
+
+    els.heatPct.textContent = String(Math.round(SESSION.heat));
+    els.heatFill.style.width = `${clamp(SESSION.heat,0,95)}%`;
+
+    els.pillAnte.textContent = `Next hand: \u2212${CFG.ante}`;
+    els.pillHeatRule.textContent = `Heat +${CFG.heatStep}% on safe overclock`;
+    els.burnPill.textContent = `Burn: ${burnChance()}%`;
+
+    // Disable global buttons during spin
+    const disabledGlobal = (HAND.phase === "SPINNING");
+    els.btnPaytable.disabled = disabledGlobal;
+    els.btnRules.disabled = disabledGlobal;
+    els.btnEndGame.disabled = disabledGlobal;
+
+    if (HAND.eval){
+      els.handPill.textContent = `Hand: ${HAND.eval.category} (${HAND.eval.detail})`;
+      const p = HAND.eval.payout;
+      if (HAND.phase==="HOLDING"){
+        els.payoutPill.textContent = `Payout: ${p>0 ? "+"+p : "0"}`;
+      } else if (HAND.phase==="RESOLVED"){
+        els.payoutPill.textContent = `Won: ${HAND.lastWinnings>0 ? "+"+HAND.lastWinnings : "0"}`;
+      } else if (HAND.phase==="BURNED"){
+        els.payoutPill.textContent = "Won: 0";
+      } else {
+        els.payoutPill.textContent = `Payout: ${p>0 ? "+"+p : "0"}`;
+      }
+    } else {
+      els.handPill.textContent = "Hand: \u2014";
+      els.payoutPill.textContent = "Payout: \u2014";
+    }
+
+    rebuildButtons();
+
+    // Embedded rule: if you hit 0 chips, the machine run ends.
+    // (Don’t end mid-hand; allow a hand already in play to resolve.)
+    if (P63_EMBED && SESSION.chips <= 0 && HAND.phase !== "HOLDING" && HAND.phase !== "SPINNING"){
+      // Avoid double-fire if updateHUD runs again during close
+      els.btnEndGame.disabled = true;
+      endGame("broke");
+      return;
+    }
+  }
+
+  function rebuildButtons(){
+    els.leftButtons.innerHTML = "";
+
+    const mk = (label, kind, onClick, disabled=false) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.className = `btn ${kind}`;
+      b.disabled = disabled;
+      b.addEventListener("click", onClick);
+      return b;
+    };
+
+    if (HAND.phase === "READY"){
+      const disabled = SESSION.chips < CFG.ante;
+      els.leftButtons.appendChild(mk(`Next Hand (\u2212${CFG.ante})`, "btn-primary", startHand, disabled));
+      return;
+    }
+
+    if (HAND.phase === "HOLDING"){
+      // Only show what is necessary:
+      // - if spins left: SPIN + BANK
+      // - if no spins left: BANK + OVERCLOCK
+      if (HAND.spinsLeft > 0){
+        els.leftButtons.appendChild(mk("Spin", "btn-primary", spinFree));
+        els.leftButtons.appendChild(mk("Bank", "btn-warn", bank));
+      } else {
+        els.leftButtons.appendChild(mk("Bank", "btn-warn", bank));
+        els.leftButtons.appendChild(mk("Overclock", "btn-danger", overclock));
+      }
+      return;
+    }
+
+    if (HAND.phase === "RESOLVED"){
+      els.leftButtons.appendChild(mk(`Next Hand (\u2212${CFG.ante})`, "btn-primary", startHand, SESSION.chips < CFG.ante));
+      return;
+    }
+
+    if (HAND.phase === "BURNED"){
+      els.leftButtons.appendChild(mk(`Next Hand (\u2212${CFG.ante})`, "btn-primary", startHand, SESSION.chips < CFG.ante));
+      return;
+    }
+    // SPINNING: no buttons
+  }
+
+  function renderPaytable(){
+    els.paytableBody.innerHTML = "";
+    for (const row of PAYTABLE){
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${row.key}</td><td class="right">${row.mult}\u00d7</td><td class="right">${Math.round(row.mult*CFG.ante)}</td>`;
+      els.paytableBody.appendChild(tr);
+    }
+  }
+
+  // ---------------- Logic ----------------
+  function resetToReady(msg="Ready."){
+    HAND.phase = "READY";
+    HAND.cards = [null,null,null,null,null];
+    HAND.held = [false,false,false,false,false];
+    HAND.spinsLeft = 0;
+    HAND.deck = [];
+    HAND.eval = null;
+    HAND.lastWinnings = 0;
+
+    renderReels([false,false,false,false,false]);
+    setStateText(msg);
+    updateHUD();
+  }
+
+  function toggleHold(i){
+    if (!canToggleHold()) return;
+    HAND.held[i] = !HAND.held[i];
+    renderReels([false,false,false,false,false]);
+    updateHUD();
+  }
+
+  function dealFromDeck(){ return HAND.deck.pop(); }
+
+  function setEvaluation(){
+    if (HAND.cards.some(c=>!c)){ HAND.eval = null; return; }
+    HAND.eval = evaluate(HAND.cards);
+  }
+
+  function randomCardFace(){
+    const s = SUITS[rint(SUITS.length)];
+    const r = RANKS[rint(RANKS.length)];
+    return { id: r.k + s.k, rank:r.k, rv:r.v, suit:s.k, sym:s.sym, color:s.color };
+  }
+
+  function animateSpin(spinningMask, onDone){
+    HAND.phase = "SPINNING";
+    setStateText("Spinning\u2026");
+    renderReels(spinningMask);
+    updateHUD();
+
+    const base = 520, stagger = 110;
+    let finished = 0;
+
+    for (let i=0;i<5;i++){
+      if (!spinningMask[i]){ finished++; continue; }
+      const stopAt = base + i*stagger + rint(140);
+      const start = performance.now();
+
+      const t = setInterval(()=>{
+        const elapsed = performance.now() - start;
+        const fake = randomCardFace();
+        const reels = els.reels.children;
+        if (reels[i]){
+          const face = reels[i].querySelector(".cardFace");
+          if (face) face.innerHTML = cardHTML(fake, true);
+        }
+        if (elapsed >= stopAt){
+          clearInterval(t);
+          const reels2 = els.reels.children;
+          if (reels2[i]){
+            const face = reels2[i].querySelector(".cardFace");
+            if (face) face.innerHTML = cardHTML(HAND.cards[i], false);
+          }
+          finished++;
+          if (finished >= 5) setTimeout(onDone, 120);
+        }
+      }, 55);
+    }
+    if (finished >= 5) setTimeout(onDone, 80);
+  }
+
+  function startHand(){
+    if (HAND.phase !== "READY" && HAND.phase !== "RESOLVED" && HAND.phase !== "BURNED") return;
+    if (SESSION.chips < CFG.ante) return;
+
+    SESSION.chips -= CFG.ante;
+
+    HAND.deck = shuffle(buildDeck());
+    HAND.held = [false,false,false,false,false];
+    HAND.spinsLeft = CFG.freeSpins;
+    HAND.lastWinnings = 0;
+
+    for (let i=0;i<5;i++) HAND.cards[i] = dealFromDeck();
+
+    animateSpin([true,true,true,true,true], ()=>{
+      setEvaluation();
+      HAND.phase = "HOLDING";
+      setStateText("Tap to hold. Spin for free rerolls, or bank your payout.");
+      updateHUD();
+    });
+  }
+
+  function spinFree(){
+    if (HAND.phase !== "HOLDING") return;
+    if (HAND.spinsLeft <= 0) return;
+
+    const mask = [false,false,false,false,false];
+    for (let i=0;i<5;i++){
+      if (!HAND.held[i]){
+        HAND.cards[i] = dealFromDeck();
+        mask[i] = true;
+      }
+    }
+    HAND.spinsLeft -= 1;
+
+    animateSpin(mask, ()=>{
+      setEvaluation();
+      HAND.phase = "HOLDING";
+      setStateText(HAND.spinsLeft > 0
+        ? "Adjust holds. Spin again, or bank."
+        : "No spins left. Bank now\u2026 or overclock."
+      );
+      updateHUD();
+    });
+  }
+
+  function bank(){
+    if (HAND.phase !== "HOLDING") return;
+    const pay = HAND.eval ? HAND.eval.payout : 0;
+
+    SESSION.chips += pay;
+    HAND.lastWinnings = pay;
+
+    HAND.phase = "RESOLVED";
+    HAND.held = [false,false,false,false,false];
+
+    setStateText(pay > 0 ? `Banked +${pay}.` : "No win.");
+    updateHUD();
+  }
+
+  function overclock(){
+    if (HAND.phase !== "HOLDING") return;
+    if (HAND.spinsLeft !== 0) return;
+
+    const p = burnChance() / 100;
+    const roll = rng();
+
+    if (roll < p){
+      // Burnout: Overclock must always sting.
+      // If you currently have a payout showing, wipe it. Otherwise, charge a flat penalty (defaults to 25 via ante).
+      const shownPay = (HAND.eval ? HAND.eval.payout : 0);
+      const penalty = CFG.ante;
+
+      SESSION.heat = 0;
+
+      if (shownPay > 0){
+        HAND.lastWinnings = 0;
+        HAND.phase = "BURNED";
+        HAND.held = [false,false,false,false,false];
+        setStateText("Burnout. Payout wiped. Heat reset.");
+      } else {
+        SESSION.chips = Math.max(0, SESSION.chips - penalty);
+        HAND.lastWinnings = 0;
+        HAND.phase = "BURNED";
+        HAND.held = [false,false,false,false,false];
+        setStateText(`Burnout. Lost ${penalty} chips. Heat reset.`);
+      }
+
+      updateHUD();
+      return;
+    }
+
+    // Safe: heat increases; one final reroll of unheld; auto-bank.
+    SESSION.heat = clamp(SESSION.heat + CFG.heatStep, 0, 95);
+
+    const mask = [false,false,false,false,false];
+    for (let i=0;i<5;i++){
+      if (!HAND.held[i]){
+        HAND.cards[i] = dealFromDeck();
+        mask[i] = true;
+      }
+    }
+
+    animateSpin(mask, ()=>{
+      setEvaluation();
+      const pay = HAND.eval ? HAND.eval.payout : 0;
+      SESSION.chips += pay;
+
+      HAND.lastWinnings = pay;
+
+      HAND.phase = "RESOLVED";
+      HAND.held = [false,false,false,false,false];
+
+      setStateText(pay > 0 ? `Overclock banked +${pay}. Heat rose.` : "Overclock banked 0. Heat rose.");
+      updateHUD();
+    });
+  }
+
+  // ---------------- Tabs ----------------
+  function showPlay(){
+    els.tabPlay.classList.add("active");
+    els.playTab.style.display = "";
+  }
+
+  els.tabPlay.addEventListener("click", showPlay);
+
+  // ---------------- Modal ----------------
+  function openPaytable(){ els.modalBack.style.display = "flex"; renderPaytable(); }
+  function closePaytable(){ els.modalBack.style.display = "none"; }
+  function openRules(){ els.rulesBack.style.display = "flex"; }
+  function closeRules(){ els.rulesBack.style.display = "none"; }
+
+  els.btnPaytable.addEventListener("click", openPaytable);
+  els.btnCloseModal.addEventListener("click", closePaytable);
+  els.modalBack.addEventListener("click", (e)=>{ if (e.target === els.modalBack) closePaytable(); });
+
+  els.btnRules.addEventListener("click", openRules);
+  els.btnCloseRules.addEventListener("click", closeRules);
+  els.rulesBack.addEventListener("click", (e)=>{ if (e.target === els.rulesBack) closeRules(); });
+
+  document.addEventListener("keydown", (e)=>{
+    if (e.key!=="Escape") return;
+    closePaytable();
+    closeRules();
+  });
+
+  // ---------------- End Game ----------------
+  function endGame(reason){
+    if (P63_ENDED) return;
+    P63_ENDED = true;
+
+    const cashOut = SESSION.chips;
+
+    if (P63_EMBED){
+      // Parent owns what happens next (chips credit + close overlay)
+      P63.send("P63_MINIGAME_END", { kind:"POKER_SLOTS", reason, cashOut });
+      return;
+    }
+
+    // Standalone fallback behavior:
+    SESSION.chips = CFG.startChips;
+    SESSION.heat = 0;
+    resetToReady(`Ended game. Cashed out ${cashOut}.`);
+    P63_ENDED = false;
+  }
+
+  els.btnEndGame.addEventListener("click", ()=> endGame("cashout"));
+
+  // ---------------- Boot ----------------
+  renderReels([false,false,false,false,false]);
+  setStateText("Ready.");
+  updateHUD();
+  showPlay();
+})();
+</script>
+</body>
+</html>
+
+  </template>
+
+  <template id="tplMinigameInfiltration">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Project 63 — Infiltration Run (Scoundrel Variant)</title>
+
+  <!-- Match MVP typography -->
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* ------------------------------------------------------------
+      P63 MVP THEME (kept compatible with p63_0.47.html)
+      ------------------------------------------------------------ */
+    :root {
+      /* Film Noir — Default Theme */
+      --bg-primary: #0f0f0f;
+      --bg-secondary: #1a1a1a;
+      --bg-card: #262626;
+      --bg-hover: #2c2c2c;
+
+      --text-primary: #f5f5f5;
+      --text-secondary: #b8b8b8;
+      --text-muted: #737373;
+
+      --accent-gold: #d4af37;
+      --gold-rgb: 212,175,55;
+      --accent-gold-dim: #8a6f1f;
+      --accent-red: #a83232;
+      --accent-green: #5e8c61;
+      --accent-blue: #5f7d95;
+      --accent-purple: #7d6a82;
+
+      --border-color: #404040;
+
+      /* Playing card ink (used on white cards) */
+      --card-red: #b13b3b;
+      --card-black: #111111;
+
+      /* Typography */
+      --font-display: 'Bebas Neue', sans-serif;
+      --font-mono: 'Space Mono', monospace;
+      --font-body: 'Inter', sans-serif;
+
+      /* Derived wash colors */
+      --wash-gold: rgba(212, 175, 55, 0.14);
+      --wash-red: rgba(168, 50, 50, 0.18);
+      --wash-green: rgba(94, 140, 97, 0.18);
+      --wash-blue: rgba(95, 125, 149, 0.16);
+      --wash-purple: rgba(125, 106, 130, 0.16);
+
+      /* Noir polish */
+      --noir-bg-primary: #0f1119;
+      --noir-bg-secondary: #141820;
+      --noir-shadow-gold: #261d0d;
+      --noir-muted-gold: #6c5b21;
+      --noir-soft-gold: #d4af37;
+      --noir-text-primary: #e4e4e7;
+      --noir-text-secondary: #a1a1aa;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-body);
+      background:
+        radial-gradient(ellipse at 50% -10%, rgba(212,175,55,0.18), rgba(15,17,25,0.0) 55%),
+        radial-gradient(ellipse at 40% 115%, rgba(95,125,149,0.18), rgba(15,17,25,0.0) 55%),
+        linear-gradient(180deg, var(--noir-bg-primary), var(--bg-primary));
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px 40px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    h1 {
+      font-family: var(--font-display);
+      font-size: 2.6em;
+      letter-spacing: 6px;
+      color: var(--accent-gold);
+      text-shadow: 0 0 18px rgba(212,175,55,0.22);
+      margin: 10px 0 4px;
+      text-transform: uppercase;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.82em;
+      letter-spacing: 2px;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+    }
+
+    #game-container { width: 100%; max-width: 760px; }
+
+
+    /* ── STATS ─────────────────────────────── */
+    .stats {
+      display: flex;
+      gap: 14px;
+      align-items: stretch;
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      background:
+        linear-gradient(90deg, rgba(212,175,55,0.65), rgba(95,125,149,0.45)) top/100% 3px no-repeat,
+        rgba(255,255,255,0.03);
+      border: 1px solid rgba(148, 163, 184, 0.20);
+      border-radius: 14px;
+    }
+    .meter-section { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+    .stat-label { font-size: 0.68em; color: var(--text-muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+    .meter-bg  { height: 13px; background: rgba(0,0,0,0.35); border-radius: 10px; border: 1px solid rgba(148,163,184,0.25); overflow: hidden; }
+    .meter-bar { height: 100%; border-radius: 10px; transition: width 0.35s ease, background 0.35s; }
+    .meter-text { font-family: var(--font-mono); font-size: 0.78em; margin-top: 5px; text-align: right; color: var(--text-secondary); }
+
+    .stat-box {
+      text-align: center;
+      display: flex; flex-direction: column; justify-content: center;
+      padding: 0 12px;
+      border-left: 1px solid rgba(148,163,184,0.18);
+      min-width: 120px;
+    }
+    .tool-val { font-family: var(--font-mono); font-size: 1.02em; color: var(--text-primary); white-space: nowrap; }
+    .tool-val.none { color: rgba(255,255,255,0.25); font-style: italic; }
+    .tool-cap { font-family: var(--font-body); font-size: 0.70em; color: var(--text-muted); margin-top: 3px; white-space: nowrap; }
+    .deck-num { font-family: var(--font-display); font-size: 1.9em; color: var(--accent-gold); line-height: 1; letter-spacing: 2px; }
+
+    /* ── COVER USED BANNER ─────────────────── */
+    .cover-banner {
+      text-align: center;
+      font-size: 0.76em;
+      color: rgba(212,175,55,0.85);
+      letter-spacing: 1px;
+      margin: 0 0 10px;
+      padding: 6px 10px;
+      background: rgba(212,175,55,0.08);
+      border: 1px solid rgba(212,175,55,0.18);
+      border-radius: 10px;
+      display: none;
+    }
+    .cover-banner.visible { display: block; }
+
+    /* ── NODE ─────────────────────────────── */
+    .node-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 10px;
+    }
+    .node-label {
+      font-size: 0.72em;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .progress-label {
+      font-family: var(--font-mono);
+      font-size: 0.78em;
+      color: var(--text-secondary);
+    }
+
+    .node {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 12px;
+      min-height: 184px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    /* ── CARDS ─────────────────────────────── */
+    .card {
+      width: 118px;
+      height: 178px;
+      background: white;
+      border-radius: 12px;
+      border: 2px solid rgba(221,221,221,0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.16s, box-shadow 0.16s, opacity 0.25s;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+      user-select: none;
+      isolation: isolate;
+    }
+
+    .card::before{
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 12px;
+      opacity: 0.0;
+      pointer-events: none;
+      transition: opacity 0.16s;
+      background: radial-gradient(ellipse at 50% 20%, rgba(212,175,55,0.25), rgba(212,175,55,0.0) 55%);
+    }
+
+    .card:hover:not(.played):not(.no-interact) {
+      transform: translateY(-8px) scale(1.03);
+      box-shadow: 0 18px 36px rgba(0,0,0,0.75);
+      z-index: 5;
+    }
+    .card:hover:not(.played):not(.no-interact)::before{ opacity: 1; }
+
+    .card.played {
+      opacity: 0.16;
+      cursor: default;
+      pointer-events: none;
+      transform: scale(0.96);
+    }
+    .card.no-interact { cursor: not-allowed; }
+
+    /* Type borders (use MVP accents) */
+    .card.detection { border-color: rgba(168, 50, 50, 0.85); }
+    .card.cover     { border-color: rgba(94, 140, 97, 0.85); }
+    .card.tool      { border-color: rgba(95, 125, 149, 0.85); }
+    .card.tool-locked { border-color: rgba(212,175,55,0.75); }
+    .card.cover-spent { opacity: 0.80; border-color: rgba(94, 140, 97, 0.45); }
+
+    .card.red-suit   .cv, .card.red-suit   .cs,
+    .card.red-suit   .big-suit, .card.red-suit .big-val { color: var(--card-red); }
+    .card.black-suit .cv, .card.black-suit .cs,
+    .card.black-suit .big-suit, .card.black-suit .big-val { color: var(--card-black); }
+
+    .corner { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 1; font-family: var(--font-mono); }
+    .corner.tl { top: 8px; left: 10px; }
+    .corner.br { bottom: 8px; right: 10px; transform: rotate(180deg); }
+    .cv { font-size: 1.02em; font-weight: 800; }
+    .cs { font-size: 0.86em; }
+
+    .card-center { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+    .big-suit { font-size: 2.6em; line-height: 1; }
+    .big-val  { font-family: var(--font-mono); font-size: 1.28em; font-weight: 800; line-height: 1; }
+    .card-type-tag {
+      font-family: var(--font-body);
+      font-size: 0.60em;
+      letter-spacing: 1.3px;
+      text-transform: uppercase;
+      color: rgba(0,0,0,0.55);
+      margin-top: 4px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .card-sub {
+      font-family: var(--font-mono);
+      font-size: 0.62em;
+      font-weight: 700;
+      margin-top: 4px;
+      text-align: center;
+    }
+    .card-sub.exposure-reduced { color: #2f6b3a; }
+    .card-sub.exposure-locked  { color: #8a6f1f; }
+    .card-sub.exposure-full    { color: #8a2010; }
+    .card-sub.no-cover         { color: #6b5b20; font-style: italic; }
+
+    .card.detection.danger { border-width: 3px; border-color: rgba(168, 50, 50, 1.0); }
+    .card.detection.danger::after{
+      content: "!";
+      position: absolute; top: -10px; right: -10px;
+      font-family: var(--font-display);
+      font-size: 0.95em;
+      color: rgba(168, 50, 50, 1.0);
+      width: 22px; height: 22px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.75);
+      border: 1px solid rgba(168, 50, 50, 0.7);
+      box-shadow: 0 0 14px rgba(168, 50, 50, 0.25);
+    }
+
+    /* ── ACTIONS ───────────────────────────── */
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      font-family: var(--font-display);
+      font-size: 0.90em;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 10px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.18s;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+    }
+    .btn:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent-gold); }
+    .btn:disabled { opacity: 0.40; cursor: not-allowed; }
+
+    .btn-secondary { background: rgba(255,255,255,0.03); color: var(--text-secondary); }
+    .btn-secondary:hover:not(:disabled) { border-color: rgba(148,163,184,0.6); }
+    .btn-primary {
+      background: rgba(95,125,149,0.22);
+      border-color: rgba(95,125,149,0.70);
+      color: var(--text-primary);
+    }
+    .btn-primary:hover:not(:disabled) { border-color: var(--accent-gold); background: rgba(95,125,149,0.30); }
+
+    .btn-branch {
+      background: rgba(212,175,55,0.12);
+      border-color: rgba(212,175,55,0.55);
+    }
+    .btn-branch:hover:not(:disabled) { background: rgba(212,175,55,0.18); }
+
+    /* ── LOG ─────────────────────────────── */
+    .log {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(148,163,184,0.18);
+      border-radius: 14px;
+      padding: 10px 14px;
+      max-height: 120px;
+      overflow-y: auto;
+      font-size: 0.86em;
+      line-height: 1.55;
+      color: var(--text-secondary);
+    }
+    .log::-webkit-scrollbar { width: 4px; }
+    .log::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.35); border-radius: 2px; }
+
+    .log-entry { color: var(--text-secondary); }
+    .log-entry.info   { color: rgba(245,245,245,0.75); }
+    .log-entry.system { color: var(--accent-gold); font-style: italic; }
+    .log-entry.exposure { color: rgba(168, 50, 50, 0.95); }
+    .log-entry.cover  { color: rgba(94, 140, 97, 0.95); }
+    .log-entry.tool   { color: rgba(95, 125, 149, 1.0); }
+    .log-entry.branch { color: rgba(212,175,55,0.95); }
+
+    /* ── RULES PANEL ─────────────────────── */
+    .rules-panel {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(148,163,184,0.18);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      font-size: 0.86em;
+      line-height: 1.55;
+      color: var(--text-secondary);
+      display: none;
+    }
+    .rules-panel.open { display: block; }
+    .rules-panel h3 {
+      font-family: var(--font-display);
+      color: var(--accent-gold);
+      margin-bottom: 10px;
+      font-size: 1.2em;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .rules-panel b { color: rgba(245,245,245,0.82); }
+    .rr { margin-bottom: 8px; }
+
+    /* ── CHALLENGE MODAL ───────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(3px);
+    }
+    .modal {
+      background: linear-gradient(180deg, rgba(20,24,32,0.95), rgba(15,15,15,0.95));
+      border: 1px solid rgba(148,163,184,0.26);
+      border-radius: 16px;
+      padding: 22px 20px;
+      text-align: center;
+      max-width: 380px;
+      width: 92%;
+      box-shadow: 0 0 60px rgba(0,0,0,0.55);
+      position: relative;
+      overflow: hidden;
+    }
+    .modal::before{
+      content:"";
+      position:absolute;
+      left:0; top:0; right:0;
+      height:3px;
+      background: linear-gradient(90deg, rgba(212,175,55,0.75), rgba(95,125,149,0.55));
+    }
+    .modal h3 {
+      font-family: var(--font-display);
+      color: var(--accent-gold);
+      margin-bottom: 10px;
+      font-size: 1.25em;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .modal .modal-body {
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      font-size: 0.92em;
+      line-height: 1.6;
+    }
+    .modal .modal-body strong { color: rgba(245,245,245,0.9); }
+    .modal .degrade-note {
+      display: block;
+      margin-top: 10px;
+      padding: 8px 10px;
+      background: rgba(212,175,55,0.10);
+      border: 1px solid rgba(212,175,55,0.18);
+      border-radius: 10px;
+      color: rgba(212,175,55,0.95);
+      font-size: 0.92em;
+    }
+    .modal-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .btn-use-tool {
+      background: rgba(95,125,149,0.26);
+      border-color: rgba(95,125,149,0.70);
+    }
+    .btn-use-tool:hover:not(:disabled){ border-color: var(--accent-gold); }
+    .btn-manual {
+      background: rgba(168,50,50,0.10);
+      border-color: rgba(168,50,50,0.55);
+    }
+    .btn-manual:hover:not(:disabled){ border-color: rgba(168,50,50,0.85); }
+
+    /* ── ENDGAME ─────────────────────────── */
+    .endgame {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.92);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 200;
+      text-align: center;
+      padding: 20px;
+    }
+    .endgame h2 {
+      font-family: var(--font-display);
+      font-size: 3em;
+      letter-spacing: 6px;
+      margin-bottom: 14px;
+      text-transform: uppercase;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .endgame.dead h2 { color: rgba(168,50,50,1.0); text-shadow: 0 0 34px rgba(168,50,50,0.55); }
+    .endgame.win  h2 { color: var(--accent-gold); text-shadow: 0 0 34px rgba(212,175,55,0.35); }
+
+    .endgame p {
+      color: var(--text-secondary);
+      margin-bottom: 18px;
+      font-size: 1.02em;
+      line-height: 1.55;
+      max-width: 420px;
+    }
+    .endgame p strong { color: rgba(245,245,245,0.9); }
+
+    .loot {
+      width: 100%;
+      max-width: 420px;
+      margin: 0 auto 18px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(148,163,184,0.18);
+      border-radius: 14px;
+      padding: 12px 14px;
+      text-align: left;
+    }
+    .loot-title{
+      font-family: var(--font-display);
+      font-size: 1.05em;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent-gold);
+      margin-bottom: 8px;
+    }
+    .loot-item{
+      font-family: var(--font-mono);
+      font-size: 0.90em;
+      color: var(--text-primary);
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(148,163,184,0.18);
+      background: rgba(0,0,0,0.22);
+      margin-bottom: 6px;
+    }
+    .loot-item:last-child{ margin-bottom: 0; }
+
+    /* Reward cards (winner screen) */
+    .loot-sub{
+      margin-top: 6px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.55);
+    }
+    .loot-items{
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .reward-card{
+      width: 112px;
+      height: 172px;
+      border-radius: 14px;
+      border: 1px solid rgba(0,0,0,0.20);
+      background: #f7f7f7;
+      box-shadow: 0 10px 26px rgba(0,0,0,0.42);
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+      user-select: none;
+      color: #111;
+      overflow: hidden;
+      display: block;
+    }
+    .reward-card::after{
+      content: '';
+      position: absolute;
+      inset: 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.12);
+      pointer-events: none;
+    }
+    .reward-card:hover{
+      transform: translateY(-8px) scale(1.02);
+      border-color: rgba(var(--gold-rgb),0.60);
+      box-shadow: 0 16px 34px rgba(0,0,0,0.52), 0 0 24px rgba(var(--gold-rgb),0.18);
+    }
+    .reward-card.selected,
+    .reward-card.is-selected{
+      border-color: rgba(var(--gold-rgb),0.95);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.60), 0 0 34px rgba(var(--gold-rgb),0.24);
+    }
+    .reward-card .reward-corner{
+      position:absolute;
+      top:8px;
+      left:8px;
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      line-height:1;
+      font-weight:800;
+      font-family:var(--font-mono);
+      color:#111;
+      z-index:2;
+    }
+    .reward-card .reward-corner.red{ color:#b13b3b; }
+    .reward-card .reward-corner .rank,
+    .reward-card .reward-corner .suit{ font-size:14px; }
+    .reward-card .reward-icon-badge{
+      position:absolute;
+      width:22px;
+      height:22px;
+      border-radius:999px;
+      border:1px solid rgba(0,0,0,0.14);
+      background:rgba(255,255,255,0.88);
+      display:grid;
+      place-items:center;
+      font-size:12px;
+      z-index:2;
+      line-height:1;
+    }
+    .reward-card .reward-stamp{ right:8px; top:8px; }
+    .reward-card .reward-sleeve{ left:8px; bottom:8px; }
+    .reward-card .reward-center{
+      position:absolute;
+      inset:0;
+      display:grid;
+      place-items:center;
+      font-family:var(--font-display);
+      letter-spacing:1px;
+      text-transform:uppercase;
+      color:rgba(17,17,17,0.85);
+    }
+    .reward-card .reward-pill{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(0,0,0,0.16);
+      background:rgba(255,255,255,0.72);
+      font-size:13px;
+    }
+
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.72; } }
+    .hidden { display: none !important; }
+  </style>
+</head>
+
+<body>
+  <h1>Infiltration Run</h1>
+  <p class="subtitle">Project 63 — Solo Node Crawler</p>
+
+  <div id="game-container">
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="meter-section">
+        <div class="stat-label">Exposure</div>
+        <div class="meter-bg"><div class="meter-bar" id="exp-bar"></div></div>
+        <div class="meter-text" id="exp-text">0 / 20</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Tool</div>
+        <div class="tool-val none" id="tool-val">None</div>
+        <div class="tool-cap" id="tool-cap"></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Deck</div>
+        <div class="deck-num" id="deck-count">--</div>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="actions" style="margin-bottom:10px">
+      <button class="btn btn-secondary" onclick="toggleRules()">Rules</button>
+          </div>
+
+    <!-- Rules Panel -->
+    <div class="rules-panel" id="rules-panel">
+      <h3>How to Play</h3>
+      <div class="rr">
+        <b>Card types —</b>
+        <b>♠ ♣ (black) 2–A</b> = <b>Detection</b> (rank = exposure gained; A=14, K=13, Q=12, J=11).
+        <b>♥ 2–10</b> = <b>Cover</b> (reduces exposure by that amount, min 0).
+        <b>♦ 2–10</b> = <b>Tool</b> (equips mitigation vs detection).
+        Red J, Q, K, A are not in the deck.
+      </div>
+      <div class="rr">
+        <b>Each node —</b> 4 cards dealt face-up. Play exactly 3; the 4th is <b>carried forward</b>.
+        When the deck is empty after dealing, it is the <b>final node</b>: play all cards, none carried.
+      </div>
+      <div class="rr">
+        <b>Cover —</b> only the <i>first</i> cover card played in a node applies. Extra cover is discarded with no effect.
+        Dimmed cover cards (with “no effect”) won’t reduce exposure.
+      </div>
+      <div class="rr">
+        <b>Mitigation with a tool —</b> exposure gained = max(0, detection rank − tool rank).
+        <i>Tool signature:</i> after mitigating a detection of rank N, the tool can only mitigate future detections ranked strictly less than N.
+        Manual bypass never increases the tool signature.
+        Locked detections cannot be targeted by your current tool.
+      </div>
+      <div class="rr">
+        <b>Change Branch —</b> all node cards go to the <i>bottom</i> of the deck in current order (no shuffle).
+        Cannot change branch two nodes in a row.
+      </div>
+      <div class="rr">
+        <b>Shorter decks</b> use balanced subsets: equal proportions of detection, cover, and tools with ranks spread across the full range.
+      </div>
+    </div>
+
+    <!-- Cover banner -->
+    <div class="cover-banner" id="cover-banner">
+      Cover already applied this node — additional cover will be discarded
+    </div>
+
+    <!-- Node -->
+    <div class="node-header">
+      <div class="node-label">Current Node</div>
+      <div class="progress-label" id="progress-label"></div>
+    </div>
+    <div class="node" id="node"></div>
+
+    <!-- Change Branch -->
+    <div class="actions">
+      <button class="btn btn-branch" id="branch-btn" onclick="changeBranch()">⚡ Change Branch</button>
+    </div>
+
+    <!-- Log -->
+    <div class="log" id="log"></div>
+  </div>
+
+  <!-- Challenge Modal -->
+  <div class="modal-overlay hidden" id="challenge-modal">
+    <div class="modal">
+      <h3 id="modal-title"></h3>
+      <div class="modal-body" id="modal-desc"></div>
+      <div class="modal-btns">
+        <button class="btn btn-use-tool" id="modal-tool-btn" onclick="resolveWithTool()">Use Tool</button>
+        <button class="btn btn-manual" onclick="resolveManual()">Manual Bypass</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Endgame -->
+  <div class="endgame hidden" id="endgame">
+    <h2 id="eg-title"></h2>
+    <p id="eg-msg"></p>
+
+    <div class="loot hidden" id="loot-box">
+      <div class="loot-title" id="loot-title">Choose 1 Reward</div>
+      <div class="loot-sub" id="loot-sub">Select a modified card to carry forward.</div>
+      <div class="loot-items" id="loot-items"></div>
+    </div>
+
+    <button class="btn btn-primary" id="eg-action-btn" onclick="endgameAction()">New Run</button>
+  </div>
+
+<script>
+
+  // ================================================================
+  //  HELPERS
+  // ================================================================
+  function valStr(v) {
+    return ({11:'J', 12:'Q', 13:'K', 14:'A'})[v] || String(v);
+  }
+
+  function cardType(suit, val) {
+    if (suit === '\u2660' || suit === '\u2663') return 'detection'; // spade, club
+    if (suit === '\u2665') return 'cover'; // heart
+    return 'tool'; // diamond
+  }
+
+  function cardDesc(c) { return valStr(c.value) + c.suit; }
+
+  function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  // ---------------- P63 Embed Bridge ----------------
+  const P63_EMBED = (window.parent && window.parent !== window);
+  const P63 = {
+    send(type, payload = {}) {
+      if (!P63_EMBED) return;
+      window.parent.postMessage({ __p63: 1, type, ...payload }, "*");
+    }
+  };
+
+  let rewardSetId = null;
+  let P63_ENDED = false;
+
+  function isRedSuit(sym){ return sym === '♥' || sym === '♦'; }
+
+  function toSuitSymbol(sym) {
+    const raw = (sym == null) ? '' : String(sym).trim();
+    if (!raw) return '♠';
+
+    const upper = raw.toUpperCase();
+    if (upper === 'S' || upper === 'SPADE' || upper === 'SPADES') return '♠';
+    if (upper === 'C' || upper === 'CLUB' || upper === 'CLUBS') return '♣';
+    if (upper === 'H' || upper === 'HEART' || upper === 'HEARTS') return '♥';
+    if (upper === 'D' || upper === 'DIAMOND' || upper === 'DIAMONDS') return '♦';
+
+    if (raw === '♠' || raw === '♣' || raw === '♥' || raw === '♦') return raw;
+    return '♠';
+  }
+
+  // Receive reward set from parent
+  window.addEventListener("message", (e) => {
+    const d = e.data;
+    if (!d || d.__p63 !== 1) return;
+
+    if (d.type === "P63_REWARD_SET" && d.kind === "INFILTRATION") {
+      rewardSetId = d.rewardSetId || null;
+      rewardChoices = Array.isArray(d.rewards) ? d.rewards : [];
+      renderRewardChoices(); // will render actual cards now
+    }
+  });
+
+  // Tell parent we're alive (optional but helpful)
+  P63.send("P63_MINIGAME_READY", { kind: "INFILTRATION" });
+
+  // ================================================================
+  //  DECK CONFIGS (mechanics unchanged; just reskinned terminology)
+  // ================================================================
+  const DECK_CONFIGS = {
+    short:  { lowRanks: [2, 5, 8, 10],          highRanks: [12, 13] },
+    medium: { lowRanks: [2, 3, 5, 6, 8, 9, 10], highRanks: [11, 13] },
+    full:   null
+  };
+
+  function buildDeck(lengthKey) {
+    const deck = [];
+    const SUITS = ['\u2660', '\u2663', '\u2665', '\u2666']; // spade club heart diamond
+
+    if (lengthKey === 'full') {
+      // 44-card standard deck
+      for (const suit of ['\u2660', '\u2663'])
+        for (let v = 2; v <= 14; v++)
+          deck.push({ suit, value: v, type: 'detection' });
+      for (let v = 2; v <= 10; v++)
+        deck.push({ suit: '\u2665', value: v, type: 'cover' });
+      for (let v = 2; v <= 10; v++)
+        deck.push({ suit: '\u2666', value: v, type: 'tool' });
+    } else {
+      const cfg = DECK_CONFIGS[lengthKey];
+      // Low ranks across all 4 suits
+      for (const suit of SUITS)
+        for (const v of cfg.lowRanks)
+          deck.push({ suit, value: v, type: cardType(suit, v) });
+      // High ranks (detection only) -- spade and club
+      for (const suit of ['\u2660', '\u2663'])
+        for (const v of cfg.highRanks)
+          deck.push({ suit, value: v, type: 'detection' });
+    }
+    return deck;
+  }
+
+  // ================================================================
+  //  GAME STATE
+  // ================================================================
+  let deck = [];
+  let node = [];
+  let carryCard = null;
+
+  let runner = { exposure: 0, maxExposure: 20 };
+  let tool = null; // {suit, value, maxDetectionValue}
+  let canBranch = true;
+  let coverUsedThisNode = false;
+  let finalNode = false;
+
+  let pendingDetection = null;
+  let pendingDetectionIdx = null;
+
+  let selectedLength = 'medium';
+
+    // Reward placeholders (victory screen)
+  let endgameMode = null;          // 'win' | 'dead'
+  let rewardChoices = [];
+  let selectedRewardIdx = null;
+
+  function buildPlaceholderRewards() {
+    // Standalone fallback only: empty placeholders
+    return [{}, {}, {}];
+  }
+
+  function rewardChoiceMarkup(r, loading = false) {
+    const suitSym = toSuitSymbol(r.suitSym || r.suit || '♠');
+    const rank = r.rank || r.value || '—';
+    const red = isRedSuit(suitSym);
+    const stamp = r.stampShort || r.stampLabel || r.stampId || '…';
+    const sleeve = r.sleeveShort || r.sleeveLabel || r.sleeveId || '…';
+
+    return `
+      <div class="reward-corner ${red ? 'red' : ''}">
+        <div class="rank">${rank}</div>
+        <div class="suit">${suitSym}</div>
+      </div>
+      <div class="reward-icon-badge reward-stamp" title="Stamp">${stamp}</div>
+      <div class="reward-icon-badge reward-sleeve" title="Sleeve">${sleeve}</div>
+      <div class="reward-center">
+        <div class="reward-pill">${loading ? 'Loading' : 'Reward'}</div>
+      </div>
+    `;
+  }
+
+  function renderRewardChoices() {
+    const lootBox   = document.getElementById('loot-box');
+    const items     = document.getElementById('loot-items');
+    const actionBtn = document.getElementById('eg-action-btn');
+
+    items.innerHTML = '';
+    selectedRewardIdx = null;
+    actionBtn.disabled = true;
+
+    const list = (rewardChoices && rewardChoices.length) ? rewardChoices : buildPlaceholderRewards();
+
+    list.forEach((r, idx) => {
+      const d = document.createElement('div');
+      d.className = 'reward-card';
+      d.title = rewardChoices.length ? 'Select reward' : 'Loading reward…';
+      d.setAttribute('role', 'button');
+      d.setAttribute('tabindex', rewardChoices.length ? '0' : '-1');
+      d.setAttribute('aria-label', rewardChoices.length ? `Select reward ${idx + 1}` : 'Loading reward');
+      d.innerHTML = rewardChoiceMarkup(r, !rewardChoices.length);
+
+      if (rewardChoices.length){
+        d.onclick = () => selectReward(idx);
+        d.onkeydown = (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') {
+            ev.preventDefault();
+            selectReward(idx);
+          }
+        };
+      } else {
+        d.style.cursor = "default";
+      }
+
+      items.appendChild(d);
+    });
+
+    lootBox.classList.remove('hidden');
+  }
+
+  function selectReward(idx) {
+    selectedRewardIdx = idx;
+    const nodes = Array.from(document.querySelectorAll('#loot-items .reward-card'));
+    nodes.forEach((n, i) => {
+      const on = i === idx;
+      n.classList.toggle('selected', on);
+      n.classList.toggle('is-selected', on);
+      n.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    document.getElementById('eg-action-btn').disabled = false;
+  }
+
+  function endgameAction() {
+    if (P63_ENDED) return;
+
+    if (P63_EMBED){
+      if (endgameMode === 'win'){
+        if (selectedRewardIdx === null) return;
+        P63_ENDED = true;
+        P63.send("P63_MINIGAME_END", {
+          kind: "INFILTRATION",
+          outcome: "win",
+          rewardSetId,
+          chosenIdx: selectedRewardIdx
+        });
+        return;
+      }
+
+      // dead
+      P63_ENDED = true;
+      P63.send("P63_MINIGAME_END", {
+        kind: "INFILTRATION",
+        outcome: "dead"
+      });
+      return;
+    }
+
+    // Standalone fallback
+    initGame();
+  }
+
+
+  // ================================================================
+  //  SETUP
+  // ================================================================
+  function initGame() {
+    P63_ENDED = false;
+
+    if (P63_EMBED){
+      selectedLength = "medium"; // Standard only
+    }
+
+    deck = shuffle(buildDeck(selectedLength));
+    runner = { exposure: 0, maxExposure: 20 };
+    tool = null;
+    canBranch = true;
+    carryCard = null;
+    coverUsedThisNode = false;
+    finalNode = false;
+    pendingDetection = pendingDetectionIdx = null;
+    node = [];
+
+    document.getElementById('endgame').classList.add('hidden');
+    document.getElementById('challenge-modal').classList.add('hidden');
+    document.getElementById('loot-box').classList.add('hidden');
+    document.getElementById('loot-items').innerHTML = '';
+    document.getElementById('log').innerHTML = '';
+
+    const labels = { short: 'Quick (20 cards)', medium: 'Standard (32 cards)', full: 'Full (44 cards)' };
+    addLog('New infiltration run — ' + labels[selectedLength] + '.', 'system');
+    dealNode(false);
+  }
+
+  // ================================================================
+  //  NODE LOGIC
+  // ================================================================
+  function dealNode(afterBranch) {
+    coverUsedThisNode = false;
+    node = [];
+    let toDraw = 4;
+
+    if (carryCard) {
+      node.push({ ...carryCard, played: false });
+      carryCard = null;
+      toDraw = 3;
+    }
+
+    for (let i = 0; i < Math.min(toDraw, deck.length); i++)
+      node.push({ ...deck.pop(), played: false });
+
+    finalNode = (deck.length === 0);
+
+    if (!afterBranch) canBranch = true;
+    updateUI();
+  }
+
+  // Final node: play everything. Normal: play all but 1 (carry the last).
+  function neededCount() {
+    if (finalNode || node.length <= 1) return node.length;
+    return node.length - 1;
+  }
+  function playedCount() { return node.filter(c => c.played).length; }
+
+  function afterCardPlayed() {
+    const played = playedCount();
+    const needed = neededCount();
+    const remaining = node.filter(c => !c.played);
+
+    if (played < needed) { updateUI(); return; }
+
+    // Node complete
+    if (!finalNode && remaining.length === 1) {
+      carryCard = { ...remaining[0] };
+      addLog('Carry forward: ' + cardDesc(carryCard) + '.', 'info');
+    }
+
+    updateUI();
+
+    if (finalNode) {
+      setTimeout(() => showEndgame(true), 650);
+    } else {
+      setTimeout(() => dealNode(false), 420);
+    }
+  }
+
+  // ================================================================
+  //  CARD INTERACTIONS
+  // ================================================================
+  function clickCard(idx) {
+    const c = node[idx];
+    if (!c || c.played) return;
+
+    if (c.type === 'cover') applyCover(idx);
+    else if (c.type === 'tool') equipTool(idx);
+    else engageDetection(idx);
+  }
+
+  function applyCover(idx) {
+    const c = node[idx];
+    c.played = true;
+
+    if (coverUsedThisNode) {
+      addLog('Cover ignored: ' + cardDesc(c) + ' (already applied cover this node).', 'info');
+    } else {
+      coverUsedThisNode = true;
+      const before = runner.exposure;
+      runner.exposure = Math.max(0, runner.exposure - c.value);
+      const reduced = before - runner.exposure;
+      addLog('Applied cover ' + cardDesc(c) + ': -' + reduced + ' exposure. (' + runner.exposure + '/' + runner.maxExposure + ')', 'cover');
+    }
+
+    afterCardPlayed();
+  }
+
+  function equipTool(idx) {
+    const c = node[idx];
+    if (tool) {
+      addLog('Swapped tool ' + valStr(tool.value) + tool.suit + ' → ' + cardDesc(c) + '.', 'tool');
+    } else {
+      addLog('Equipped tool ' + cardDesc(c) + '.', 'tool');
+    }
+    tool = { suit: c.suit, value: c.value, maxDetectionValue: Infinity };
+    c.played = true;
+    afterCardPlayed();
+  }
+
+  function toolCanMitigate(detectionVal) {
+    return tool !== null && detectionVal < tool.maxDetectionValue;
+  }
+
+  function engageDetection(idx) {
+    const c = node[idx];
+    pendingDetection = c;
+    pendingDetectionIdx = idx;
+
+    addLog('Engaged ' + cardDesc(c) + ' detection.', 'info');
+
+    const canUse = toolCanMitigate(c.value);
+    const toolExp = canUse ? Math.max(0, c.value - tool.value) : null;
+
+    if (canUse) {
+      const afterCap = c.value;
+      const expStr = toolExp === 0
+        ? '<strong>+0 exposure</strong> (fully mitigated)'
+        : '<strong>+' + toolExp + ' exposure</strong>';
+
+      const signatureStr = afterCap <= 2
+        ? 'After this, the tool is effectively burned (no detections ranked &lt; ' + afterCap + ').'
+        : 'After use: tool signature rises — mitigates rank &lt; ' + afterCap + ' only.';
+
+      document.getElementById('modal-title').textContent =
+        'Detection — ' + cardDesc(c) + ' (rank ' + c.value + ')';
+
+      document.getElementById('modal-desc').innerHTML =
+        'Manual bypass: <strong>+' + c.value + ' exposure</strong> <em style="font-size:0.9em;color:rgba(184,184,184,0.8)">(tool preserved)</em><br>' +
+        valStr(tool.value) + tool.suit + ': ' + expStr +
+        '<span class="degrade-note">' + signatureStr + '</span>';
+
+      document.getElementById('challenge-modal').classList.remove('hidden');
+    } else {
+      if (tool) {
+        const cap = tool.maxDetectionValue === Infinity ? 'any rank' : 'rank < ' + tool.maxDetectionValue;
+        addLog('Tool ' + valStr(tool.value) + tool.suit + ' cannot mitigate rank ' + c.value + ' (' + cap + '). Manual bypass.', 'info');
+      }
+      resolveEngagement(false);
+    }
+  }
+
+  function resolveWithTool() {
+    document.getElementById('challenge-modal').classList.add('hidden');
+    resolveEngagement(true);
+  }
+  function resolveManual() {
+    document.getElementById('challenge-modal').classList.add('hidden');
+    resolveEngagement(false);
+  }
+
+  function resolveEngagement(useTool) {
+    const c = pendingDetection;
+    const idx = pendingDetectionIdx;
+
+    let inc = c.value; // manual bypass = full exposure
+
+    if (useTool && tool) {
+      inc = Math.max(0, c.value - tool.value);
+      const oldCap = tool.maxDetectionValue === Infinity ? 'any' : '< ' + tool.maxDetectionValue;
+      tool.maxDetectionValue = c.value;
+
+      runner.exposure += inc;
+
+      addLog(
+        'Mitigated ' + cardDesc(c) + ' with ' + valStr(tool.value) + tool.suit + ': +' + inc + ' exposure. ' +
+        '(tool was ' + oldCap + ', now < ' + c.value + ') ' +
+        '(' + runner.exposure + '/' + runner.maxExposure + ')',
+        'exposure'
+      );
+    } else {
+      runner.exposure += inc;
+      addLog(
+        'Bypassed ' + cardDesc(c) + ' manually: +' + inc + ' exposure. (' + runner.exposure + '/' + runner.maxExposure + ')',
+        'exposure'
+      );
+    }
+
+    node[idx].played = true;
+
+    if (runner.exposure >= runner.maxExposure) {
+      runner.exposure = runner.maxExposure;
+      updateUI();
+      setTimeout(() => showEndgame(false), 650);
+      return;
+    }
+
+    afterCardPlayed();
+  }
+
+  // ================================================================
+  //  CHANGE BRANCH (FLEE)
+  // ================================================================
+  function changeBranch() {
+    if (!canBranch) { addLog('Cannot change branch two nodes in a row.', 'info'); return; }
+
+    const allCards = node.map(c => { const { played, ...bare } = c; return bare; });
+    deck.unshift(...allCards);
+
+    addLog('Changed branch — ' + allCards.length + ' card(s) moved to bottom of deck. (' + deck.length + ' remain)', 'branch');
+
+    canBranch = false;
+    carryCard = null;
+    node = [];
+    dealNode(true);
+  }
+
+  // ================================================================
+  //  UI
+  // ================================================================
+  function updateUI() {
+    // Exposure bar (fills up as exposure rises)
+    const pct = Math.max(0, Math.min(1, runner.exposure / runner.maxExposure)) * 100;
+    const bar = document.getElementById('exp-bar');
+    bar.style.width = pct + '%';
+    bar.style.background = pct < 35
+      ? 'linear-gradient(90deg, rgba(94,140,97,0.95), rgba(94,140,97,0.65))'
+      : pct < 70
+      ? 'linear-gradient(90deg, rgba(212,175,55,0.95), rgba(212,175,55,0.65))'
+      : 'linear-gradient(90deg, rgba(168,50,50,0.95), rgba(168,50,50,0.65))';
+
+    document.getElementById('exp-text').textContent = runner.exposure + ' / ' + runner.maxExposure;
+
+    // Tool
+    const tv = document.getElementById('tool-val');
+    const tc = document.getElementById('tool-cap');
+
+    if (tool) {
+      tv.className = 'tool-val';
+      tv.textContent = valStr(tool.value) + tool.suit;
+
+      if (tool.maxDetectionValue === Infinity) {
+        tc.textContent = 'mitigates any rank';
+        tc.style.color = '';
+      } else if (tool.maxDetectionValue <= 2) {
+        tc.textContent = 'burned (fully flagged)';
+        tc.style.color = 'rgba(168,50,50,0.95)';
+      } else {
+        tc.textContent = 'mitigates rank < ' + tool.maxDetectionValue;
+        tc.style.color = '';
+      }
+    } else {
+      tv.className = 'tool-val none';
+      tv.textContent = 'None';
+      tc.textContent = '';
+      tc.style.color = '';
+    }
+
+    // Deck count
+    document.getElementById('deck-count').textContent = deck.length;
+
+    // Change branch button
+    document.getElementById('branch-btn').disabled = !canBranch;
+
+    // Cover banner: show if cover used AND unused cover remains
+    const unusedCover = node.filter(c => !c.played && c.type === 'cover').length;
+    document.getElementById('cover-banner')
+      .classList.toggle('visible', coverUsedThisNode && unusedCover > 0);
+
+    // Progress label
+    const played = playedCount();
+    const needed = neededCount();
+    document.getElementById('progress-label').textContent =
+      played + ' / ' + needed + ' played' + (finalNode ? ' (final node)' : '');
+
+    renderNode();
+  }
+
+  function renderNode() {
+    const el = document.getElementById('node');
+    el.innerHTML = '';
+
+    const played = playedCount();
+    const needed = neededCount();
+
+    node.forEach((c, idx) => {
+      const isRed = (c.suit === '\u2665' || c.suit === '\u2666');
+      const v = valStr(c.value);
+      const isDanger = !c.played && c.type === 'detection' && c.value >= 10;
+      const isLocked = !c.played && c.type === 'detection' && tool && !toolCanMitigate(c.value);
+      const isSpent = !c.played && c.type === 'cover' && coverUsedThisNode;
+
+      let subText = '', subClass = '';
+
+      if (!c.played) {
+        if (c.type === 'detection') {
+          if (tool && toolCanMitigate(c.value)) {
+            const inc = Math.max(0, c.value - tool.value);
+            if (inc === 0) { subText = '+0 EXP'; subClass = 'exposure-reduced'; }
+            else { subText = '+' + inc + ' EXP'; subClass = 'exposure-reduced'; }
+          } else if (isLocked) {
+            subText = '+' + c.value + ' EXP'; subClass = 'exposure-locked';
+          } else {
+            subText = '+' + c.value + ' EXP'; subClass = 'exposure-full';
+          }
+        } else if (isSpent) {
+          subText = 'no effect'; subClass = 'no-cover';
+        }
+      }
+
+      if (isLocked && subText) subText = '🔒 ' + subText;
+
+      const typeLabel = { detection: 'Detection', cover: 'Cover', tool: 'Tool' }[c.type];
+
+      const cls = [
+        'card',
+        c.type,
+        isLocked ? 'tool-locked' : '',
+        isSpent ? 'cover-spent' : '',
+        isRed ? 'red-suit' : 'black-suit',
+        (isDanger && !c.played) ? 'danger' : '',
+        c.played ? 'played' : '',
+        (!c.played && played >= needed) ? 'no-interact' : ''
+      ].filter(Boolean).join(' ');
+
+      const div = document.createElement('div');
+      div.className = cls;
+
+      div.innerHTML =
+        '<div class="corner tl"><span class="cv">' + v + '</span><span class="cs">' + c.suit + '</span></div>' +
+        '<div class="card-center">' +
+          '<div class="big-suit">' + c.suit + '</div>' +
+          '<div class="big-val">' + v + '</div>' +
+          '<div class="card-type-tag">' + typeLabel + '</div>' +
+          (subText ? '<div class="card-sub ' + subClass + '">' + subText + '</div>' : '') +
+        '</div>' +
+        '<div class="corner br"><span class="cv">' + v + '</span><span class="cs">' + c.suit + '</span></div>';
+
+      if (!c.played && played < needed) {
+        div.onclick = () => clickCard(idx);
+        div.title =
+          c.type === 'detection' ? 'Engage detection'
+          : c.type === 'cover' ? (isSpent ? 'Discard cover (no effect)' : 'Apply cover')
+          : 'Equip tool';
+      }
+
+      el.appendChild(div);
+    });
+  }
+
+  function addLog(msg, cls) {
+    const log = document.getElementById('log');
+    const d = document.createElement('div');
+    d.className = 'log-entry' + (cls ? ' ' + cls : '');
+    d.textContent = msg;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function showEndgame(win) {
+    endgameMode = win ? 'win' : 'dead';
+
+    const el        = document.getElementById('endgame');
+    const titleEl   = document.getElementById('eg-title');
+    const msgEl     = document.getElementById('eg-msg');
+    const actionBtn = document.getElementById('eg-action-btn');
+    const lootBox   = document.getElementById('loot-box');
+    const lootItems = document.getElementById('loot-items');
+
+    el.className = 'endgame ' + (win ? 'win' : 'dead');
+
+    if (win) {
+      titleEl.textContent = 'SUCCESS';
+      msgEl.innerHTML = 'Trace cleared.<br><strong>The Pit holds no record.</strong>';
+
+      lootItems.innerHTML = '';
+      lootBox.classList.remove('hidden');
+
+      actionBtn.textContent = 'CLAIM REWARD';
+      actionBtn.disabled = true;
+
+      if (P63_EMBED){
+        // Show loading placeholders, then request real rewards from parent
+        rewardChoices = [];
+        rewardSetId = null;
+        renderRewardChoices();
+        P63.send("P63_REQUEST_REWARD_SET", { kind:"INFILTRATION" });
+      } else {
+        rewardChoices = buildPlaceholderRewards();
+        renderRewardChoices();
+      }
+    } else {
+      titleEl.textContent = 'TRACE BREACHED';
+      msgEl.innerHTML =
+        'Exposure hit <strong>' + runner.maxExposure + '</strong>.<br>' +
+        'The node chain is sealed — start a new run.';
+
+      lootBox.classList.add('hidden');
+      lootItems.innerHTML = '';
+
+      actionBtn.textContent = P63_EMBED ? 'END GAME' : 'New Run';
+      actionBtn.disabled = false;
+    }
+
+    el.classList.remove('hidden');
+  }
+
+  function toggleRules() {
+    document.getElementById('rules-panel').classList.toggle('open');
+  }
+
+  // ================================================================
+  //  START
+  // ================================================================
+  initGame();
+</script>
+</body>
+</html>
+
+  </template>
+
   <script>
     // =============================================
     // CONSTANTS
@@ -1974,7 +4679,14 @@
     const STARTING_CHIPS = 500;
     const REST_REWARD = 50;
     const BARTENDER_REWARD = 50;
-    const MINIGAME_REWARD = 50;
+    const MINIGAME_POKER_ENTRY_COST = 100;
+
+    // rarity roll used for BOTH stamps and sleeves for infiltration rewards
+    const MINIGAME_RARITY_ROLL = [
+      { r: 'common',   p: 0.55 },
+      { r: 'uncommon', p: 0.35 },
+      { r: 'rare',     p: 0.10 }
+    ];
 
     const MERCHANT_BUY_BASE_STANDARD = 50;
     const MERCHANT_BUY_BASE_MOD = 100;
@@ -2016,6 +4728,7 @@ const CALLING_RANK_THRESHOLDS = [
     const BUYIN_STANDARD = 100;
     const BUYIN_HIGH = 200;
     const BUYIN_BOSS = 300;
+    const HIGH_STAKES_KARMA_MULT = 1.2;
 
     // Action tokens + cocktails
     const COCKTAIL_COST = 150;
@@ -2089,7 +4802,48 @@ const CALLING_RANK_THRESHOLDS = [
       MERCHANT: { name: 'Shop Keeper', desc: 'Buy cards & modifiers. Optional paid removals and rerolls.' },
       MODIFY: { name: 'Modify', desc: 'Pay chips to re-suit / re-rank and other presses.' },
       COLLECTOR: { name: 'Collector', desc: 'Buy stamps & sleeves; auction the leftovers.' },
-      MINIGAME: { name: 'Mini Game', desc: 'Side challenge with a small reward.' }
+      MINIGAME: { name: 'Mini Game', desc: 'Choose Poker Slots for chips or Infiltration Run for cards.' }
+    };
+
+
+    const HELP_TILES = {
+      STANDARD: { title: 'Standard Table', lines: [`Buy-in: ${BUYIN_STANDARD} chips`, 'Play a normal 5-lane match.', 'Win the match for a deck reward.'] },
+      HIGH_STAKES: { title: 'High Stakes Table', lines: [`Buy-in: ${BUYIN_HIGH} chips`, 'Harder tables, bigger swings.', 'Win the match for a deck reward.'] },
+      BOSS: { title: 'Boss Table', lines: [`Buy-in: ${BUYIN_BOSS} chips`, 'Multi-round boss match.', 'Clear it to advance floors.'] },
+      MERCHANT: { title: 'Merchant', lines: ['Buy cards and modifiers.', 'Reroll inventory for a fee.', 'Optional paid card removal.'] },
+      MODIFY: { title: 'Modify', lines: ['Pay to re-suit / re-rank cards.', 'Premium presses can affect sets.', 'Rerolls cost chips.'] },
+      COLLECTOR: { title: 'Collector', lines: ['Buy stamps & sleeves.', 'Apply to eligible base cards.', 'Slots refresh after purchase.'] },
+      LOAN_SHARK: { title: 'Loan Shark', lines: [`Borrow ${LOAN_AMOUNT} chips now`, `Repay ${LOAN_REPAY} before Floor 3 boss`, 'Can block boss entry if unpaid.'] },
+      REST_STOP: { title: 'Rest Stop', lines: ['Choose 1 benefit (free).', 'Also gain +1 banked Action Token.', 'Good for stabilizing runs.'] },
+      BARTENDER: { title: 'Bartender', lines: [`Take +${BARTENDER_REWARD} chips`, `Or buy a Cocktail for ${COCKTAIL_COST}`, 'Cocktails unlock Actions.'] },
+      MINIGAME: { title: 'Minigame', lines: [`Poker Slots: entry ${MINIGAME_POKER_ENTRY_COST}`, 'Infiltration Run: play for cards.', 'Does not advance the floor.'] }
+    };
+
+    const HELP_MODALS = {
+      'Settings': { lines: ['These settings persist on this device/browser.', 'Help toggles control tips + tooltips.', 'Advanced/Testing is optional and usually unnecessary for normal play.'] },
+      'Rules': { lines: ['Goal: beat the Dealer by winning lanes with totals ≤ 21.', 'Close a lane to lock it (you can’t add more cards).', 'On touch devices: long-press cards/tiles to see tooltips.'] },
+      'Deck Viewer': { lines: ['Shows your current deck contents (including badges).', 'Use this to understand how stamps/sleeves are shaping your run.', 'Deck changes happen through rewards + shops.'] },
+      'Feedback': { lines: ['Notes saved here attach to the current run.', 'Use “Bugs” for reproducible issues; “Comments” for balance/UX notes.', 'This is designed to export cleanly in the analyzer.'] },
+      'Rest Stop': { lines: ['Choose ONE: Free Removal or Chips.', 'You ALSO gain +1 banked Action Token no matter what you choose.', 'Free Removal will offer a small set of cards to delete.'] },
+      'Bartender': { lines: ['You can always take the free chips.', 'Cocktail unlocks 1 random Action (until you own them all).', 'Actions are spent during matches using Action Tokens.'] },
+      'Minigame': { lines: [`Poker Slots costs ${MINIGAME_POKER_ENTRY_COST} to enter.`, 'Poker Slots: you can cash out anytime; the run ends if you hit 0.', 'Infiltration Run: win to choose a card reward.'] },
+      'Loan Shark': { lines: [`Take ${LOAN_AMOUNT} now, but you must repay ${LOAN_REPAY}.`, 'If unpaid at the Floor 3 boss gate, you may be blocked from entering.', 'Repaying clears the loan immediately.'] },
+      'Merchant': { lines: ['Buy cards/modifiers to strengthen your deck.', 'Removal mode lets you pay to delete a card (when offered).', 'Rerolls refresh inventory at a cost.'] },
+      'Modify': { lines: ['Each purchase consumes chips immediately and counts toward the shop cap.', 'Core services affect single cards (re-suit / rank shift).', 'Premium services can affect sets (shown in the UI).'] },
+      'Collector': { lines: ['Buy a Stamp or Sleeve, then apply it to an eligible base card.', 'Cards that already have a stamp/sleeve may be ineligible.', 'After applying, the purchased slot refreshes.'] },
+      'Debt Due': { lines: ['You must repay your loan to proceed into the final boss.', 'If you can’t repay, you’ll be turned away.', 'Borrowing is powerful but can become a hard gate.'] },
+      'Boss Cleared': { lines: ['Clearing a boss advances the run to the next floor.', 'You gain tokens (floor base) and your bench capacity may change.', 'Continue to generate the next board.'] },
+      'A New Opponent': { lines: ['This is a special encounter with unique behavior.', 'Your current Calling Card influences some interactions.', 'Prepare for higher pressure and different timing.'] },
+      'Winner Reward': { lines: ['You won the match — choose a deck reward.', 'Remove: delete a card from offered options.', 'Duplicate: add a copy of a chosen offered card.'] },
+      'Fuse Cards': { lines: ['Select exactly 2 eligible cards to fuse into 1.', 'A fused card counts as a single card for effect scanning.', 'Fusion is permanent for the run.'] },
+      'Actions': { lines: ['Choose an action to perform during the match.', 'Opening this list consumes the token even if you cancel (per current rules).', 'Some actions prompt follow-up choices (lane/card).'] },
+      'Split Decision': { lines: ['Choose 1 card to play now.', 'The other card will be played by the Dealer immediately after.', 'Use this to force timing and lane pressure.'] },
+      'Second Opinion': { lines: ['Choose 1 card to play now.', 'The other card is discarded.', 'Use this to filter bad draws into acceptable plays.'] },
+      'Power Proc': { lines: ['A triggered power is asking for your choice.', 'Your selection applies immediately to the specified lane.', 'Use this to push totals across/away from 21 thresholds.'] },
+      'Test Games': { lines: ['Sandbox mode: runs minigames in a loop.', 'No progression or rewards carry into normal runs.', 'Use “END TEST” to return.'] },
+      'Collector - Apply': { lines: ['Pick a card from the offered sample.', 'Only eligible cards are shown.', 'After selecting, you return to the Collector main view.'] },
+      'Modify - Service': { lines: ['Pick a target card from the shown candidates.', 'Reroll refreshes candidates at a cost.', 'Confirming applies immediately and updates your deck.'] },
+      'Quick Start': { lines: ['You win lanes by beating the Dealer total without busting.', 'Close lanes to lock totals; you can’t add more cards.', 'Use Action Tokens to access powerful tactical plays.'] }
     };
 
 
@@ -2275,6 +5029,14 @@ const CALLING_RANK_THRESHOLDS = [
 
     const LOG_STORAGE_KEY = 'p63_runlog_latest';
     const PLAYER_NAME_KEY = 'p63_player_name';
+    const SFX_ENABLED_KEY = 'p63_sfx_enabled';
+    const SFX_VOLUME_KEY = 'p63_sfx_volume';
+    const HELP_ENABLED_KEY = 'p63_help_enabled';
+    const HELP_DEFAULT_OPEN_KEY = 'p63_help_default_open';
+    const TOOLTIPS_ENABLED_KEY = 'p63_tooltips_enabled';
+    const TUTORIALS_ENABLED_KEY = 'p63_tutorials_enabled';
+    const REDUCE_MOTION_KEY = 'p63_reduce_motion';
+    const TUTORIAL_SEEN_KEY = 'p63_tutorial_seen_table';
     let uiSettings = {
       autoOpenLogOnEnd: true,
 
@@ -2288,7 +5050,18 @@ const CALLING_RANK_THRESHOLDS = [
       rakeMode: 'hard', // 'easy' (none) | 'medium' (10% flat) | 'hard' (10/20/30)
 
       // hard cap for bench capacity (0 = no cap)
-      benchHardCap: 3 // 2 or 3 (or 0 for “no cap”)
+      benchHardCap: 3, // 2 or 3 (or 0 for “no cap”)
+
+      // SFX (NEW)
+      sfxEnabled: true,
+      sfxVolume: 0.70,
+
+      // NEW — player help
+      helpEnabled: true,
+      helpDefaultOpen: true,
+      tooltipsEnabled: true,
+      tutorialsEnabled: true,
+      reduceMotion: false
     };
 
     // Back-compat: if you had older saves/edits that set uiSettings.difficulty
@@ -2305,6 +5078,70 @@ const CALLING_RANK_THRESHOLDS = [
 
     function clearPlayerName() {
       try { localStorage.removeItem(PLAYER_NAME_KEY); } catch (e) {}
+    }
+
+    function loadSfxPrefs() {
+      try {
+        const e = localStorage.getItem(SFX_ENABLED_KEY);
+        const v = localStorage.getItem(SFX_VOLUME_KEY);
+        if (e !== null) uiSettings.sfxEnabled = (e === '1');
+        if (v !== null) uiSettings.sfxVolume = Math.max(0, Math.min(1, parseFloat(v)));
+      } catch (err) {}
+
+      try {
+        if (window.SFX) {
+          SFX.setEnabled(uiSettings.sfxEnabled !== false);
+          SFX.setVolume(uiSettings.sfxVolume);
+        }
+      } catch (err) {}
+    }
+
+    function saveSfxPrefs() {
+      try {
+        localStorage.setItem(SFX_ENABLED_KEY, (uiSettings.sfxEnabled !== false) ? '1' : '0');
+        localStorage.setItem(SFX_VOLUME_KEY, String(Math.max(0, Math.min(1, parseFloat(uiSettings.sfxVolume)))));
+      } catch (err) {}
+    }
+
+    function loadHelpPrefs() {
+      try {
+        const vHelp = localStorage.getItem(HELP_ENABLED_KEY);
+        if (vHelp !== null) uiSettings.helpEnabled = (vHelp === '1');
+
+        const vOpen = localStorage.getItem(HELP_DEFAULT_OPEN_KEY);
+        if (vOpen !== null) uiSettings.helpDefaultOpen = (vOpen === '1');
+
+        const vTips = localStorage.getItem(TOOLTIPS_ENABLED_KEY);
+        if (vTips !== null) uiSettings.tooltipsEnabled = (vTips === '1');
+
+        const vTut = localStorage.getItem(TUTORIALS_ENABLED_KEY);
+        if (vTut !== null) uiSettings.tutorialsEnabled = (vTut === '1');
+
+        const vRM = localStorage.getItem(REDUCE_MOTION_KEY);
+        if (vRM !== null) uiSettings.reduceMotion = (vRM === '1');
+      } catch (e) {}
+    }
+
+    function saveHelpPrefs() {
+      try {
+        localStorage.setItem(HELP_ENABLED_KEY, uiSettings.helpEnabled ? '1' : '0');
+        localStorage.setItem(HELP_DEFAULT_OPEN_KEY, uiSettings.helpDefaultOpen ? '1' : '0');
+        localStorage.setItem(TOOLTIPS_ENABLED_KEY, uiSettings.tooltipsEnabled ? '1' : '0');
+        localStorage.setItem(TUTORIALS_ENABLED_KEY, uiSettings.tutorialsEnabled ? '1' : '0');
+        localStorage.setItem(REDUCE_MOTION_KEY, uiSettings.reduceMotion ? '1' : '0');
+      } catch (e) {}
+    }
+
+    function applyReduceMotion() {
+      document.body.classList.toggle('reduce-motion', !!uiSettings.reduceMotion);
+    }
+
+    function hasSeenTableTutorial() {
+      try { return localStorage.getItem(TUTORIAL_SEEN_KEY) === '1'; } catch (e) { return false; }
+    }
+
+    function markSeenTableTutorial() {
+      try { localStorage.setItem(TUTORIAL_SEEN_KEY, '1'); } catch (e) {}
     }
 
 
@@ -2788,7 +5625,9 @@ const CALLING_RANK_THRESHOLDS = [
       if (t === 'FLOOR_START') return `Entered Floor ${d.floor}`;
       if (t === 'TILE_ENTER') return `Entered tile #${d.tileId} (${d.tileType})`;
       if (t === 'REST_CHOICE') return `Lounge: ${d.choice}${d.freeRemoval ? ' (free removal)' : ''}`;
-      if (t === 'MINIGAME') return `Minigame reward +${d.chips} chips, +${d.tokens} token`;
+      if (t === 'MINIGAME_START') return `Minigame start: ${d.kind}${d.entryCost ? ` (entry ${d.entryCost})` : ''}`;
+      if (t === 'MINIGAME_REWARD_OFFER') return `Infiltration rewards offered (set ${d.rewardSetId || 'n/a'})`;
+      if (t === 'MINIGAME_END') return `Minigame end: ${d.kind} ${d.outcome || d.reason || ''}`.trim();
       if (t === 'BARTENDER_TAKE') return `Bartender: took +${d.chips} chips`;
       if (t === 'COCKTAIL_BOUGHT') return `Bought cocktail: ${d.actionName} (-${d.cost})`;
       if (t === 'LOAN_TAKEN') return `Loan taken +${d.amount}, owe ${d.repay}`;
@@ -3341,75 +6180,113 @@ const CALLING_RANK_THRESHOLDS = [
       `;
     }
 
+    function openTestGamesModal() {
+      showModal('Test Games', `
+        <p class="modal-text">Choose a minigame to run in an endless sandbox loop.</p>
+      `, [
+        {
+          text: 'Poker Slots (Test)',
+          primary: true,
+          action: () => { closeModal(); Minigames.startTest('POKER_SLOTS'); }
+        },
+        {
+          text: 'Infiltration Run (Test)',
+          action: () => { closeModal(); Minigames.startTest('INFILTRATION'); }
+        },
+        { text: 'Close', action: () => closeModal() }
+      ]);
+
+    }
+
     function openSettingsPanel() {
       const checked = !!uiSettings.autoOpenLogOnEnd;
       const revealOnClose = (uiSettings.revealTotalsOnClose !== false);
-
       const oppDiff = getOpponentDifficulty();
       const rakeMode = (uiSettings.rakeMode || 'hard');
-
       const benchCap = String(safeNumber(uiSettings.benchHardCap, 3));
+      const sfxEnabled = (uiSettings.sfxEnabled !== false);
+      const sfxPct = Math.round(safeNumber(uiSettings.sfxVolume, 0.70) * 100);
+      const helpEnabled = (uiSettings.helpEnabled !== false);
+      const helpDefaultOpen = (uiSettings.helpDefaultOpen !== false);
+      const tooltipsEnabled = (uiSettings.tooltipsEnabled !== false);
+      const tutorialsEnabled = (uiSettings.tutorialsEnabled !== false);
+      const reduceMotion = !!uiSettings.reduceMotion;
 
       const body = `
-        <p class="modal-text">Lightweight runtime options for testing.</p>
+        <p class="modal-text">Player settings + optional testing tools.</p>
 
-        <div style="display:flex; flex-direction:column; gap:12px;">
+        <details open class="settings-section">
+          <summary>Gameplay</summary>
+          <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">Opponent Difficulty</div>
+          <select id="setting_opponentDifficulty" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
+            <option value="easy" ${oppDiff === 'easy' ? 'selected' : ''}>Easy — safer play, rarely uses bench mods</option>
+            <option value="medium" ${oppDiff === 'medium' ? 'selected' : ''}>Medium — situational bench use, normal standing</option>
+            <option value="hard" ${oppDiff === 'hard' ? 'selected' : ''}>Hard — counterplay-focused, proactive bench use</option>
+          </select>
+        </details>
 
-          <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
-            <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer;">
-              <input id="setting_autoOpenLog" type="checkbox" ${checked ? 'checked' : ''} style="margin-top:3px;"/>
-              <div>
-                <div style="font-weight:800; color:var(--text-primary);">Auto-open Run Log on Game Over / Victory</div>
-                <div style="color:var(--text-secondary); font-size:12px; line-height:1.4; margin-top:4px;">
-                  Helpful for rapid playtesting and immediate review.
-                </div>
-              </div>
-            </label>
-          </div>
+        <details open class="settings-section">
+          <summary>Help</summary>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:8px;">
+            <input id="setting_helpEnabled" type="checkbox" ${helpEnabled ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Enable tips in modals</div></div>
+          </label>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:8px;">
+            <input id="setting_helpDefaultOpen" type="checkbox" ${helpDefaultOpen ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Tips expanded by default</div></div>
+          </label>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:8px;">
+            <input id="setting_tooltipsEnabled" type="checkbox" ${tooltipsEnabled ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Enable tooltips</div></div>
+          </label>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:8px;">
+            <input id="setting_tutorialsEnabled" type="checkbox" ${tutorialsEnabled ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Enable first-time tutorials</div></div>
+          </label>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer;">
+            <input id="setting_reduceMotion" type="checkbox" ${reduceMotion ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Reduce motion</div></div>
+          </label>
+        </details>
 
-          <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
-            <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer;">
-              <input id="setting_revealTotalsOnClose" type="checkbox" ${revealOnClose ? 'checked' : ''} style="margin-top:3px;"/>
-              <div>
-                <div style="font-weight:800; color:var(--text-primary);">Reveal Dealer totals + hole card when a lane closes</div>
-                <div style="color:var(--text-secondary); font-size:12px; line-height:1.4; margin-top:4px;">
-                  If off, Dealer totals + hole card reveal only at match resolution (Spy Network still works).
-                </div>
-              </div>
-            </label>
-          </div>
-
-          <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
-            <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">Opponent Difficulty</div>
-            <select id="setting_opponentDifficulty" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
-              <option value="easy" ${oppDiff === 'easy' ? 'selected' : ''}>Easy — safer play, rarely uses bench mods</option>
-              <option value="medium" ${oppDiff === 'medium' ? 'selected' : ''}>Medium — situational bench use, normal standing</option>
-              <option value="hard" ${oppDiff === 'hard' ? 'selected' : ''}>Hard — counterplay-focused, proactive bench use</option>
-            </select>
-          </div>
-
-          <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
-            <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">House Rake</div>
-            <select id="setting_rakeMode" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
-              <option value="easy" ${rakeMode === 'easy' ? 'selected' : ''}>Off — 0%</option>
-              <option value="medium" ${rakeMode === 'medium' ? 'selected' : ''}>Flat — 10% all floors</option>
-              <option value="hard" ${rakeMode === 'hard' ? 'selected' : ''}>Scaled — 10% / 20% / 30%</option>
-            </select>
-          </div>
-
-          <div style="padding:12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px;">
-            <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">Bench hard cap</div>
-            <select id="setting_benchHardCap" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
-              <option value="2" ${benchCap === '2' ? 'selected' : ''}>2 slots</option>
-              <option value="3" ${benchCap === '3' ? 'selected' : ''}>3 slots</option>
-              <option value="0" ${benchCap === '0' ? 'selected' : ''}>No cap (dev)</option>
-            </select>
-            <div style="color:var(--text-secondary); font-size:12px; line-height:1.4; margin-top:8px;">
-              Capacity still starts at ${BENCH_BASE_CAPACITY} and grows by boss wins, but won’t exceed the cap.
+        <details open class="settings-section">
+          <summary>Audio</summary>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:10px;">
+            <input id="setting_sfxEnabled" type="checkbox" ${sfxEnabled ? 'checked' : ''} style="margin-top:3px;"/>
+            <div>
+              <div style="font-weight:800; color:var(--text-primary);">Enable SFX</div>
+              <div style="color:var(--text-secondary); font-size:12px; line-height:1.4; margin-top:4px;">Warm UI + gameplay sounds (no music in MVP).</div>
             </div>
+          </label>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input id="setting_sfxVolume" type="range" min="0" max="100" value="${sfxPct}" ${sfxEnabled ? '' : 'disabled'} style="width:100%;" />
+            <div id="setting_sfxVolumeReadout" style="min-width:52px; text-align:right; font-weight:800; color:var(--text-primary);">${sfxPct}%</div>
           </div>
+        </details>
 
-        </div>
+        <details class="settings-section">
+          <summary>Advanced / Testing</summary>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:10px;">
+            <input id="setting_autoOpenLog" type="checkbox" ${checked ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Auto-open Run Log on Game Over / Victory</div></div>
+          </label>
+          <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; margin-bottom:10px;">
+            <input id="setting_revealTotalsOnClose" type="checkbox" ${revealOnClose ? 'checked' : ''} style="margin-top:3px;"/>
+            <div><div style="font-weight:800; color:var(--text-primary);">Reveal Dealer totals + hole card when a lane closes</div></div>
+          </label>
+          <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">House Rake</div>
+          <select id="setting_rakeMode" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); margin-bottom:10px;">
+            <option value="easy" ${rakeMode === 'easy' ? 'selected' : ''}>Off — 0%</option>
+            <option value="medium" ${rakeMode === 'medium' ? 'selected' : ''}>Flat — 10% all floors</option>
+            <option value="hard" ${rakeMode === 'hard' ? 'selected' : ''}>Scaled — 10% / 20% / 30%</option>
+          </select>
+          <div style="font-weight:800; color:var(--text-primary); margin-bottom:6px;">Bench hard cap</div>
+          <select id="setting_benchHardCap" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
+            <option value="2" ${benchCap === '2' ? 'selected' : ''}>2 slots</option>
+            <option value="3" ${benchCap === '3' ? 'selected' : ''}>3 slots</option>
+            <option value="0" ${benchCap === '0' ? 'selected' : ''}>No cap (dev)</option>
+          </select>
+        </details>
       `;
 
       showModal('Settings', body, [
@@ -3423,14 +6300,35 @@ const CALLING_RANK_THRESHOLDS = [
             const selOpp = document.getElementById('setting_opponentDifficulty');
             const selRake = document.getElementById('setting_rakeMode');
             const selCap = document.getElementById('setting_benchHardCap');
+            const cbSfx = document.getElementById('setting_sfxEnabled');
+            const volSfx = document.getElementById('setting_sfxVolume');
+            const cbHelp = document.getElementById('setting_helpEnabled');
+            const cbHelpOpen = document.getElementById('setting_helpDefaultOpen');
+            const cbTips = document.getElementById('setting_tooltipsEnabled');
+            const cbTut = document.getElementById('setting_tutorialsEnabled');
+            const cbReduce = document.getElementById('setting_reduceMotion');
 
             uiSettings.autoOpenLogOnEnd = !!(cbLog && cbLog.checked);
             uiSettings.revealTotalsOnClose = !!(cbReveal && cbReveal.checked);
-
             uiSettings.opponentDifficulty = (selOpp && selOpp.value) ? selOpp.value : 'hard';
             uiSettings.rakeMode = (selRake && selRake.value) ? selRake.value : 'hard';
-
             uiSettings.benchHardCap = safeNumber(selCap && selCap.value, 3);
+
+            uiSettings.sfxEnabled = !!(cbSfx && cbSfx.checked);
+            uiSettings.sfxVolume = Math.max(0, Math.min(1, safeNumber(volSfx && volSfx.value, 70) / 100));
+            saveSfxPrefs();
+            if (window.SFX) {
+              SFX.setEnabled(uiSettings.sfxEnabled !== false);
+              SFX.setVolume(uiSettings.sfxVolume);
+            }
+
+            uiSettings.helpEnabled = !!(cbHelp && cbHelp.checked);
+            uiSettings.helpDefaultOpen = !!(cbHelpOpen && cbHelpOpen.checked);
+            uiSettings.tooltipsEnabled = !!(cbTips && cbTips.checked);
+            uiSettings.tutorialsEnabled = !!(cbTut && cbTut.checked);
+            uiSettings.reduceMotion = !!(cbReduce && cbReduce.checked);
+            saveHelpPrefs();
+            applyReduceMotion();
 
             const nextSettings = getSettingsSnapshot();
             logEvent('SETTINGS_CHANGED', { prev: prevSettings, next: nextSettings });
@@ -3443,9 +6341,36 @@ const CALLING_RANK_THRESHOLDS = [
         },
         { text: 'Close', action: () => closeModal() }
       ]);
+
+      setTimeout(() => {
+        const cb = document.getElementById('setting_sfxEnabled');
+        const vol = document.getElementById('setting_sfxVolume');
+        const ro = document.getElementById('setting_sfxVolumeReadout');
+        if (!cb || !vol) return;
+
+        const applyEnabledUI = () => {
+          vol.disabled = !cb.checked;
+          if (window.SFX) SFX.setEnabled(cb.checked);
+          uiSettings.sfxEnabled = cb.checked;
+          saveSfxPrefs();
+        };
+
+        cb.addEventListener('change', () => {
+          applyEnabledUI();
+          if (cb.checked && window.SFX) SFX.play('toast');
+        });
+
+        vol.addEventListener('input', () => {
+          const v = Math.max(0, Math.min(1, (parseInt(vol.value, 10) || 0) / 100));
+          uiSettings.sfxVolume = v;
+          if (ro) ro.textContent = `${Math.round(v * 100)}%`;
+          saveSfxPrefs();
+          if (window.SFX) SFX.setVolume(v);
+        });
+
+        applyEnabledUI();
+      }, 0);
     }
-
-
 
     function openRulesPanel() {
       const html = `
@@ -3546,6 +6471,7 @@ const CALLING_RANK_THRESHOLDS = [
         },
         { text: 'Close', action: () => closeModal() }
       ]);
+
     }
 
     function openDeckViewer() {
@@ -3619,13 +6545,32 @@ const CALLING_RANK_THRESHOLDS = [
       });
     })();
 
+    function renderHelpBlock(helpKey) {
+      if (uiSettings.helpEnabled === false) return '';
+      const h = HELP_MODALS[helpKey];
+      if (!h || !h.lines || !h.lines.length) return '';
+
+      const openAttr = (uiSettings.helpDefaultOpen !== false) ? 'open' : '';
+      const items = h.lines.map(line => `<li>${line}</li>`).join('');
+
+      return `
+        <details class="help-block" ${openAttr}>
+          <summary>How this works</summary>
+          <ul>${items}</ul>
+        </details>
+      `;
+    }
+
     function showModal(title, bodyHtml, buttons = [], opts = {}) {
+
       __modalButtons = buttons.map(b => ({ ...b }));
       __modalTitle = title || '';
       __modalOnClose = (opts && typeof opts.onClose === 'function') ? opts.onClose : null;
 
       const overlay = document.getElementById('modalOverlay');
       const modal = document.getElementById('modal');
+      const helpKey = opts.helpKey || title;
+      const helpHtml = renderHelpBlock(helpKey);
 
       const footer = buttons.length ? `
         <div class="modal-footer">
@@ -3643,10 +6588,11 @@ const CALLING_RANK_THRESHOLDS = [
 
       modal.innerHTML = `
         <div class="modal-header">${title}</div>
-        <div class="modal-body">${bodyHtml}</div>
+        <div class="modal-body">${helpHtml + bodyHtml}</div>
         ${footer}
       `;
       overlay.classList.remove('hidden');
+      try { if (window.SFX) { SFX.unlock(); SFX.play('modal_open'); } } catch(e){}
     }
 
     function closeModal() {
@@ -3657,6 +6603,7 @@ const CALLING_RANK_THRESHOLDS = [
 
       __modalOnClose = null;
       __modalTitle = '';
+      try { if (window.SFX) SFX.play('modal_close'); } catch(e){}
       document.getElementById('modalOverlay').classList.add('hidden');
       document.getElementById('modal').innerHTML = '';
       __modalButtons = [];
@@ -3673,6 +6620,7 @@ const CALLING_RANK_THRESHOLDS = [
         title: data.title || 'Calling Proc',
         desc: data.desc || ''
       };
+      try { if (window.SFX) SFX.play('proc'); } catch(e){}
 
       renderBlackjack();
 
@@ -3685,6 +6633,7 @@ const CALLING_RANK_THRESHOLDS = [
     }
 
     function showToast(text, ms = 1600) {
+      try { if (window.SFX) SFX.play('toast'); } catch(e){}
       const el = document.getElementById('toast');
       el.textContent = text;
       el.classList.remove('hidden');
@@ -4089,6 +7038,88 @@ const CALLING_RANK_THRESHOLDS = [
       return Number.isFinite(n) ? n : fallback;
     }
 
+    function installGlobalClickSfx() {
+      document.addEventListener('pointerdown', (e) => {
+        try {
+          if (!window.SFX) return;
+          if ((uiSettings && uiSettings.sfxEnabled) === false) return;
+          if (typeof e.button === 'number' && e.button !== 0) return;
+          const t = e.target;
+          if (!t || !t.closest) return;
+          if (t.closest('input, textarea, select')) return;
+          const clickable = t.closest('button, [role="button"], a[href], [onclick], .bj-btn, .modal-btn');
+          if (!clickable || clickable.disabled) return;
+          if (clickable.getAttribute('data-sfx-skip') === '1') return;
+          const key = clickable.getAttribute('data-sfx');
+          SFX.unlock();
+          SFX.play(key || 'ui_click');
+        } catch (err) {}
+      }, true);
+    }
+
+    window.SFX = (function(){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return { unlock(){}, play(){}, setEnabled(){}, setVolume(){}, isUnlocked(){ return false; } };
+      let ctx = null;
+      let master = null;
+      let unlocked = false;
+      const lastAt = new Map();
+      const gate = (k, ms) => {
+        const now = performance.now();
+        const prev = lastAt.get(k) || 0;
+        if (now - prev < ms) return false;
+        lastAt.set(k, now);
+        return true;
+      };
+      const rnd = (a,b)=>a+Math.random()*(b-a);
+      const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+      function enabled(){ return (uiSettings && uiSettings.sfxEnabled) !== false; }
+      function volume(){ const v=(uiSettings ? safeNumber(uiSettings.sfxVolume, 0.70) : 0.70); return clamp(v,0,1); }
+      function ensure(){ if (ctx) return; ctx = new AC({ latencyHint:'interactive' }); master = ctx.createGain(); master.gain.value = volume() * 2.0; master.connect(ctx.destination); }
+      async function unlock(){ if (unlocked) return; ensure(); try { await ctx.resume(); const o=ctx.createOscillator(); const g=ctx.createGain(); g.gain.value=0.00001; o.frequency.value=220; o.connect(g); g.connect(master); o.start(); o.stop(ctx.currentTime+0.01); unlocked=true; } catch(e){} }
+      function setEnabled(v){ if (uiSettings) uiSettings.sfxEnabled = !!v; }
+      function setVolume(v){ if (uiSettings) uiSettings.sfxVolume = clamp(parseFloat(v)||0, 0, 1); ensure(); master.gain.value = volume() * 2.0; }
+      function envGain(t0, a, d, s, r){ const g=ctx.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(a, t0 + 0.001); g.gain.exponentialRampToValueAtTime(Math.max(0.0001, s), t0 + d); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + r); return g; }
+      function hp(node, f){ const bi=ctx.createBiquadFilter(); bi.type='highpass'; bi.frequency.value=f; node.connect(bi); return bi; }
+      function lp(node, f){ const bi=ctx.createBiquadFilter(); bi.type='lowpass'; bi.frequency.value=f; node.connect(bi); return bi; }
+      function noiseBuf(){ const len=Math.floor(ctx.sampleRate*0.25); const b=ctx.createBuffer(1,len,ctx.sampleRate); const d=b.getChannelData(0); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len); return b; }
+      const _noise = { buf: null };
+      function noise(){ if (!_noise.buf) _noise.buf = noiseBuf(); const s=ctx.createBufferSource(); s.buffer=_noise.buf; return s; }
+      function s_click(vol=1){ if(!gate('ui_click',40)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nG=envGain(t,0.28*vol,0.018,0.0004,0.03); const nHP=hp(n,650); const nLP=lp(nHP,5200); nLP.connect(nG); nG.connect(master); const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(340,t); o.frequency.exponentialRampToValueAtTime(180,t+0.03); const oG=envGain(t,0.10*vol,0.015,0.0005,0.04); o.connect(oG); oG.connect(master); n.start(t); n.stop(t+0.08); o.start(t); o.stop(t+0.08); }
+      function s_toast(vol=1){ if(!gate('toast',80)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(1040,t); o.frequency.exponentialRampToValueAtTime(1320,t+0.08); const g=envGain(t,0.10*vol,0.05,0.0005,0.07); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.14); }
+      function s_modalOpen(vol=1){ if(!gate('modal_open',80)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,180); const nLP=lp(nHP,1800); const g=envGain(t,0.18*vol,0.05,0.0005,0.12); nLP.connect(g); g.connect(master); n.start(t); n.stop(t+0.18); }
+      function s_modalClose(vol=1){ if(!gate('modal_close',80)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,420); const nLP=lp(nHP,2600); const g=envGain(t,0.16*vol,0.03,0.0005,0.10); nLP.connect(g); g.connect(master); n.start(t); n.stop(t+0.14); }
+      function s_paper(vol=1){ if(!gate('paper',28)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,900); const nLP=lp(nHP,5400); const g=envGain(t,0.22*vol,0.02,0.0005,0.05); nLP.connect(g); g.connect(master); n.start(t); n.stop(t+0.10); }
+      function s_paperHeavy(vol=1){ if(!gate('paperHeavy',32)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,700); const nLP=lp(nHP,4600); const g=envGain(t,0.26*vol,0.03,0.0005,0.07); nLP.connect(g); g.connect(master); n.start(t); n.stop(t+0.13); }
+      function s_chipTap(vol=1){ if(!gate('chipTap',50)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(620,t); o.frequency.exponentialRampToValueAtTime(420,t+0.05); const g=envGain(t,0.12*vol,0.02,0.0005,0.06); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.10); }
+      function s_bust(vol=1){ if(!gate('bust',120)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,120); const nLP=lp(nHP,700); const g=envGain(t,0.22*vol,0.05,0.0005,0.15); nLP.connect(g); g.connect(master); const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(170,t); o.frequency.exponentialRampToValueAtTime(90,t+0.18); const og=envGain(t,0.10*vol,0.04,0.0005,0.18); o.connect(og); og.connect(master); n.start(t); n.stop(t+0.24); o.start(t); o.stop(t+0.24); }
+      function s_chipDrop(vol=1){ if(!gate('chipDrop',35)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o1=ctx.createOscillator(); o1.type='triangle'; o1.frequency.setValueAtTime(860,t); o1.frequency.exponentialRampToValueAtTime(520,t+0.06); const g1=envGain(t,0.14*vol,0.02,0.0005,0.07); o1.connect(g1); g1.connect(master); const o2=ctx.createOscillator(); o2.type='sine'; o2.frequency.setValueAtTime(1240,t+0.02); o2.frequency.exponentialRampToValueAtTime(760,t+0.08); const g2=envGain(t+0.02,0.10*vol,0.02,0.0005,0.08); o2.connect(g2); g2.connect(master); o1.start(t); o1.stop(t+0.11); o2.start(t+0.02); o2.stop(t+0.13); }
+      function s_rakeClick(vol=1){ if(!gate('rake',45)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,900); const nLP=lp(nHP,2600); const g=envGain(t,0.16*vol,0.015,0.0005,0.05); nLP.connect(g); g.connect(master); n.start(t); n.stop(t+0.08); }
+      function s_earnTick(vol=1){ if(!gate('earnTick',60)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(980,t); const g=envGain(t,0.06*vol,0.02,0.0005,0.05); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.08); }
+      function s_chipClinks(vol=1){ if(!gate('chipDone',160)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; for(let i=0;i<3;i++){ const tt=t+i*0.06; const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(rnd(900,1400),tt); const g=envGain(tt,0.10*vol,0.02,0.0005,0.06); o.connect(g); g.connect(master); o.start(tt); o.stop(tt+0.08); } }
+      function s_karmaTick(vol=1){ if(!gate('karmaTick',60)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(1180,t); o.frequency.exponentialRampToValueAtTime(1480,t+0.06); const g=envGain(t,0.06*vol,0.02,0.0005,0.06); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.10); }
+      function s_rankUp(vol=1){ if(!gate('rankUp',200)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(520,t); o.frequency.exponentialRampToValueAtTime(1040,t+0.18); const g=envGain(t,0.14*vol,0.06,0.0005,0.20); o.connect(g); g.connect(master); const n=noise(); const nHP=hp(n,1400); const nLP=lp(nHP,6000); const ng=envGain(t,0.10*vol,0.05,0.0005,0.22); nLP.connect(ng); ng.connect(master); o.start(t); o.stop(t+0.28); n.start(t); n.stop(t+0.28); }
+      function s_benchArm(vol=1){ if(!gate('benchArm',50)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='square'; o.frequency.setValueAtTime(240,t); o.frequency.exponentialRampToValueAtTime(320,t+0.05); const g=envGain(t,0.08*vol,0.02,0.0005,0.08); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.12); }
+      function s_modPlus(vol=1){ if(!gate('modPlus',60)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(820,t); o.frequency.exponentialRampToValueAtTime(1320,t+0.10); const g=envGain(t,0.10*vol,0.04,0.0005,0.12); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.18); }
+      function s_modMinus(vol=1){ if(!gate('modMinus',60)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(520,t); o.frequency.exponentialRampToValueAtTime(260,t+0.12); const g=envGain(t,0.10*vol,0.04,0.0005,0.14); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.20); }
+      function s_block(vol=1){ if(!gate('block',70)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const n=noise(); const nHP=hp(n,500); const nLP=lp(nHP,1300); const g=envGain(t,0.12*vol,0.02,0.0005,0.08); nLP.connect(g); g.connect(master); n.start(t); n.stop(t+0.12); }
+      function s_proc(vol=1){ if(!gate('proc',150)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(660,t); o.frequency.exponentialRampToValueAtTime(990,t+0.10); const g=envGain(t,0.12*vol,0.04,0.0005,0.12); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.18); }
+      function s_bossCleared(vol=1){ if(!gate('bossCleared',250)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(392,t); o.frequency.exponentialRampToValueAtTime(784,t+0.18); const g=envGain(t,0.18*vol,0.06,0.0005,0.22); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.30); }
+      function s_watcherIntro(vol=1){ if(!gate('watcherIntro',250)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(110,t); o.frequency.exponentialRampToValueAtTime(220,t+0.25); const g=envGain(t,0.18*vol,0.10,0.0005,0.35); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.45); }
+      function s_victory(vol=1){ if(!gate('victory',300)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(440,t); o.frequency.exponentialRampToValueAtTime(880,t+0.18); const g=envGain(t,0.18*vol,0.06,0.0005,0.24); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.32); }
+      function s_gameover(vol=1){ if(!gate('gameover',300)) return; ensure(); if(!enabled()) return; const t=ctx.currentTime; const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(220,t); o.frequency.exponentialRampToValueAtTime(110,t+0.22); const g=envGain(t,0.16*vol,0.06,0.0005,0.26); o.connect(g); g.connect(master); o.start(t); o.stop(t+0.34); }
+      function play(name, opt={}){ if (!enabled()) return; ensure(); if (!unlocked) unlock(); const vol = clamp(safeNumber(opt.volMul,1)*volume(),0,1); switch(name){
+        case 'ui_click': return s_click(vol); case 'toast': return s_toast(vol); case 'modal_open': return s_modalOpen(vol); case 'modal_close': return s_modalClose(vol);
+        case 'card_draw': return s_paper(vol); case 'card_place': return s_paperHeavy(vol); case 'dealer_place': return s_paper(vol*0.6);
+        case 'bench_add': return s_chipDrop(vol); case 'bench_overflow': return s_rakeClick(vol); case 'bench_arm': return s_benchArm(vol); case 'lane_close': return s_chipTap(vol); case 'bust': return s_bust(vol);
+        case 'chip_tick': return s_earnTick(vol); case 'chip_done': return s_chipClinks(vol); case 'karma_tick': return s_karmaTick(vol); case 'karma_done': return s_rankUp(vol);
+        case 'mod': return safeNumber(opt.delta,0) >= 0 ? s_modPlus(vol) : s_modMinus(vol); case 'mod_block': return s_block(vol);
+        case 'boss_cleared': return s_bossCleared(vol); case 'watcher_intro': return s_watcherIntro(vol); case 'victory': return s_victory(vol); case 'gameover': return s_gameover(vol); case 'proc': return s_proc(vol);
+        default: return;
+      }}
+      return { unlock, play, setEnabled, setVolume, isUnlocked: () => unlocked && ctx?.state === 'running' };
+    })();
+
     function escapeHtml(value) {
       return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -4237,6 +7268,7 @@ function benchPush(card, source = '') {
 
   if (blackjackMatch.bench.length >= cap) {
     removed = blackjackMatch.bench.shift();
+    try { if (window.SFX) SFX.play('bench_overflow'); } catch(e){}
 
     // keep armed index stable
     if (blackjackMatch.armedBenchIdx !== null && blackjackMatch.armedBenchIdx !== undefined) {
@@ -4249,6 +7281,7 @@ function benchPush(card, source = '') {
   }
 
   blackjackMatch.bench.push(card);
+  try { if (window.SFX) SFX.play('bench_add'); } catch(e){}
   return removed;
 }
 
@@ -4325,7 +7358,16 @@ function benchPush(card, source = '') {
       const rankValue = rollNpcRankValue(floor, type);
       const rank = valueToRank(rankValue);
       const name = makeNpcName(type);
-      return { name, callingCard: { rank, suit } };
+      const npc = { name, callingCard: { rank, suit } };
+
+      if (type === 'STANDARD' || type === 'HIGH_STAKES') {
+        const pool = (type === 'HIGH_STAKES') ? AI_PROFILE_WEIGHTS.HIGH_STAKES : AI_PROFILE_WEIGHTS.STANDARD;
+        npc.aiProfileId = pickWeighted(pool);
+        npc.aiQuirkBias = Array.from({ length: LANE_COUNT }, () => (Math.random() * 2 - 1));
+        npc.aiRaiseQuirk = (Math.random() * 2 - 1) * 0.06;
+      }
+
+      return npc;
     }
 
     function buildTilePoolForFloor(floor) {
@@ -4491,7 +7533,8 @@ function benchPush(card, source = '') {
             tileId: tile.id,
             tileType: tile.type,
             npcName: tile.npc.name,
-            npcCallingCard: tile.npc.callingCard
+            npcCallingCard: tile.npc.callingCard,
+            aiProfileId: tile.npc.aiProfileId || null
           });
         }
       });
@@ -4529,6 +7572,25 @@ function benchPush(card, source = '') {
     // =============================================
     // ENCOUNTERS
     // =============================================
+    function maybeShowTableTutorial(continueFn) {
+      if (uiSettings.tutorialsEnabled === false) return continueFn();
+      if (hasSeenTableTutorial()) return continueFn();
+
+      showModal('Quick Start', `
+        <p class="modal-text">A fast primer before your first table.</p>
+      `, [
+        {
+          text: 'Continue',
+          primary: true,
+          action: () => { markSeenTableTutorial(); closeModal(); continueFn(); }
+        },
+        {
+          text: "Don't show again",
+          action: () => { uiSettings.tutorialsEnabled = false; saveHelpPrefs(); markSeenTableTutorial(); closeModal(); continueFn(); }
+        }
+      ], { helpKey: 'Quick Start' });
+    }
+
     function resolveTileEncounter(tileType) {
       switch (tileType) {
         case 'REST_STOP': encounterRest(); break;
@@ -4538,9 +7600,9 @@ function benchPush(card, source = '') {
         case 'MERCHANT': encounterMerchant(); break;
         case 'MODIFY': encounterModify(); break;
         case 'COLLECTOR': encounterCollector(); break;
-        case 'STANDARD': encounterBlackjackStandard(); break;
-        case 'HIGH_STAKES': encounterBlackjackHigh(); break;
-        case 'BOSS': encounterBoss(); break;
+        case 'STANDARD': maybeShowTableTutorial(() => encounterBlackjackStandard()); break;
+        case 'HIGH_STAKES': maybeShowTableTutorial(() => encounterBlackjackHigh()); break;
+        case 'BOSS': maybeShowTableTutorial(() => encounterBoss()); break;
       }
     }
 
@@ -4712,17 +7774,354 @@ function benchPush(card, source = '') {
       ]);
     }
 
-    // --- Minigame: +50 chips and +1 banked token ---
+    const Minigames = (() => {
+      const overlay = () => document.getElementById('minigameOverlay');
+      const frame = () => document.getElementById('minigameFrame');
+
+      let active = null;
+      let testSession = { active: false, kind: null };
+
+      function setTestBarVisible(on, kindLabel) {
+        const bar = document.getElementById('minigameTestBar');
+        const title = document.getElementById('minigameTestTitle');
+        if (!bar) return;
+        if (on) {
+          if (title) title.textContent = `TEST MODE — ${kindLabel || ''}`.trim();
+          bar.classList.remove('hidden');
+        } else {
+          bar.classList.add('hidden');
+        }
+      }
+
+      function openOverlayWithTemplate(tplId) {
+        const tpl = document.getElementById(tplId);
+        const html = tpl ? tpl.innerHTML : '';
+        const ov = overlay();
+        const fr = frame();
+
+        const sfxBridge = `<script>(function(){
+  document.addEventListener('pointerdown', function(e){
+    try {
+      if (typeof e.button === 'number' && e.button !== 0) return;
+      var t = e.target;
+      if (!t || !t.closest) return;
+      if (t.closest('input, textarea, select')) return;
+      var clickable = t.closest('button, [role="button"], a[href], [onclick], .bj-btn, .modal-btn');
+      if (!clickable || clickable.disabled) return;
+      if (clickable.getAttribute('data-sfx-skip') === '1') return;
+      var key = clickable.getAttribute('data-sfx') || 'ui_click';
+      parent.postMessage({ __p63: 1, type: 'P63_MINIGAME_SFX', name: key }, '*');
+    } catch (err) {}
+  }, true);
+})();<\/script>`;
+
+        if (html.includes('</body>')) fr.srcdoc = html.replace('</body>', `${sfxBridge}</body>`);
+        else fr.srcdoc = `${html}${sfxBridge}`;
+        ov.classList.remove('hidden');
+        ov.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeOverlay() {
+        const ov = overlay();
+        const fr = frame();
+        ov.classList.add('hidden');
+        ov.setAttribute('aria-hidden', 'true');
+        fr.srcdoc = '';
+        setTestBarVisible(false);
+        active = null;
+      }
+
+      function postToFrame(msg) {
+        const fr = frame();
+        if (!fr || !fr.contentWindow) return;
+        fr.contentWindow.postMessage(msg, '*');
+      }
+
+      function rollRarity() {
+        const x = Math.random();
+        let acc = 0;
+        for (const row of MINIGAME_RARITY_ROLL) {
+          acc += row.p;
+          if (x <= acc) return row.r;
+        }
+        return 'common';
+      }
+
+      function pickDefIdByRarity(defsObj, rarity) {
+        const all = Object.values(defsObj || {});
+        const pool = all.filter((d) => d && d.rarity === rarity);
+        const use = pool.length ? pool : all;
+        if (!use.length) return null;
+        return use[Math.floor(Math.random() * use.length)].id;
+      }
+
+      function makeRewardCard(opts = {}) {
+        const forceRare = !!opts.forceRare;
+        const c = {
+          uid: null,
+          rank: RANKS[Math.floor(Math.random() * RANKS.length)],
+          suit: SUITS[Math.floor(Math.random() * SUITS.length)],
+          stampId: null,
+          sleeveId: null,
+          laminationId: null,
+          _forcedHighValue: forceRare
+        };
+
+        const sr = forceRare ? 'rare' : rollRarity();
+        const lr = forceRare ? 'rare' : rollRarity();
+        c.stampId = pickDefIdByRarity(STAMP_DEFS, sr);
+        c.sleeveId = pickDefIdByRarity(SLEEVE_DEFS, lr);
+
+        assignUid(c);
+        return c;
+      }
+
+      function dedupeRewardCards(rewards) {
+        const list = Array.isArray(rewards) ? rewards : [];
+        const seen = new Set();
+
+        for (let pass = 0; pass < 12; pass++) {
+          let changed = false;
+          seen.clear();
+
+          for (const card of list) {
+            const key = `${card.rank}${card.suit}|${card.stampId || ''}|${card.sleeveId || ''}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              continue;
+            }
+
+            card.rank = RANKS[Math.floor(Math.random() * RANKS.length)];
+            card.suit = SUITS[Math.floor(Math.random() * SUITS.length)];
+            if (!card._forcedHighValue) {
+              card.stampId = pickDefIdByRarity(STAMP_DEFS, rollRarity());
+              card.sleeveId = pickDefIdByRarity(SLEEVE_DEFS, rollRarity());
+            }
+            assignUid(card);
+            changed = true;
+          }
+
+          if (!changed) break;
+        }
+
+        return list;
+      }
+
+      function formatRewardForMinigame(card) {
+        const sd = getStampDef(card.stampId);
+        const ld = getSleeveDef(card.sleeveId);
+        return {
+          rank: card.rank,
+          suitSym: card.suit,
+          stampId: card.stampId,
+          sleeveId: card.sleeveId,
+          stampShort: (sd && (sd.icon || sd.name)) || card.stampId || '',
+          sleeveShort: (ld && (ld.icon || ld.name)) || card.sleeveId || ''
+        };
+      }
+
+      function beginPokerSlots(opts = {}) {
+        const testMode = !!opts.testMode;
+
+        if (!testMode) {
+          if (run.chips < MINIGAME_POKER_ENTRY_COST) {
+            showToast(`Need ${MINIGAME_POKER_ENTRY_COST} chips`);
+            return;
+          }
+          run.chips -= MINIGAME_POKER_ENTRY_COST;
+          logEvent('MINIGAME_START', { kind: 'POKER_SLOTS', entryCost: MINIGAME_POKER_ENTRY_COST });
+          renderHUD();
+        }
+
+        active = { kind: 'POKER_SLOTS', testMode, poker: { entryCost: MINIGAME_POKER_ENTRY_COST } };
+        openOverlayWithTemplate('tplMinigamePokerSlots');
+        setTimeout(() => {
+          postToFrame({
+            __p63: 1,
+            type: 'P63_INIT',
+            kind: 'POKER_SLOTS',
+            startChips: 100,
+            ante: 25,
+            freeSpins: 2,
+            baseBurn: 15,
+            heatStep: 10
+          });
+        }, 30);
+      }
+
+      function beginInfiltration(opts = {}) {
+        const testMode = !!opts.testMode;
+        if (!testMode) logEvent('MINIGAME_START', { kind: 'INFILTRATION' });
+        active = { kind: 'INFILTRATION', testMode, infiltration: { rewardSetId: null, rewards: null } };
+        openOverlayWithTemplate('tplMinigameInfiltration');
+      }
+
+      function onMessage(e) {
+        const fr = frame();
+        if (!fr || e.source !== fr.contentWindow) return;
+
+        const d = e.data;
+        if (!d || d.__p63 !== 1) return;
+        if (!active) return;
+
+        if (d.type === 'P63_MINIGAME_READY') return;
+
+        if (d.type === 'P63_MINIGAME_SFX') {
+          try { if (window.SFX) SFX.play(d.name || 'ui_click'); } catch (err) {}
+          return;
+        }
+
+        if (d.type === 'P63_REQUEST_REWARD_SET' && d.kind === 'INFILTRATION' && active.kind === 'INFILTRATION') {
+          const setId = `rw_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+          const forcedIdx = Math.floor(Math.random() * 3);
+          const rewards = dedupeRewardCards([0, 1, 2].map((idx) => makeRewardCard({ forceRare: idx === forcedIdx })));
+          active.infiltration.rewardSetId = setId;
+          active.infiltration.rewards = rewards;
+
+          if (!active.testMode) {
+            logEvent('MINIGAME_REWARD_OFFER', {
+              kind: 'INFILTRATION',
+              rewardSetId: setId,
+              rewards: rewards.map((r) => ({ rank: r.rank, suit: r.suit, stampId: r.stampId, sleeveId: r.sleeveId, uid: r.uid }))
+            });
+          }
+
+          postToFrame({
+            __p63: 1,
+            type: 'P63_REWARD_SET',
+            kind: 'INFILTRATION',
+            rewardSetId: setId,
+            rewards: rewards.map(formatRewardForMinigame)
+          });
+          return;
+        }
+
+        if (d.type === 'P63_MINIGAME_END') {
+          if (d.kind === 'POKER_SLOTS' && active.kind === 'POKER_SLOTS') {
+            const cashOut = Math.max(0, safeNumber(d.cashOut, 0));
+
+            if (active.testMode && testSession.active) {
+              showToast(cashOut > 0 ? `Test cash out: ${cashOut}` : 'Test busted');
+              beginPokerSlots({ testMode: true });
+              return;
+            }
+
+            run.chips += cashOut;
+            logEvent('MINIGAME_END', { kind: 'POKER_SLOTS', reason: d.reason || null, cashOut, net: cashOut - MINIGAME_POKER_ENTRY_COST });
+            closeOverlay();
+            renderAll();
+            showToast(cashOut > 0 ? `Cashed out ${cashOut} chips` : 'Busted');
+            return;
+          }
+
+          if (d.kind === 'INFILTRATION' && active.kind === 'INFILTRATION') {
+            if (active.testMode && testSession.active) {
+              if (d.outcome === 'win') showToast('Test win (reward not applied)');
+              else showToast('Test failed');
+              beginInfiltration({ testMode: true });
+              return;
+            }
+
+            if (d.outcome === 'win') {
+              const setId = d.rewardSetId || null;
+              const idx = safeNumber(d.chosenIdx, -1);
+
+              if (!active.infiltration.rewards || setId !== active.infiltration.rewardSetId || idx < 0 || idx >= active.infiltration.rewards.length) {
+                logEvent('MINIGAME_END', { kind: 'INFILTRATION', outcome: 'win', applied: false, reason: 'reward_mismatch' });
+                closeOverlay();
+                renderAll();
+                showToast('Reward failed (mismatch)');
+                return;
+              }
+
+              const card = active.infiltration.rewards[idx];
+              run.playerDeck.push(card);
+              logEvent('MINIGAME_END', {
+                kind: 'INFILTRATION',
+                outcome: 'win',
+                applied: true,
+                chosenIdx: idx,
+                card: { rank: card.rank, suit: card.suit, stampId: card.stampId, sleeveId: card.sleeveId, uid: card.uid }
+              });
+
+              closeOverlay();
+              renderAll();
+              showToast(`Card acquired: ${card.rank}${card.suit}`);
+              return;
+            }
+
+            logEvent('MINIGAME_END', { kind: 'INFILTRATION', outcome: d.outcome || 'dead', applied: false });
+            closeOverlay();
+            renderAll();
+            showToast('No reward');
+            return;
+          }
+        }
+      }
+
+      function startTest(kind) {
+        testSession.active = true;
+        testSession.kind = kind;
+
+        setTestBarVisible(true, kind === 'POKER_SLOTS' ? 'Poker Slots' : 'Infiltration');
+
+        if (kind === 'POKER_SLOTS') beginPokerSlots({ testMode: true });
+        else beginInfiltration({ testMode: true });
+      }
+
+      function stopTest(returnToMenu) {
+        testSession.active = false;
+        testSession.kind = null;
+        setTestBarVisible(false);
+
+        closeOverlay();
+        renderAll();
+
+        if (returnToMenu) openTestGamesModal();
+      }
+
+      function openChoiceModal() {
+        const canAfford = run.chips >= MINIGAME_POKER_ENTRY_COST;
+
+        showModal('Minigame', `
+          <p class="modal-text">A side path opens. Choose your wager.</p>
+          <div class="modal-reward" style="display:flex; flex-direction:column; gap:8px;">
+            <div><b>PLAY FOR CHIPS</b> — Poker Slots (Entry: ${MINIGAME_POKER_ENTRY_COST})</div>
+            <div><b>PLAY FOR CARDS</b> — Infiltration Run (Win: choose 1 of 3)</div>
+          </div>
+        `, [
+          {
+            text: canAfford ? `PLAY FOR CHIPS (-${MINIGAME_POKER_ENTRY_COST})` : `PLAY FOR CHIPS (Need ${MINIGAME_POKER_ENTRY_COST})`,
+            primary: true,
+            disabled: !canAfford,
+            action: () => {
+              closeModal();
+              beginPokerSlots();
+            }
+          },
+          {
+            text: 'PLAY FOR CARDS',
+            action: () => {
+              closeModal();
+              beginInfiltration();
+            }
+          },
+          { text: 'Leave', action: () => { closeModal(); renderAll(); } }
+        ]);
+      }
+
+      (function bindTestBarOnce() {
+        const btn = document.getElementById('btnEndTest');
+        if (btn) btn.onclick = () => stopTest(true);
+      })();
+
+      window.addEventListener('message', onMessage);
+
+      return { openChoiceModal, startTest, stopTest };
+    })();
+
     function encounterMinigame() {
-      run.chips = safeNumber(run.chips) + MINIGAME_REWARD;
-      clampAddBankedToken(1);
-      logEvent('MINIGAME', { chips: MINIGAME_REWARD, tokens: 1 });
-      logEvent('TOKEN_GAIN', { amount: 1, source: 'MINIGAME' });
-      showModal('Minigame', `
-        <p class="modal-text">You win a quick side game.</p>
-        <div class="modal-reward">+${MINIGAME_REWARD} chips</div>
-        <p class="modal-text" style="text-align:center; color: var(--accent-purple); font-weight:800;">+1 banked Action Token</p>
-      `, [{ text: 'Continue', primary: true, action: () => { closeModal(); renderAll(); } }]);
+      Minigames.openChoiceModal();
     }
 
     function encounterLoanShark() {
@@ -5050,7 +8449,7 @@ function benchPush(card, source = '') {
         </div>
       `, [
         { text: 'Back', action: () => renderModifyMenu() }
-      ]);
+      ], { helpKey: 'Modify - Service' });
 
 
       window.selectModifyCoreCard = function(deckIdx) {
@@ -5103,7 +8502,7 @@ function benchPush(card, source = '') {
         </div>
       `, [
         { text: 'Back', action: () => renderModifyMenu() }
-      ]);
+      ], { helpKey: 'Modify - Service' });
 
 
       window.selectModifyRankShiftCard = function(deckIdx) {
@@ -5153,7 +8552,7 @@ function benchPush(card, source = '') {
           disabled: delta === 0 || !shiftedRank || !canAfford,
           action: () => confirmModifyRankShift()
         }
-      ]);
+      ], { helpKey: 'Modify - Service' });
 
       window.adjustRankShiftDelta = function(step) {
         const state = run.ui.modifyContext && run.ui.modifyContext.rankShift;
@@ -5203,7 +8602,7 @@ function benchPush(card, source = '') {
         </div>
       `, [
         { text: 'Back', action: () => openModifyCorePicker('Re-Suit', MODIFY_SERVICES.RESUIT.id) }
-      ]);
+      ], { helpKey: 'Modify - Service' });
     }
 
     window.applyModifyResuit = function(deckIdx, suit) {
@@ -5249,7 +8648,7 @@ function benchPush(card, source = '') {
           }
         },
         { text: 'Back', action: () => renderModifyMenu() }
-      ]);
+      ], { helpKey: 'Modify - Service' });
 
     }
 
@@ -5294,7 +8693,7 @@ function benchPush(card, source = '') {
           }
         })),
         { text: 'Back', action: () => renderModifyMenu() }
-      ]);
+      ], { helpKey: 'Modify - Service' });
 
     }
 
@@ -5540,7 +8939,7 @@ function benchPush(card, source = '') {
         <div class="merchant-cards">${cardsHtml}</div>
       `, [
         { text: 'Back', action: () => renderCollector() }
-      ]);
+      ], { helpKey: 'Collector - Apply' });
     }
 
     window.applyStampToCard = function(stampId, deckIdx) {
@@ -5579,7 +8978,7 @@ function benchPush(card, source = '') {
         <div class="merchant-cards">${cardsHtml}</div>
       `, [
         { text: 'Back', action: () => renderCollector() }
-      ]);
+      ], { helpKey: 'Collector - Apply' });
     }
 
     window.applySleeveToCard = function(sleeveId, deckIdx) {
@@ -6122,6 +9521,141 @@ body += `
       if (bf.phase === 2) updateThreatTargetLane(true, 'round_start');
     }
 
+    const AI_PROFILES = {
+      ACCOUNTANT: {
+        id: 'ACCOUNTANT',
+        verb: 'counts the margins',
+        standShift: +1,
+        riskMult: 1.20,
+        winBonusMult: 1.00,
+        closeBonusMult: 1.00,
+        spreadPenalty: 0.0,
+        focusStrength: 0.0,
+        raiseDelta: -0.15,
+        benchEarlyMult: 0.75,
+        benchLateMult: 0.85,
+        salvageMult: 0.90,
+        jitter: 0.10,
+        quirkLaneWeight: 1.2
+      },
+      CLOSER: {
+        id: 'CLOSER',
+        verb: 'closes lanes early',
+        standShift: +2,
+        riskMult: 1.05,
+        winBonusMult: 1.20,
+        closeBonusMult: 1.15,
+        spreadPenalty: 0.0,
+        focusStrength: 0.15,
+        raiseDelta: -0.05,
+        benchEarlyMult: 0.90,
+        benchLateMult: 0.85,
+        salvageMult: 0.90,
+        jitter: 0.15,
+        quirkLaneWeight: 1.0
+      },
+      SNIPER: {
+        id: 'SNIPER',
+        verb: 'targets a lane',
+        standShift: 0,
+        riskMult: 1.00,
+        winBonusMult: 1.10,
+        closeBonusMult: 1.05,
+        spreadPenalty: 0.0,
+        focusStrength: 1.0,
+        focusMode: 'WEAKEST_PLAYER',
+        raiseDelta: +0.05,
+        benchEarlyMult: 1.00,
+        benchLateMult: 1.00,
+        salvageMult: 1.00,
+        jitter: 0.20,
+        quirkLaneWeight: 1.2
+      },
+      PRESSURIZER: {
+        id: 'PRESSURIZER',
+        verb: 'applies Pressure',
+        standShift: -2,
+        riskMult: 0.90,
+        winBonusMult: 1.00,
+        closeBonusMult: 0.95,
+        spreadPenalty: 1.2,
+        focusStrength: 0.0,
+        raiseDelta: +0.15,
+        benchEarlyMult: 1.35,
+        benchLateMult: 1.10,
+        salvageMult: 1.10,
+        jitter: 0.25,
+        quirkLaneWeight: 1.0
+      },
+      GAMBLER: {
+        id: 'GAMBLER',
+        verb: 'takes risks',
+        standShift: -1,
+        riskMult: 0.75,
+        winBonusMult: 1.00,
+        closeBonusMult: 1.00,
+        spreadPenalty: 0.5,
+        focusStrength: 0.0,
+        raiseDelta: +0.20,
+        benchEarlyMult: 1.00,
+        benchLateMult: 1.00,
+        salvageMult: 1.00,
+        jitter: 0.90,
+        quirkLaneWeight: 1.4
+      },
+      TRICKSTER: {
+        id: 'TRICKSTER',
+        verb: 'plays it late',
+        standShift: -1,
+        riskMult: 0.95,
+        winBonusMult: 1.05,
+        closeBonusMult: 1.00,
+        spreadPenalty: 0.6,
+        focusStrength: 0.70,
+        focusMode: 'PUNISH_COMPLETES',
+        raiseDelta: +0.10,
+        benchEarlyMult: 0.55,
+        benchLateMult: 1.55,
+        salvageMult: 1.35,
+        jitter: 0.35,
+        quirkLaneWeight: 1.3
+      }
+    };
+
+    const AI_PROFILE_WEIGHTS = {
+      STANDARD: [
+        ['ACCOUNTANT', 0.26],
+        ['CLOSER',     0.22],
+        ['SNIPER',     0.16],
+        ['PRESSURIZER',0.14],
+        ['TRICKSTER',  0.12],
+        ['GAMBLER',    0.10]
+      ],
+      HIGH_STAKES: [
+        ['PRESSURIZER',0.24],
+        ['GAMBLER',    0.22],
+        ['TRICKSTER',  0.18],
+        ['SNIPER',     0.18],
+        ['CLOSER',     0.10],
+        ['ACCOUNTANT', 0.08]
+      ]
+    };
+
+    function pickWeighted(pairs) {
+      const r = Math.random();
+      let acc = 0;
+      for (const [k, w] of pairs) {
+        acc += w;
+        if (r <= acc) return k;
+      }
+      return pairs[pairs.length - 1][0];
+    }
+
+    function getDealerProfile() {
+      if (!blackjackMatch) return AI_PROFILES.ACCOUNTANT;
+      return blackjackMatch.aiProfile || AI_PROFILES.ACCOUNTANT;
+    }
+
     // =============================================
     // SLOT BLACKJACK ENGINE
     // =============================================
@@ -6135,6 +9669,7 @@ body += `
       clearDealerTimers();
 
       run.chips -= buyIn;
+      if (buyIn > 0) { try { if (window.SFX) SFX.play('bench_add'); } catch(e){} }
       run.matchSeq = safeNumber(run.matchSeq, 0) + 1;
 
       const playerDrawPile = shuffle(run.playerDeck.slice());
@@ -6255,6 +9790,23 @@ body += `
       const currentTile = run.board.tiles[run.board.currentTileId];
       const npc = options.npcOverride || (currentTile ? currentTile.npc : null);
       blackjackMatch.npc = npc;
+
+      let profileId = (npc && npc.aiProfileId) ? npc.aiProfileId : 'ACCOUNTANT';
+      if (options && options.aiProfileId) profileId = options.aiProfileId;
+
+      blackjackMatch.aiProfileId = profileId;
+      blackjackMatch.aiProfile = AI_PROFILES[profileId] || AI_PROFILES.ACCOUNTANT;
+      blackjackMatch.aiQuirkBias = (npc && Array.isArray(npc.aiQuirkBias)) ? npc.aiQuirkBias.slice() : Array.from({ length: LANE_COUNT }, () => 0);
+      blackjackMatch.aiRaiseQuirk = (npc && typeof npc.aiRaiseQuirk === 'number') ? npc.aiRaiseQuirk : 0;
+      blackjackMatch.aiFocusLane = null;
+
+      if (npc && blackjackMatch.aiProfile && blackjackMatch.aiProfile.verb) {
+        showToast(`${npc.name} ${blackjackMatch.aiProfile.verb}.`);
+      }
+      if (blackjackMatch.type === 'HIGH_STAKES') {
+        showToast(`High Stakes rule: Karma x${HIGH_STAKES_KARMA_MULT}`);
+      }
+
       let affinity = 'neutral';
       let edgeDelta = 0;
       let procChance = CALLING_PROC_CHANCE;
@@ -6354,7 +9906,15 @@ body += `
       const current = blackjackMatch.transferMultiplier || 1;
       const max = blackjackMatch.transferMultiplierMax || current;
       const canRaise = current < max;
-      const willRaise = canRaise && Math.random() < 0.5;
+      const prof = getDealerProfile();
+      const diff = getOpponentDifficulty();
+      const base = (blackjackMatch.type === 'HIGH_STAKES') ? 0.55 : 0.35;
+      const diffAdj = (diff === 'hard') ? 0.10 : (diff === 'easy' ? -0.10 : 0);
+      const profAdj = safeNumber(prof.raiseDelta, 0);
+      const quirkAdj = safeNumber(blackjackMatch.aiRaiseQuirk, 0);
+      let p = base + diffAdj + profAdj + quirkAdj;
+      p = Math.max(0.05, Math.min(0.90, p));
+      const willRaise = canRaise && Math.random() < p;
 
       if (willRaise) {
         blackjackMatch.transferRaiseOffer = current + 1;
@@ -6518,18 +10078,21 @@ body += `
     function applyLaneMod(side, laneIdx, delta) {
       const positions = side === 'dealer' ? blackjackMatch.dealerPositions : blackjackMatch.playerPositions;
       const pos = positions[laneIdx];
-      if (!pos) return 'invalid';
-      if (pos.isComplete) return 'closed';
+      if (!pos) { try { if (window.SFX) SFX.play('mod_block'); } catch(e){} return 'invalid'; }
+      if (pos.isComplete) { try { if (window.SFX) SFX.play('mod_block'); } catch(e){} return 'closed'; }
       if (!pos.isOpen) {
         blackjackMatch.traps[side][laneIdx] += delta;
+        try { if (window.SFX) SFX.play('mod_block'); } catch(e){}
         return 'unopened';
       }
       if ((pos.eraserCharges || 0) > 0) {
         pos.eraserCharges -= 1;
+        try { if (window.SFX) SFX.play('mod_block'); } catch(e){}
         return 'erased';
       }
       pos.mods = pos.mods || [];
       pos.mods.push(delta);
+      try { if (window.SFX) SFX.play('mod', { delta }); } catch(e){}
       return 'open';
     }
 
@@ -6960,6 +10523,7 @@ body += `
       const es = blackjackMatch.earningsSeq;
       if (es.idx >= es.steps.length) {
         es.active = false;
+        try { if (window.SFX && es.accrued > 0) SFX.play('chip_done'); } catch(e){}
         const cb = es.onDone;
         if (typeof cb === 'function') cb();
         renderAll();
@@ -6979,6 +10543,12 @@ body += `
         }
       }
       es.message = `${step.name}: ${step.delta >= 0 ? '+' : ''}${step.delta}`;
+      try {
+        if (window.SFX) {
+          if (step.delta > 0) SFX.play('chip_tick');
+          else if (step.delta < 0) SFX.play('bench_overflow');
+        }
+      } catch(e){}
       renderAll();
       setTimeout(advanceEarningsSequence, 650);
     }
@@ -7050,8 +10620,10 @@ body += `
       seq.focusSide = step.lane ? 'player' : null;
       seq.focusCardUids = step.cardUids || [];
       seq.message = step.message || 'Karma tally…';
+      if (step.type === 'levelUp') { try { if (window.SFX) SFX.play('karma_done'); } catch(e){} }
       if (step.delta > 0) {
         seq.accrued += step.delta;
+      try { if (window.SFX && step.delta > 0) SFX.play('karma_tick'); } catch(e){}
         if (step.lane && typeof step.lane.idx === 'number') seq.laneAccrued[step.lane.idx] += step.delta;
         seq.float = {
           id: `${Date.now()}_${seq.stepIndex}`,
@@ -7373,6 +10945,7 @@ body += `
           continue;
         }
         blackjackMatch.drawnCard = c;
+        try { if (window.SFX) SFX.play('card_draw'); } catch(e){}
         blackjackMatch.metrics.playerDraws += 1;
         logEvent('PLAYER_DRAW', { card: cardToString(c), cardUid: c.uid || null, cardRef: cardRef(c) });
         renderBlackjack();
@@ -7391,6 +10964,7 @@ body += `
 
       const placed = blackjackMatch.drawnCard;
       pos.cards.push(placed);
+      try { if (window.SFX) SFX.play('card_place'); } catch(e){}
       const placedForHooks = handleFusionOnCardPlaced(pos, placed);
       pos.lastPlay = { kind: 'card', rank: placed.rank, value: getStrikeValueFromCard(placedForHooks) };
       onCardPlacedForAttack(pos, placedForHooks);
@@ -7423,10 +10997,12 @@ body += `
 
       tryFireCloseAttack('player', posIdx);
       pos.isComplete = true;
+      try { if (window.SFX) SFX.play('lane_close'); } catch(e){}
 
       // If they close while >21, it is a bust now (closure reveals score)
       const total = getPositionTotal(pos);
       pos.isBust = total > 21;
+      if (pos.isBust) { try { if (window.SFX) SFX.play('bust'); } catch(e){} }
 
       blackjackMatch.metrics.playerStands += 1;
 
@@ -7573,19 +11149,20 @@ function estimatePlayerTargetForLane(idx, diff) {
 function dealerLaneScore(idx, total, diff) {
   if (total > 21) return -10000 - total;
 
+  const prof = getDealerProfile();
   const target = estimatePlayerTargetForLane(idx, diff);
 
-  // If player is (known or assumed) busted, just don't bust; prefer safer totals (<=11)
   if (target === 0) {
-    return 120 + (total <= 11 ? (11 - Math.abs(11 - total)) : 0) - dealerRiskPenalty(total) * 12;
+    return 120 + (total <= 11 ? (11 - Math.abs(11 - total)) : 0) - dealerRiskPenalty(total) * 12 * (prof.riskMult || 1);
   }
 
   const winNeed = Math.min(21, target + 1);
-  const winBonus = (total >= winNeed) ? 140 : 0;
-  const closeBonus = (total === 21) ? 260 : (total === 20) ? 90 : (total === 19) ? 45 : 0;
+  const winBonus = (total >= winNeed) ? (140 * (prof.winBonusMult || 1)) : 0;
+  const closeBonusBase = (total === 21) ? 260 : (total === 20) ? 90 : (total === 19) ? 45 : 0;
+  const closeBonus = closeBonusBase * (prof.closeBonusMult || 1);
   const pushPenalty = (total === target) ? 14 : 0;
 
-  const risk = dealerRiskPenalty(total) * 12;
+  const risk = dealerRiskPenalty(total) * 12 * (prof.riskMult || 1);
 
   return total + winBonus + closeBonus - risk - pushPenalty;
 }
@@ -7628,22 +11205,72 @@ function dealerLaneScore(idx, total, diff) {
           const afterScore = dealerLaneScore(idx, after, diff);
 
           return { idx, before, after, delta: (afterScore - beforeScore), afterScore };
-        }).sort((a, b) => b.delta - a.delta);
+        });
 
-        if (diff === 'easy') {
-          // Easy: pick among top 2 if they exist, weighted by being "not awful"
+        const prof = getDealerProfile();
+        const quirk = blackjackMatch.aiQuirkBias || [];
+        let focusLane = blackjackMatch.aiFocusLane;
+
+        if (focusLane == null && safeNumber(prof.focusStrength, 0) > 0) {
+          if (prof.focusMode === 'WEAKEST_PLAYER') {
+            let best = null;
+            for (const s of scored) {
+              const pPos = blackjackMatch.playerPositions[s.idx];
+              if (!pPos || !pPos.isOpen || pPos.isComplete) continue;
+              const pt = getPositionTotal(pPos);
+              if (!best || pt < best.pt) best = { idx: s.idx, pt };
+            }
+            if (best) focusLane = best.idx;
+          } else if (prof.focusMode === 'PUNISH_COMPLETES') {
+            let best = null;
+            for (const s of scored) {
+              const pPos = blackjackMatch.playerPositions[s.idx];
+              if (pPos && pPos.isComplete && !pPos.isBust) {
+                const pt = getPositionTotal(pPos);
+                if (!best || pt > best.pt) best = { idx: s.idx, pt };
+              }
+            }
+            if (best) focusLane = best.idx;
+          }
+          blackjackMatch.aiFocusLane = focusLane;
+        }
+
+        for (const s of scored) {
+          s.delta += (quirk[s.idx] || 0) * (prof.quirkLaneWeight || 1);
+
+          if (prof.spreadPenalty) {
+            const dPos = blackjackMatch.dealerPositions[s.idx];
+            const laneCards = (dPos && dPos.cards) ? dPos.cards.length : 0;
+            s.delta -= prof.spreadPenalty * Math.max(0, laneCards - 2);
+          }
+
+          if (focusLane != null && s.idx === focusLane) {
+            s.delta += 12 * (prof.focusStrength || 0);
+          }
+
+          const j = prof.jitter || 0;
+          if (j) s.delta += (Math.random() * 2 - 1) * j;
+        }
+
+        scored.sort((a, b) => b.delta - a.delta);
+
+        if (prof.id === 'GAMBLER' && diff !== 'easy') {
+          const top = scored.slice(0, Math.min(3, scored.length));
+          top.sort((a, b) => b.delta - a.delta);
+          targetIdx = top[Math.floor(Math.random() * top.length)].idx;
+        } else if (diff === 'easy') {
           const top = scored.slice(0, Math.min(2, scored.length));
           top.sort((a, b) => b.afterScore - a.afterScore);
           targetIdx = (top.length === 1) ? top[0].idx : (Math.random() < 0.55 ? top[0].idx : top[1].idx);
         } else {
-          // Medium/Hard: best delta, but if all negative, choose least bad afterScore
           if (scored[0].delta >= 0) targetIdx = scored[0].idx;
-          else targetIdx = scored.sort((a, b) => b.afterScore - a.afterScore)[0].idx;
+          else targetIdx = scored.slice().sort((a, b) => b.afterScore - a.afterScore)[0].idx;
         }
       }
 
       if (targetIdx >= 0) {
         blackjackMatch.dealerPositions[targetIdx].cards.push(card);
+        try { if (window.SFX) SFX.play('dealer_place'); } catch(e){}
         const dealerPlaced = handleFusionOnCardPlaced(blackjackMatch.dealerPositions[targetIdx], card);
         blackjackMatch.dealerPositions[targetIdx].lastPlay = { kind: 'card', rank: card.rank, value: getStrikeValueFromCard(dealerPlaced) };
         onCardPlacedForAttack(blackjackMatch.dealerPositions[targetIdx], dealerPlaced);
@@ -7748,6 +11375,8 @@ function dealerFindBestBenchMove(diff, phase) {
 
 function dealerShouldStandLane(idx, diff) {
   const dPos = blackjackMatch.dealerPositions[idx];
+  const prof = getDealerProfile();
+  const shift = safeNumber(prof.standShift, 0);
   if (!dPos || !dPos.isOpen || dPos.isComplete) return false;
 
   const total = getPositionTotal(dPos);
@@ -7767,24 +11396,24 @@ function dealerShouldStandLane(idx, diff) {
   // If player lane is complete (known target)
   if (pComplete) {
     if (total > pTotal && total >= 13) return true;
-    if (diff === 'hard') return total >= 19;
-    return total >= 17; // medium/easy baseline
+    if (diff === 'hard') return total >= Math.max(16, 19 + shift);
+    return total >= Math.max(15, 17 + shift);
   }
 
   // Player lane incomplete: estimate and choose
   const target = estimatePlayerTargetForLane(idx, diff);
 
   if (diff === 'easy') {
-    return (total >= 16 && Math.random() < 0.70) || total >= 19;
+    return (total >= Math.max(14, 16 + shift) && Math.random() < 0.70) || total >= Math.max(17, 19 + shift);
   }
   if (diff === 'medium') {
-    if (total >= 17) return true;
+    if (total >= Math.max(15, 17 + shift)) return true;
     if (total >= 15 && total >= target + 2) return true;
     return false;
   }
 
   // hard
-  if (total >= 19) return true;
+  if (total >= Math.max(16, 19 + shift)) return true;
   if (total >= 17 && total >= target + 1) return true;
   if (total >= 15 && total >= target + 3) return true;
   return false;
@@ -7831,7 +11460,11 @@ function dealerStandPhase(diff, maxPasses = 6) {
       }
 
       // 1) Strategic bench use (no forced plays; only if improves)
-      const benchBudget = (diff === 'hard') ? 2 : (diff === 'medium') ? 1 : (Math.random() < 0.35 ? 1 : 0);
+      const prof = getDealerProfile();
+      const draws = safeNumber(blackjackMatch.metrics.dealerDraws, 0);
+      const late = draws >= 6;
+      let benchBudget = (diff === 'hard') ? 2 : (diff === 'medium') ? 1 : (Math.random() < 0.35 ? 1 : 0);
+      benchBudget = Math.round(benchBudget * (late ? (prof.benchLateMult || 1) : (prof.benchEarlyMult || 1)));
       for (let k = 0; k < benchBudget; k++) {
         const move = dealerFindBestBenchMove(diff, 'strategic');
         if (!move) break;
@@ -7864,7 +11497,8 @@ function dealerStandPhase(diff, maxPasses = 6) {
         dealerPlaceOneCard(card);
 
         // 4) Salvage: if any lanes would bust at end-of-turn, try negatives first
-        const salvageBudget = (diff === 'hard') ? 2 : 1;
+        let salvageBudget = (diff === 'hard') ? 2 : 1;
+        salvageBudget = Math.round(salvageBudget * (prof.salvageMult || 1));
         for (let k = 0; k < salvageBudget; k++) {
           const move = dealerFindBestBenchMove(diff, 'salvage');
           if (!move) break;
@@ -8125,7 +11759,15 @@ function dealerStandPhase(diff, maxPasses = 6) {
       }
 
       const karmaExtraTotal = karmaExtras.reduce((sum, e) => sum + safeNumber(e.delta, 0), 0);
-      const karmaGained = karmaLaneGain + karmaExtraTotal;
+      let karmaGained = karmaLaneGain + karmaExtraTotal;
+
+      if (blackjackMatch.type === 'HIGH_STAKES') {
+        const bonus = Math.floor(karmaGained * (HIGH_STAKES_KARMA_MULT - 1));
+        if (bonus > 0) {
+          karmaExtras.push({ name: `High Stakes x${HIGH_STAKES_KARMA_MULT}`, delta: bonus, kind: 'high_stakes' });
+          karmaGained += bonus;
+        }
+      }
       let ventureFundChips = 0;
       for (let i = 0; i < blackjackMatch.playerPositions.length; i++) {
         if (positionResults[i] !== 'player') continue;
@@ -8940,6 +12582,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         primary: true,
         action: () => {
           closeModal();
+          try { if (window.SFX) SFX.play('watcher_intro'); } catch(e){}
           const watcherCard = run.callingCard ? { ...run.callingCard } : { rank: 'A', suit: '♠' };
           startBlackjackMatch('WATCHER', 0, {
             npcOverride: { name: 'The Watcher', callingCard: watcherCard },
@@ -9039,6 +12682,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const result = blackjackMatch.result;
 
       if (bf.hp <= 0) {
+        try { if (window.SFX) SFX.play('boss_cleared'); } catch(e){}
         logEvent('BOSS_FIGHT_DEFEATED', { floor: run.floor, round: bf.round, maxRounds: bf.maxRounds });
         run.bossWins = safeNumber(run.bossWins, 0) + 1;
         run.bossFight = null;
@@ -9132,6 +12776,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     }
 
     function gameOver(message, reasonCode = 'UNKNOWN') {
+      try { if (window.SFX) SFX.play('gameover'); } catch(e){}
       clearDealerTimers();
       run.ui.mode = 'GAMEOVER';
       run.ui.message = message;
@@ -9143,6 +12788,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     }
 
     function victory() {
+      try { if (window.SFX) SFX.play('victory'); } catch(e){}
       clearDealerTimers();
       run.ui.mode = 'VICTORY';
       endCurrentFloorIfOpen({ endReason: 'VICTORY' });
@@ -9400,9 +13046,9 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
         // Tooltip lines
         const meta = TILE_META[tile.type] || { name: tile.label, desc: '' };
-        const ttTitle = `${meta.name} · ${tile.label}`;
-        const ttLines = [];
-        if (meta.desc) ttLines.push(meta.desc);
+        const tip = HELP_TILES[tile.type];
+        const ttTitle = tip?.title || (meta.name || tile.type);
+        const ttLines = tip && Array.isArray(tip.lines) ? [...tip.lines] : (meta.desc ? [meta.desc] : []);
 
         let subLabel = '';
         if (tile.npc && tile.npc.callingCard) {
@@ -9905,12 +13551,14 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       });
 
       document.addEventListener('mouseout', (e) => {
+        if (!tooltipsOn()) return;
         if (activeCard && !e.relatedTarget?.closest('.playing-card')) {
           hideTooltip();
         }
       });
 
       document.addEventListener('mousemove', (e) => {
+        if (!tooltipsOn()) return;
         if (!activeCard) return;
         tooltip.style.left = `${e.clientX + 12}px`;
         tooltip.style.top = `${e.clientY + 12}px`;
@@ -9976,12 +13624,14 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       });
 
       document.addEventListener('mouseout', (e) => {
+        if (!tooltipsOn()) return;
         if (activeChip && !e.relatedTarget?.closest('.action-chip')) {
           hideTooltip();
         }
       });
 
       document.addEventListener('mousemove', (e) => {
+        if (!tooltipsOn()) return;
         if (!activeChip) return;
         tooltip.style.left = `${e.clientX + 12}px`;
         tooltip.style.top = `${e.clientY + 12}px`;
@@ -10015,6 +13665,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       let activeTile = null;
       let longPressTimer = null;
 
+      const tooltipsOn = () => (uiSettings.tooltipsEnabled !== false);
+
       const buildTooltipHtml = (tileEl) => {
         const ds = tileEl.dataset || {};
         const title = ds.ttTitle || 'Tile';
@@ -10027,7 +13679,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       };
 
       const showTooltip = (tileEl, x, y) => {
-        if (!tileEl) return;
+        if (!tileEl || !tooltipsOn()) return;
         // Only show when board view is visible
         const boardView = document.getElementById('boardView');
         if (boardView && boardView.classList.contains('hidden')) return;
@@ -10044,37 +13696,40 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       };
 
       document.addEventListener('mouseover', (e) => {
+        if (!tooltipsOn()) return;
         const tileEl = e.target.closest && e.target.closest('.hex-tile');
         if (!tileEl) return;
         showTooltip(tileEl, e.clientX, e.clientY);
       });
 
       document.addEventListener('mouseout', (e) => {
+        if (!tooltipsOn()) return;
         if (activeTile && !e.relatedTarget?.closest?.('.hex-tile')) {
           hideTooltip();
         }
       });
 
       document.addEventListener('mousemove', (e) => {
+        if (!tooltipsOn()) return;
         if (!activeTile) return;
         tooltip.style.left = `${e.clientX + 12}px`;
         tooltip.style.top = `${e.clientY + 12}px`;
       });
 
       document.addEventListener('pointerdown', (e) => {
+        if (!tooltipsOn()) return;
         const tileEl = e.target.closest && e.target.closest('.hex-tile');
         if (!tileEl) return;
+        if (longPressTimer) clearTimeout(longPressTimer);
         longPressTimer = setTimeout(() => showTooltip(tileEl, e.clientX, e.clientY), 450);
       });
 
-      document.addEventListener('pointerup', () => {
-        if (longPressTimer) clearTimeout(longPressTimer);
-        longPressTimer = null;
-      });
-
-      document.addEventListener('pointercancel', () => {
-        if (longPressTimer) clearTimeout(longPressTimer);
-        longPressTimer = null;
+      ['pointerup','pointercancel','pointerleave'].forEach((evt) => {
+        document.addEventListener(evt, () => {
+          if (longPressTimer) clearTimeout(longPressTimer);
+          longPressTimer = null;
+          hideTooltip();
+        });
       });
 
       document.addEventListener('click', (e) => {
@@ -10187,6 +13842,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const npcLine = npc
         ? `${npc.name} · ${cardToString(npc.callingCard)} · ${affinityIcon(affinity)} · Edge ${edgeDelta >= 0 ? '+' : ''}${edgeDelta} · Proc ${procPct}%`
         : `Dealer · Proc ${procPct}%`;
+      const prof = blackjackMatch.aiProfile;
+      const styleLine = (npc && prof && prof.verb) ? `${npc.name} ${prof.verb}.` : '';
+      const houseRuleLine = (blackjackMatch.type === 'HIGH_STAKES')
+        ? `High Stakes rule: Karma x${HIGH_STAKES_KARMA_MULT}`
+        : '';
 
       const typeLabel = blackjackMatch.type === 'WATCHER' ? 'THE WATCHER' :
                         blackjackMatch.type === 'BOSS' ? 'BOSS BATTLE' :
@@ -10211,6 +13871,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           <div class="bj-title">${typeLabel}</div>
           <div class="bj-status">Buy-in: ${blackjackMatch.buyIn} chips · Side Bet x${transferMultiplier}</div>
           <div class="bj-status">${npcLine}</div>
+          ${houseRuleLine ? `<div class="bj-house-rule">${escapeHtml(houseRuleLine)}</div>` : ''}
+          ${styleLine ? `<div class="bj-style-line">${escapeHtml(styleLine)}</div>` : ''}
           ${bossMeta}
         </div>
       `;
@@ -10928,29 +14590,6 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
     }
 
     // =============================================
-    // TILE RESOLUTION
-    // =============================================
-    function encounterBlackjackStandard() {
-      if (run.chips < BUYIN_STANDARD) {
-        logEvent('MATCH_START_FAILED', { type: 'STANDARD', buyIn: BUYIN_STANDARD, chips: run.chips, reason: 'INSUFFICIENT_CHIPS' });
-        gameOver("You can't afford the buy-in.", 'INSUFFICIENT_BUYIN');
-        return;
-      }
-      startBlackjackMatch('STANDARD', BUYIN_STANDARD);
-    }
-
-    function encounterBlackjackHigh() {
-      if (run.chips < BUYIN_HIGH) {
-        logEvent('MATCH_START_FAILED', { type: 'HIGH_STAKES', buyIn: BUYIN_HIGH, chips: run.chips, reason: 'INSUFFICIENT_CHIPS' });
-        gameOver("You can't afford the buy-in.", 'INSUFFICIENT_BUYIN');
-        return;
-      }
-      const hsKey = run.secret && run.secret.keys ? run.secret.keys.highStakes : null;
-      const specialReward = (hsKey && !hsKey.obtained && run.board.currentTileId === hsKey.tileId) ? 'KEY_HIGH' : null;
-      startBlackjackMatch('HIGH_STAKES', BUYIN_HIGH, { specialReward });
-    }
-
-    // =============================================
     // BOOT
     // =============================================
     (function boot() {
@@ -10963,6 +14602,10 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
         }
       } catch (e) {}
 
+      loadSfxPrefs();
+      loadHelpPrefs();
+      applyReduceMotion();
+      installGlobalClickSfx();
       setupCardTooltip();
       setupActionTooltip();
       setupTileTooltip();
@@ -10972,7 +14615,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const c=document.getElementById('btnContinue'); if (c) c.onclick = () => { hideStartScreen(); renderAll(); };
       const n=document.getElementById('btnNewRun'); if (n) n.onclick = () => { initRun(); hideStartScreen(); };
       const r=document.getElementById('btnRules'); if (r) r.onclick = () => openRulesPanel();
-      const st=document.getElementById('btnStats'); if (st) st.onclick = () => openLogPanel('stats');
+      const tg=document.getElementById('btnTestGames'); if (tg) tg.onclick = () => openTestGamesModal();
       const se=document.getElementById('btnSettings'); if (se) se.onclick = () => openSettingsPanel();
       const fb=document.getElementById('btnFeedback'); if (fb) fb.onclick = () => openFeedbackModal();
       updateStartRunCard();
