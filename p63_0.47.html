@@ -483,6 +483,33 @@
     .minigame-shell{
       width: 100%;
       height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .minigame-testbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(0,0,0,0.35);
+      backdrop-filter: blur(8px) saturate(120%);
+      -webkit-backdrop-filter: blur(8px) saturate(120%);
+    }
+
+    .minigame-testbar.hidden{ display:none; }
+
+    .minigame-testbar-title{
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.95;
+    }
+
+    .minigame-testbar-actions{
+      display:flex;
+      gap: 8px;
     }
 
     #minigameFrame{
@@ -1963,7 +1990,7 @@
 
       <div class="start-grid">
         <button class="hud-btn" id="btnRules">Rules</button>
-        <button class="hud-btn" id="btnStats">Run Stats</button>
+        <button class="hud-btn" id="btnTestGames">Test Games</button>
         <button class="hud-btn" id="btnSettings">Settings</button>
         <button class="hud-btn" id="btnFeedback">Feedback</button>
       </div>
@@ -1989,6 +2016,12 @@
 
   <div id="minigameOverlay" class="hidden" aria-hidden="true">
     <div class="minigame-shell">
+      <div id="minigameTestBar" class="minigame-testbar hidden">
+        <div class="minigame-testbar-title" id="minigameTestTitle">TEST MODE</div>
+        <div class="minigame-testbar-actions">
+          <button class="hud-btn" id="btnEndTest">END TEST</button>
+        </div>
+      </div>
       <iframe id="minigameFrame" title="Minigame" sandbox="allow-scripts"></iframe>
     </div>
   </div>
@@ -5912,6 +5945,23 @@ const CALLING_RANK_THRESHOLDS = [
       `;
     }
 
+    function openTestGamesModal() {
+      showModal('Test Games', `
+        <p class="modal-text">Choose a minigame to run in an endless sandbox loop.</p>
+      `, [
+        {
+          text: 'Poker Slots (Test)',
+          primary: true,
+          action: () => { closeModal(); Minigames.startTest('POKER_SLOTS'); }
+        },
+        {
+          text: 'Infiltration Run (Test)',
+          action: () => { closeModal(); Minigames.startTest('INFILTRATION'); }
+        },
+        { text: 'Close', action: () => closeModal() }
+      ]);
+    }
+
     function openSettingsPanel() {
       const checked = !!uiSettings.autoOpenLogOnEnd;
       const revealOnClose = (uiSettings.revealTotalsOnClose !== false);
@@ -7288,6 +7338,19 @@ function benchPush(card, source = '') {
       const frame = () => document.getElementById('minigameFrame');
 
       let active = null;
+      let testSession = { active: false, kind: null };
+
+      function setTestBarVisible(on, kindLabel) {
+        const bar = document.getElementById('minigameTestBar');
+        const title = document.getElementById('minigameTestTitle');
+        if (!bar) return;
+        if (on) {
+          if (title) title.textContent = `TEST MODE — ${kindLabel || ''}`.trim();
+          bar.classList.remove('hidden');
+        } else {
+          bar.classList.add('hidden');
+        }
+      }
 
       function openOverlayWithTemplate(tplId) {
         const tpl = document.getElementById(tplId);
@@ -7305,6 +7368,7 @@ function benchPush(card, source = '') {
         ov.classList.add('hidden');
         ov.setAttribute('aria-hidden', 'true');
         fr.srcdoc = '';
+        setTestBarVisible(false);
         active = null;
       }
 
@@ -7364,16 +7428,20 @@ function benchPush(card, source = '') {
         };
       }
 
-      function beginPokerSlots() {
-        if (run.chips < MINIGAME_POKER_ENTRY_COST) {
-          showToast(`Need ${MINIGAME_POKER_ENTRY_COST} chips`);
-          return;
-        }
-        run.chips -= MINIGAME_POKER_ENTRY_COST;
-        logEvent('MINIGAME_START', { kind: 'POKER_SLOTS', entryCost: MINIGAME_POKER_ENTRY_COST });
-        renderHUD();
+      function beginPokerSlots(opts = {}) {
+        const testMode = !!opts.testMode;
 
-        active = { kind: 'POKER_SLOTS', poker: { entryCost: MINIGAME_POKER_ENTRY_COST } };
+        if (!testMode) {
+          if (run.chips < MINIGAME_POKER_ENTRY_COST) {
+            showToast(`Need ${MINIGAME_POKER_ENTRY_COST} chips`);
+            return;
+          }
+          run.chips -= MINIGAME_POKER_ENTRY_COST;
+          logEvent('MINIGAME_START', { kind: 'POKER_SLOTS', entryCost: MINIGAME_POKER_ENTRY_COST });
+          renderHUD();
+        }
+
+        active = { kind: 'POKER_SLOTS', testMode, poker: { entryCost: MINIGAME_POKER_ENTRY_COST } };
         openOverlayWithTemplate('tplMinigamePokerSlots');
         setTimeout(() => {
           postToFrame({
@@ -7389,9 +7457,10 @@ function benchPush(card, source = '') {
         }, 30);
       }
 
-      function beginInfiltration() {
-        logEvent('MINIGAME_START', { kind: 'INFILTRATION' });
-        active = { kind: 'INFILTRATION', infiltration: { rewardSetId: null, rewards: null } };
+      function beginInfiltration(opts = {}) {
+        const testMode = !!opts.testMode;
+        if (!testMode) logEvent('MINIGAME_START', { kind: 'INFILTRATION' });
+        active = { kind: 'INFILTRATION', testMode, infiltration: { rewardSetId: null, rewards: null } };
         openOverlayWithTemplate('tplMinigameInfiltration');
       }
 
@@ -7411,11 +7480,13 @@ function benchPush(card, source = '') {
           active.infiltration.rewardSetId = setId;
           active.infiltration.rewards = rewards;
 
-          logEvent('MINIGAME_REWARD_OFFER', {
-            kind: 'INFILTRATION',
-            rewardSetId: setId,
-            rewards: rewards.map((r) => ({ rank: r.rank, suit: r.suit, stampId: r.stampId, sleeveId: r.sleeveId, uid: r.uid }))
-          });
+          if (!active.testMode) {
+            logEvent('MINIGAME_REWARD_OFFER', {
+              kind: 'INFILTRATION',
+              rewardSetId: setId,
+              rewards: rewards.map((r) => ({ rank: r.rank, suit: r.suit, stampId: r.stampId, sleeveId: r.sleeveId, uid: r.uid }))
+            });
+          }
 
           postToFrame({
             __p63: 1,
@@ -7430,6 +7501,13 @@ function benchPush(card, source = '') {
         if (d.type === 'P63_MINIGAME_END') {
           if (d.kind === 'POKER_SLOTS' && active.kind === 'POKER_SLOTS') {
             const cashOut = Math.max(0, safeNumber(d.cashOut, 0));
+
+            if (active.testMode && testSession.active) {
+              showToast(cashOut > 0 ? `Test cash out: ${cashOut}` : 'Test busted');
+              beginPokerSlots({ testMode: true });
+              return;
+            }
+
             run.chips += cashOut;
             logEvent('MINIGAME_END', { kind: 'POKER_SLOTS', reason: d.reason || null, cashOut, net: cashOut - MINIGAME_POKER_ENTRY_COST });
             closeOverlay();
@@ -7439,6 +7517,13 @@ function benchPush(card, source = '') {
           }
 
           if (d.kind === 'INFILTRATION' && active.kind === 'INFILTRATION') {
+            if (active.testMode && testSession.active) {
+              if (d.outcome === 'win') showToast('Test win (reward not applied)');
+              else showToast('Test failed');
+              beginInfiltration({ testMode: true });
+              return;
+            }
+
             if (d.outcome === 'win') {
               const setId = d.rewardSetId || null;
               const idx = safeNumber(d.chosenIdx, -1);
@@ -7476,6 +7561,27 @@ function benchPush(card, source = '') {
         }
       }
 
+      function startTest(kind) {
+        testSession.active = true;
+        testSession.kind = kind;
+
+        setTestBarVisible(true, kind === 'POKER_SLOTS' ? 'Poker Slots' : 'Infiltration');
+
+        if (kind === 'POKER_SLOTS') beginPokerSlots({ testMode: true });
+        else beginInfiltration({ testMode: true });
+      }
+
+      function stopTest(returnToMenu) {
+        testSession.active = false;
+        testSession.kind = null;
+        setTestBarVisible(false);
+
+        closeOverlay();
+        renderAll();
+
+        if (returnToMenu) openTestGamesModal();
+      }
+
       function openChoiceModal() {
         const canAfford = run.chips >= MINIGAME_POKER_ENTRY_COST;
 
@@ -7506,9 +7612,14 @@ function benchPush(card, source = '') {
         ]);
       }
 
+      (function bindTestBarOnce() {
+        const btn = document.getElementById('btnEndTest');
+        if (btn) btn.onclick = () => stopTest(true);
+      })();
+
       window.addEventListener('message', onMessage);
 
-      return { openChoiceModal };
+      return { openChoiceModal, startTest, stopTest };
     })();
 
     function encounterMinigame() {
@@ -13762,7 +13873,7 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const c=document.getElementById('btnContinue'); if (c) c.onclick = () => { hideStartScreen(); renderAll(); };
       const n=document.getElementById('btnNewRun'); if (n) n.onclick = () => { initRun(); hideStartScreen(); };
       const r=document.getElementById('btnRules'); if (r) r.onclick = () => openRulesPanel();
-      const st=document.getElementById('btnStats'); if (st) st.onclick = () => openLogPanel('stats');
+      const tg=document.getElementById('btnTestGames'); if (tg) tg.onclick = () => openTestGamesModal();
       const se=document.getElementById('btnSettings'); if (se) se.onclick = () => openSettingsPanel();
       const fb=document.getElementById('btnFeedback'); if (fb) fb.onclick = () => openFeedbackModal();
       updateStartRunCard();
