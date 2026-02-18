@@ -680,6 +680,20 @@
 
   function isRedSuit(sym){ return sym === '♥' || sym === '♦'; }
 
+  function toSuitSymbol(sym) {
+    const raw = (sym == null) ? '' : String(sym).trim();
+    if (!raw) return '♠';
+
+    const upper = raw.toUpperCase();
+    if (upper === 'S' || upper === 'SPADE' || upper === 'SPADES') return '♠';
+    if (upper === 'C' || upper === 'CLUB' || upper === 'CLUBS') return '♣';
+    if (upper === 'H' || upper === 'HEART' || upper === 'HEARTS') return '♥';
+    if (upper === 'D' || upper === 'DIAMOND' || upper === 'DIAMONDS') return '♦';
+
+    if (raw === '♠' || raw === '♣' || raw === '♥' || raw === '♦') return raw;
+    return '♠';
+  }
+
   // Receive reward set from parent
   window.addEventListener("message", (e) => {
     const d = e.data;
@@ -778,7 +792,7 @@
       // Build a display from flexible fields:
       // Expected from parent:
       // { rank:'A', suit:'S', suitSym:'♠', stampShort:'+10', sleeveShort:'STEEL' } (fields can vary)
-      const suitSym = r.suitSym || r.suit || '♠';
+      const suitSym = toSuitSymbol(r.suitSym || r.suit || '♠');
       const rank    = r.rank || r.value || '—';
       const red     = isRedSuit(suitSym);
 
