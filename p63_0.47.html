@@ -775,6 +775,12 @@
       font-size: 14px;
       color: var(--text-secondary);
     }
+    .bj-house-rule, .bj-style-line{
+      margin-top: 4px;
+      font-size: 12px;
+      opacity: .85;
+      letter-spacing: .2px;
+    }
 
     .bj-board { display: flex; flex-direction: column; gap: 34px; }
     .bj-side { display: flex; flex-direction: column; gap: 12px; }
@@ -4722,6 +4728,7 @@ const CALLING_RANK_THRESHOLDS = [
     const BUYIN_STANDARD = 100;
     const BUYIN_HIGH = 200;
     const BUYIN_BOSS = 300;
+    const HIGH_STAKES_KARMA_MULT = 1.2;
 
     // Action tokens + cocktails
     const COCKTAIL_COST = 150;
@@ -7351,7 +7358,16 @@ function benchPush(card, source = '') {
       const rankValue = rollNpcRankValue(floor, type);
       const rank = valueToRank(rankValue);
       const name = makeNpcName(type);
-      return { name, callingCard: { rank, suit } };
+      const npc = { name, callingCard: { rank, suit } };
+
+      if (type === 'STANDARD' || type === 'HIGH_STAKES') {
+        const pool = (type === 'HIGH_STAKES') ? AI_PROFILE_WEIGHTS.HIGH_STAKES : AI_PROFILE_WEIGHTS.STANDARD;
+        npc.aiProfileId = pickWeighted(pool);
+        npc.aiQuirkBias = Array.from({ length: LANE_COUNT }, () => (Math.random() * 2 - 1));
+        npc.aiRaiseQuirk = (Math.random() * 2 - 1) * 0.06;
+      }
+
+      return npc;
     }
 
     function buildTilePoolForFloor(floor) {
@@ -7517,7 +7533,8 @@ function benchPush(card, source = '') {
             tileId: tile.id,
             tileType: tile.type,
             npcName: tile.npc.name,
-            npcCallingCard: tile.npc.callingCard
+            npcCallingCard: tile.npc.callingCard,
+            aiProfileId: tile.npc.aiProfileId || null
           });
         }
       });
@@ -9504,6 +9521,141 @@ body += `
       if (bf.phase === 2) updateThreatTargetLane(true, 'round_start');
     }
 
+    const AI_PROFILES = {
+      ACCOUNTANT: {
+        id: 'ACCOUNTANT',
+        verb: 'counts the margins',
+        standShift: +1,
+        riskMult: 1.20,
+        winBonusMult: 1.00,
+        closeBonusMult: 1.00,
+        spreadPenalty: 0.0,
+        focusStrength: 0.0,
+        raiseDelta: -0.15,
+        benchEarlyMult: 0.75,
+        benchLateMult: 0.85,
+        salvageMult: 0.90,
+        jitter: 0.10,
+        quirkLaneWeight: 1.2
+      },
+      CLOSER: {
+        id: 'CLOSER',
+        verb: 'closes lanes early',
+        standShift: +2,
+        riskMult: 1.05,
+        winBonusMult: 1.20,
+        closeBonusMult: 1.15,
+        spreadPenalty: 0.0,
+        focusStrength: 0.15,
+        raiseDelta: -0.05,
+        benchEarlyMult: 0.90,
+        benchLateMult: 0.85,
+        salvageMult: 0.90,
+        jitter: 0.15,
+        quirkLaneWeight: 1.0
+      },
+      SNIPER: {
+        id: 'SNIPER',
+        verb: 'targets a lane',
+        standShift: 0,
+        riskMult: 1.00,
+        winBonusMult: 1.10,
+        closeBonusMult: 1.05,
+        spreadPenalty: 0.0,
+        focusStrength: 1.0,
+        focusMode: 'WEAKEST_PLAYER',
+        raiseDelta: +0.05,
+        benchEarlyMult: 1.00,
+        benchLateMult: 1.00,
+        salvageMult: 1.00,
+        jitter: 0.20,
+        quirkLaneWeight: 1.2
+      },
+      PRESSURIZER: {
+        id: 'PRESSURIZER',
+        verb: 'applies Pressure',
+        standShift: -2,
+        riskMult: 0.90,
+        winBonusMult: 1.00,
+        closeBonusMult: 0.95,
+        spreadPenalty: 1.2,
+        focusStrength: 0.0,
+        raiseDelta: +0.15,
+        benchEarlyMult: 1.35,
+        benchLateMult: 1.10,
+        salvageMult: 1.10,
+        jitter: 0.25,
+        quirkLaneWeight: 1.0
+      },
+      GAMBLER: {
+        id: 'GAMBLER',
+        verb: 'takes risks',
+        standShift: -1,
+        riskMult: 0.75,
+        winBonusMult: 1.00,
+        closeBonusMult: 1.00,
+        spreadPenalty: 0.5,
+        focusStrength: 0.0,
+        raiseDelta: +0.20,
+        benchEarlyMult: 1.00,
+        benchLateMult: 1.00,
+        salvageMult: 1.00,
+        jitter: 0.90,
+        quirkLaneWeight: 1.4
+      },
+      TRICKSTER: {
+        id: 'TRICKSTER',
+        verb: 'plays it late',
+        standShift: -1,
+        riskMult: 0.95,
+        winBonusMult: 1.05,
+        closeBonusMult: 1.00,
+        spreadPenalty: 0.6,
+        focusStrength: 0.70,
+        focusMode: 'PUNISH_COMPLETES',
+        raiseDelta: +0.10,
+        benchEarlyMult: 0.55,
+        benchLateMult: 1.55,
+        salvageMult: 1.35,
+        jitter: 0.35,
+        quirkLaneWeight: 1.3
+      }
+    };
+
+    const AI_PROFILE_WEIGHTS = {
+      STANDARD: [
+        ['ACCOUNTANT', 0.26],
+        ['CLOSER',     0.22],
+        ['SNIPER',     0.16],
+        ['PRESSURIZER',0.14],
+        ['TRICKSTER',  0.12],
+        ['GAMBLER',    0.10]
+      ],
+      HIGH_STAKES: [
+        ['PRESSURIZER',0.24],
+        ['GAMBLER',    0.22],
+        ['TRICKSTER',  0.18],
+        ['SNIPER',     0.18],
+        ['CLOSER',     0.10],
+        ['ACCOUNTANT', 0.08]
+      ]
+    };
+
+    function pickWeighted(pairs) {
+      const r = Math.random();
+      let acc = 0;
+      for (const [k, w] of pairs) {
+        acc += w;
+        if (r <= acc) return k;
+      }
+      return pairs[pairs.length - 1][0];
+    }
+
+    function getDealerProfile() {
+      if (!blackjackMatch) return AI_PROFILES.ACCOUNTANT;
+      return blackjackMatch.aiProfile || AI_PROFILES.ACCOUNTANT;
+    }
+
     // =============================================
     // SLOT BLACKJACK ENGINE
     // =============================================
@@ -9638,6 +9790,23 @@ body += `
       const currentTile = run.board.tiles[run.board.currentTileId];
       const npc = options.npcOverride || (currentTile ? currentTile.npc : null);
       blackjackMatch.npc = npc;
+
+      let profileId = (npc && npc.aiProfileId) ? npc.aiProfileId : 'ACCOUNTANT';
+      if (options && options.aiProfileId) profileId = options.aiProfileId;
+
+      blackjackMatch.aiProfileId = profileId;
+      blackjackMatch.aiProfile = AI_PROFILES[profileId] || AI_PROFILES.ACCOUNTANT;
+      blackjackMatch.aiQuirkBias = (npc && Array.isArray(npc.aiQuirkBias)) ? npc.aiQuirkBias.slice() : Array.from({ length: LANE_COUNT }, () => 0);
+      blackjackMatch.aiRaiseQuirk = (npc && typeof npc.aiRaiseQuirk === 'number') ? npc.aiRaiseQuirk : 0;
+      blackjackMatch.aiFocusLane = null;
+
+      if (npc && blackjackMatch.aiProfile && blackjackMatch.aiProfile.verb) {
+        showToast(`${npc.name} ${blackjackMatch.aiProfile.verb}.`);
+      }
+      if (blackjackMatch.type === 'HIGH_STAKES') {
+        showToast(`High Stakes rule: Karma x${HIGH_STAKES_KARMA_MULT}`);
+      }
+
       let affinity = 'neutral';
       let edgeDelta = 0;
       let procChance = CALLING_PROC_CHANCE;
@@ -9737,7 +9906,15 @@ body += `
       const current = blackjackMatch.transferMultiplier || 1;
       const max = blackjackMatch.transferMultiplierMax || current;
       const canRaise = current < max;
-      const willRaise = canRaise && Math.random() < 0.5;
+      const prof = getDealerProfile();
+      const diff = getOpponentDifficulty();
+      const base = (blackjackMatch.type === 'HIGH_STAKES') ? 0.55 : 0.35;
+      const diffAdj = (diff === 'hard') ? 0.10 : (diff === 'easy' ? -0.10 : 0);
+      const profAdj = safeNumber(prof.raiseDelta, 0);
+      const quirkAdj = safeNumber(blackjackMatch.aiRaiseQuirk, 0);
+      let p = base + diffAdj + profAdj + quirkAdj;
+      p = Math.max(0.05, Math.min(0.90, p));
+      const willRaise = canRaise && Math.random() < p;
 
       if (willRaise) {
         blackjackMatch.transferRaiseOffer = current + 1;
@@ -10972,19 +11149,20 @@ function estimatePlayerTargetForLane(idx, diff) {
 function dealerLaneScore(idx, total, diff) {
   if (total > 21) return -10000 - total;
 
+  const prof = getDealerProfile();
   const target = estimatePlayerTargetForLane(idx, diff);
 
-  // If player is (known or assumed) busted, just don't bust; prefer safer totals (<=11)
   if (target === 0) {
-    return 120 + (total <= 11 ? (11 - Math.abs(11 - total)) : 0) - dealerRiskPenalty(total) * 12;
+    return 120 + (total <= 11 ? (11 - Math.abs(11 - total)) : 0) - dealerRiskPenalty(total) * 12 * (prof.riskMult || 1);
   }
 
   const winNeed = Math.min(21, target + 1);
-  const winBonus = (total >= winNeed) ? 140 : 0;
-  const closeBonus = (total === 21) ? 260 : (total === 20) ? 90 : (total === 19) ? 45 : 0;
+  const winBonus = (total >= winNeed) ? (140 * (prof.winBonusMult || 1)) : 0;
+  const closeBonusBase = (total === 21) ? 260 : (total === 20) ? 90 : (total === 19) ? 45 : 0;
+  const closeBonus = closeBonusBase * (prof.closeBonusMult || 1);
   const pushPenalty = (total === target) ? 14 : 0;
 
-  const risk = dealerRiskPenalty(total) * 12;
+  const risk = dealerRiskPenalty(total) * 12 * (prof.riskMult || 1);
 
   return total + winBonus + closeBonus - risk - pushPenalty;
 }
@@ -11027,17 +11205,66 @@ function dealerLaneScore(idx, total, diff) {
           const afterScore = dealerLaneScore(idx, after, diff);
 
           return { idx, before, after, delta: (afterScore - beforeScore), afterScore };
-        }).sort((a, b) => b.delta - a.delta);
+        });
 
-        if (diff === 'easy') {
-          // Easy: pick among top 2 if they exist, weighted by being "not awful"
+        const prof = getDealerProfile();
+        const quirk = blackjackMatch.aiQuirkBias || [];
+        let focusLane = blackjackMatch.aiFocusLane;
+
+        if (focusLane == null && safeNumber(prof.focusStrength, 0) > 0) {
+          if (prof.focusMode === 'WEAKEST_PLAYER') {
+            let best = null;
+            for (const s of scored) {
+              const pPos = blackjackMatch.playerPositions[s.idx];
+              if (!pPos || !pPos.isOpen || pPos.isComplete) continue;
+              const pt = getPositionTotal(pPos);
+              if (!best || pt < best.pt) best = { idx: s.idx, pt };
+            }
+            if (best) focusLane = best.idx;
+          } else if (prof.focusMode === 'PUNISH_COMPLETES') {
+            let best = null;
+            for (const s of scored) {
+              const pPos = blackjackMatch.playerPositions[s.idx];
+              if (pPos && pPos.isComplete && !pPos.isBust) {
+                const pt = getPositionTotal(pPos);
+                if (!best || pt > best.pt) best = { idx: s.idx, pt };
+              }
+            }
+            if (best) focusLane = best.idx;
+          }
+          blackjackMatch.aiFocusLane = focusLane;
+        }
+
+        for (const s of scored) {
+          s.delta += (quirk[s.idx] || 0) * (prof.quirkLaneWeight || 1);
+
+          if (prof.spreadPenalty) {
+            const dPos = blackjackMatch.dealerPositions[s.idx];
+            const laneCards = (dPos && dPos.cards) ? dPos.cards.length : 0;
+            s.delta -= prof.spreadPenalty * Math.max(0, laneCards - 2);
+          }
+
+          if (focusLane != null && s.idx === focusLane) {
+            s.delta += 12 * (prof.focusStrength || 0);
+          }
+
+          const j = prof.jitter || 0;
+          if (j) s.delta += (Math.random() * 2 - 1) * j;
+        }
+
+        scored.sort((a, b) => b.delta - a.delta);
+
+        if (prof.id === 'GAMBLER' && diff !== 'easy') {
+          const top = scored.slice(0, Math.min(3, scored.length));
+          top.sort((a, b) => b.delta - a.delta);
+          targetIdx = top[Math.floor(Math.random() * top.length)].idx;
+        } else if (diff === 'easy') {
           const top = scored.slice(0, Math.min(2, scored.length));
           top.sort((a, b) => b.afterScore - a.afterScore);
           targetIdx = (top.length === 1) ? top[0].idx : (Math.random() < 0.55 ? top[0].idx : top[1].idx);
         } else {
-          // Medium/Hard: best delta, but if all negative, choose least bad afterScore
           if (scored[0].delta >= 0) targetIdx = scored[0].idx;
-          else targetIdx = scored.sort((a, b) => b.afterScore - a.afterScore)[0].idx;
+          else targetIdx = scored.slice().sort((a, b) => b.afterScore - a.afterScore)[0].idx;
         }
       }
 
@@ -11148,6 +11375,8 @@ function dealerFindBestBenchMove(diff, phase) {
 
 function dealerShouldStandLane(idx, diff) {
   const dPos = blackjackMatch.dealerPositions[idx];
+  const prof = getDealerProfile();
+  const shift = safeNumber(prof.standShift, 0);
   if (!dPos || !dPos.isOpen || dPos.isComplete) return false;
 
   const total = getPositionTotal(dPos);
@@ -11167,24 +11396,24 @@ function dealerShouldStandLane(idx, diff) {
   // If player lane is complete (known target)
   if (pComplete) {
     if (total > pTotal && total >= 13) return true;
-    if (diff === 'hard') return total >= 19;
-    return total >= 17; // medium/easy baseline
+    if (diff === 'hard') return total >= Math.max(16, 19 + shift);
+    return total >= Math.max(15, 17 + shift);
   }
 
   // Player lane incomplete: estimate and choose
   const target = estimatePlayerTargetForLane(idx, diff);
 
   if (diff === 'easy') {
-    return (total >= 16 && Math.random() < 0.70) || total >= 19;
+    return (total >= Math.max(14, 16 + shift) && Math.random() < 0.70) || total >= Math.max(17, 19 + shift);
   }
   if (diff === 'medium') {
-    if (total >= 17) return true;
+    if (total >= Math.max(15, 17 + shift)) return true;
     if (total >= 15 && total >= target + 2) return true;
     return false;
   }
 
   // hard
-  if (total >= 19) return true;
+  if (total >= Math.max(16, 19 + shift)) return true;
   if (total >= 17 && total >= target + 1) return true;
   if (total >= 15 && total >= target + 3) return true;
   return false;
@@ -11231,7 +11460,11 @@ function dealerStandPhase(diff, maxPasses = 6) {
       }
 
       // 1) Strategic bench use (no forced plays; only if improves)
-      const benchBudget = (diff === 'hard') ? 2 : (diff === 'medium') ? 1 : (Math.random() < 0.35 ? 1 : 0);
+      const prof = getDealerProfile();
+      const draws = safeNumber(blackjackMatch.metrics.dealerDraws, 0);
+      const late = draws >= 6;
+      let benchBudget = (diff === 'hard') ? 2 : (diff === 'medium') ? 1 : (Math.random() < 0.35 ? 1 : 0);
+      benchBudget = Math.round(benchBudget * (late ? (prof.benchLateMult || 1) : (prof.benchEarlyMult || 1)));
       for (let k = 0; k < benchBudget; k++) {
         const move = dealerFindBestBenchMove(diff, 'strategic');
         if (!move) break;
@@ -11264,7 +11497,8 @@ function dealerStandPhase(diff, maxPasses = 6) {
         dealerPlaceOneCard(card);
 
         // 4) Salvage: if any lanes would bust at end-of-turn, try negatives first
-        const salvageBudget = (diff === 'hard') ? 2 : 1;
+        let salvageBudget = (diff === 'hard') ? 2 : 1;
+        salvageBudget = Math.round(salvageBudget * (prof.salvageMult || 1));
         for (let k = 0; k < salvageBudget; k++) {
           const move = dealerFindBestBenchMove(diff, 'salvage');
           if (!move) break;
@@ -11525,7 +11759,15 @@ function dealerStandPhase(diff, maxPasses = 6) {
       }
 
       const karmaExtraTotal = karmaExtras.reduce((sum, e) => sum + safeNumber(e.delta, 0), 0);
-      const karmaGained = karmaLaneGain + karmaExtraTotal;
+      let karmaGained = karmaLaneGain + karmaExtraTotal;
+
+      if (blackjackMatch.type === 'HIGH_STAKES') {
+        const bonus = Math.floor(karmaGained * (HIGH_STAKES_KARMA_MULT - 1));
+        if (bonus > 0) {
+          karmaExtras.push({ name: `High Stakes x${HIGH_STAKES_KARMA_MULT}`, delta: bonus, kind: 'high_stakes' });
+          karmaGained += bonus;
+        }
+      }
       let ventureFundChips = 0;
       for (let i = 0; i < blackjackMatch.playerPositions.length; i++) {
         if (positionResults[i] !== 'player') continue;
@@ -13600,6 +13842,11 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
       const npcLine = npc
         ? `${npc.name} · ${cardToString(npc.callingCard)} · ${affinityIcon(affinity)} · Edge ${edgeDelta >= 0 ? '+' : ''}${edgeDelta} · Proc ${procPct}%`
         : `Dealer · Proc ${procPct}%`;
+      const prof = blackjackMatch.aiProfile;
+      const styleLine = (npc && prof && prof.verb) ? `${npc.name} ${prof.verb}.` : '';
+      const houseRuleLine = (blackjackMatch.type === 'HIGH_STAKES')
+        ? `High Stakes rule: Karma x${HIGH_STAKES_KARMA_MULT}`
+        : '';
 
       const typeLabel = blackjackMatch.type === 'WATCHER' ? 'THE WATCHER' :
                         blackjackMatch.type === 'BOSS' ? 'BOSS BATTLE' :
@@ -13624,6 +13871,8 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
           <div class="bj-title">${typeLabel}</div>
           <div class="bj-status">Buy-in: ${blackjackMatch.buyIn} chips · Side Bet x${transferMultiplier}</div>
           <div class="bj-status">${npcLine}</div>
+          ${houseRuleLine ? `<div class="bj-house-rule">${escapeHtml(houseRuleLine)}</div>` : ''}
+          ${styleLine ? `<div class="bj-style-line">${escapeHtml(styleLine)}</div>` : ''}
           ${bossMeta}
         </div>
       `;
@@ -14338,29 +14587,6 @@ run.chips = safeNumber(run.chips) + payout + transferNet - rake;
 
       const analysis = getRunEndAnalysis();
       renderRunEndPanel(analysis);
-    }
-
-    // =============================================
-    // TILE RESOLUTION
-    // =============================================
-    function encounterBlackjackStandard() {
-      if (run.chips < BUYIN_STANDARD) {
-        logEvent('MATCH_START_FAILED', { type: 'STANDARD', buyIn: BUYIN_STANDARD, chips: run.chips, reason: 'INSUFFICIENT_CHIPS' });
-        gameOver("You can't afford the buy-in.", 'INSUFFICIENT_BUYIN');
-        return;
-      }
-      startBlackjackMatch('STANDARD', BUYIN_STANDARD);
-    }
-
-    function encounterBlackjackHigh() {
-      if (run.chips < BUYIN_HIGH) {
-        logEvent('MATCH_START_FAILED', { type: 'HIGH_STAKES', buyIn: BUYIN_HIGH, chips: run.chips, reason: 'INSUFFICIENT_CHIPS' });
-        gameOver("You can't afford the buy-in.", 'INSUFFICIENT_BUYIN');
-        return;
-      }
-      const hsKey = run.secret && run.secret.keys ? run.secret.keys.highStakes : null;
-      const specialReward = (hsKey && !hsKey.obtained && run.board.currentTileId === hsKey.tileId) ? 'KEY_HIGH' : null;
-      startBlackjackMatch('HIGH_STAKES', BUYIN_HIGH, { specialReward });
     }
 
     // =============================================
