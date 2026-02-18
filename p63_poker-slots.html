@@ -477,48 +477,6 @@
     th{ color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px; font-size: 0.78em; }
     .right{ text-align:right; }
 
-    /* Tune tab */
-    .tuneWrap{ display:none; padding: 14px 18px 18px; }
-    .tGrid{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    @media (max-width: 820px){ .tGrid{ grid-template-columns: 1fr; } }
-
-    .tCard{
-      border: 1px solid var(--panel-border);
-      border-radius: 14px;
-      padding: 12px;
-      background: rgba(255,255,255,0.02);
-    }
-    .tTitle{
-      font-family: var(--font-display);
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--accent-gold);
-      font-size: 1.05em;
-      margin-bottom: 10px;
-    }
-
-    label{
-      display:flex;
-      justify-content: space-between;
-      gap: 10px;
-      align-items:center;
-      font-family: var(--font-mono);
-      font-size: 0.86em;
-      color: var(--text-secondary);
-      margin: 8px 0;
-    }
-    input{
-      width: 140px;
-      padding: 8px 9px;
-      border-radius: 10px;
-      border: 1px solid rgba(148,163,184,0.25);
-      background: rgba(0,0,0,0.25);
-      color: var(--text-primary);
-      font-family: var(--font-mono);
-      outline: none;
-    }
-    .tActions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
-    .hint{ color: var(--text-secondary); font-size: 0.86em; line-height: 1.45; margin-top: 8px; }
 
   </style>
 </head>
@@ -651,7 +609,24 @@
 
   let P63_ENDED = false;
 
-  // ---------------- Runtime settings (tunable in TUNE tab) ----------------
+
+  window.addEventListener("message", (e) => {
+    const d = e.data;
+    if (!d || d.__p63 !== 1 || d.type !== "P63_INIT" || d.kind !== "POKER_SLOTS") return;
+    if (typeof d.startChips === "number") CFG.startChips = d.startChips;
+    if (typeof d.ante === "number") CFG.ante = d.ante;
+    if (typeof d.freeSpins === "number") CFG.freeSpins = d.freeSpins;
+    if (typeof d.baseBurn === "number") CFG.baseBurn = d.baseBurn;
+    if (typeof d.heatStep === "number") CFG.heatStep = d.heatStep;
+
+    // reset session with new CFG
+    SESSION.chips = CFG.startChips;
+    SESSION.heat = 0;
+    resetToReady("Ready.");
+    updateHUD();
+  });
+
+  // ---------------- Runtime settings ----------------
   let CFG = {
     startChips: 100,
     ante: 25,
