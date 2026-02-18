@@ -7375,6 +7375,18 @@ function benchPush(card, source = '') {
 
         active = { kind: 'POKER_SLOTS', poker: { entryCost: MINIGAME_POKER_ENTRY_COST } };
         openOverlayWithTemplate('tplMinigamePokerSlots');
+        setTimeout(() => {
+          postToFrame({
+            __p63: 1,
+            type: 'P63_INIT',
+            kind: 'POKER_SLOTS',
+            startChips: 100,
+            ante: 25,
+            freeSpins: 2,
+            baseBurn: 15,
+            heatStep: 10
+          });
+        }, 30);
       }
 
       function beginInfiltration() {
@@ -7384,6 +7396,9 @@ function benchPush(card, source = '') {
       }
 
       function onMessage(e) {
+        const fr = frame();
+        if (!fr || e.source !== fr.contentWindow) return;
+
         const d = e.data;
         if (!d || d.__p63 !== 1) return;
         if (!active) return;
